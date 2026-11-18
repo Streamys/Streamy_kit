@@ -86,6 +86,9 @@ function main() {
 
     const sendMax = () => { try { win.webContents.send('win:maximized', win.isMaximized()); } catch {} };
     win.on('maximize', sendMax); win.on('unmaximize', sendMax);
+    // 편집 가이드 창이 본 창을 따라다니게
+    for (const ev of ['move', 'resize', 'maximize', 'unmaximize', 'restore', 'show']) win.on(ev, () => ovPlace());
+    for (const ev of ['minimize', 'hide']) win.on(ev, () => { try { if (ov && !ov.isDestroyed()) ov.hide(); } catch {} });
     // 최소화하면 미니 오버레이, 다시 열면 숨김
     win.on('minimize', () => { if (miniCfg.on) miniShow(); });
     win.on('restore', () => miniHide());
@@ -138,6 +141,7 @@ function main() {
     stopAudioSessions(); stopWinWatch();
     try { chat.flushLog(); chat.stopAll(); } catch {}
     try { if (mini && !mini.isDestroyed()) mini.destroy(); } catch {}
+    try { if (ov && !ov.isDestroyed()) ov.destroy(); } catch {}
     log.warn('main', 'force quit:', why);
     try { if (win && !win.isDestroyed()) win.hide(); } catch {}
     await killOwnEngine('force quit');
@@ -212,6 +216,35 @@ function main() {
   }
 
   // ---------------------------------------------------------------- 업데이트 (GitHub Releases)
+  // ---------------------------------------------------------------- 편집 가이드 (미리보기 위에 겹치는 투명 창)
+  // 미리보기는 엔진이 그리는 별도 창이라 HTML을 위에 못 그림 → 마우스가 통과하는 투명 창을 정확히 겹쳐서 테두리·손잡이를 그림
+  let ov = null, ovRect = null, ovWant = false, ovReady = false;
+  function ovCreate() {
+    if (ov && !ov.isDestroyed()) return ov;
+    ov = new BrowserWindow({
+      parent: win, frame: false, transparent: true, resizable: false, movable: false, focusable: false, skipTaskbar: true,
+      show: false, hasShadow: false, backgroundColor: '#00000000', title: 'Streamy Kit 편집 가이드',
+      webPreferences: { nodeIntegration: true, contextIsolation: false, spellcheck: false, backgroundThrottling: false },
+    });
+    ov.setIgnoreMouseEvents(true);
+    ov.loadFile(path.join(__dirname, 'renderer', 'guide.html'));
+    ov.webContents.on('did-finish-load', () => { ovReady = true; ovPlace(); try { win.webContents.send('ov:ready'); } catch {} });
+    ov.webContents.on('render-process-gone', () => { ovReady = false; try { win.webContents.send('ov:lost'); } catch {} });
+    ov.on('closed', () => { ov = null; ovReady = false; });
+    return ov;
+  }
+  function ovPlace() {
+    if (!ov || ov.isDestroyed() || !win || win.isDestroyed()) return;
+    const visible = ovWant && ovRect && ovRect.width > 4 && win.isVisible() && !win.isMinimized();
+    if (!visible) { if (ov.isVisible()) ov.hide(); return; }
+    const cb = win.getContentBounds();
+    ov.setBounds({ x: Math.round(cb.x + ovRect.x), y: Math.round(cb.y + ovRect.y), width: Math.round(ovRect.width), height: Math.round(ovRect.height) });
+    if (!ov.isVisible()) ov.showInactive();
+  }
+  ipcMain.on('ov:rect', (_e, r) => { ovRect = r; ovCreate(); ovPlace(); });
+  ipcMain.on('ov:show', (_e, on) => { ovWant = !!on; ovCreate(); ovPlace(); });
+  ipcMain.on('ov:draw', (_e, d) => { try { if (ov && !ov.isDestroyed() && ovReady) ov.webContents.send('ov:draw', d); } catch {} });
+
   // ---------------------------------------------------------------- 미니 오버레이 (최소화했을 때)
   let mini = null, miniState = null, miniTimer = null;
   let miniCfg = { on: true, platforms: ['chzzk', 'youtube', 'soop'], opacity: 30, count: 5 };
@@ -321,6 +354,7 @@ function main() {
     stopAudioSessions(); stopWinWatch();
     try { chat.flushLog(); chat.stopAll(); } catch {}
     try { if (mini && !mini.isDestroyed()) mini.destroy(); } catch {}
+    try { if (ov && !ov.isDestroyed()) ov.destroy(); } catch {}
     await killOwnEngine('after shutdown');
     log.info('main', 'quit');
     app.exit(0);

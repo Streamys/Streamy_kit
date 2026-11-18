@@ -20,7 +20,7 @@ const DEFAULTS = {
   keys: { chzzk: '', youtube: '', soop: '' }, encoder: 'auto',
   appAudio: [], audioState: {}, devices: {}, showViewers: false, channels: { chzzk: '', youtube: '', soop: '' },
   timer: { mode: 'stopwatch', minutes: 10, label: '', theme: 'red' }, quality: '1080p60',
-  mode: 'setup', airOnLive: true, chatLog: false, autoUpdate: true,
+  mode: 'setup', airOnLive: true, chatLog: false, autoUpdate: true, guide: true,
   mini: { on: true, platforms: ['chzzk', 'youtube', 'soop'], opacity: 30, count: 5 },
   virtualAuto: true, virtualAutoDone: [],
 };
@@ -315,7 +315,55 @@ function cornerAt(rect, p) {
   for (const [k, [x, y]] of Object.entries(cs)) if (Math.abs(p.x - x) <= tol && Math.abs(p.y - y) <= tol) return k;
   return null;
 }
-function snap(v, size, total, tol) { for (const t of [0, total / 2 - size / 2, total - size]) if (Math.abs(v - t) < tol) return t; return v; }
+function snap(v, size, total, tol, out, axis) {
+  const ts = [[0, 0], [total / 2 - size / 2, total / 2], [total - size, total]];
+  for (const [t, line] of ts) if (Math.abs(v - t) < tol) { if (out) out.push({ axis, at: line }); return t; }
+  return v;
+}
+
+// ================================================================== 편집 가이드 (미리보기 위 투명 창에 테두리 · 손잡이 · 크기 · 안내)
+let ovOk = false, hoverId = null, snapLines = [], guideRaf = 0;
+function viewMap() {
+  const r = prev.getBoundingClientRect(), z = window.devicePixelRatio || 1;
+  const pr = engine.previewRect(r.width * z, r.height * z);
+  return { s: pr.w / (engine.width * z), ox: pr.x / z, oy: pr.y / z };
+}
+function guideData() {
+  if (!engineOk || mode === 'air') return { items: [] };
+  const m = viewMap(), items = [];
+  const selId = engine.sel.size === 1 ? engine.primary : null;
+  for (const x of engine.items().slice().reverse()) {           // 아래(뒤)부터 그림
+    if (!x.visible) continue;
+    const it = engine.itemObj(x.id); if (!it) continue;
+    const r = engine.itemRect(it); if (!(r.w > 0 && r.h > 0)) continue;
+    const state = engine.sel.has(x.id) ? 'sel' : x.id === hoverId ? 'hover' : 'norm';
+    items.push({ x: m.ox + r.x * m.s, y: m.oy + r.y * m.s, w: r.w * m.s, h: r.h * m.s, name: `${x.icon} ${x.name}`, state });
+  }
+  let size = '', hint = '';
+  if (selId != null) { const it = engine.itemObj(selId); if (it) { const r = engine.itemRect(it); size = `${Math.round(r.w)} × ${Math.round(r.h)} · ${Math.round((r.w / engine.width) * 100)}%`; } }
+  if (drag) hint = drag.mode === 'move' ? '놓으면 그 자리에 저장돼요 · Alt = 자석 끄기' : '비율을 유지하면서 크기 조절 중 · Alt = 자석 끄기';
+  else if (selId != null) hint = '안쪽을 끌면 이동 · 모서리 □를 끌면 크기 조절 · 방향키로 1px씩 (Shift = 10px)';
+  else if (items.length) hint = '소스를 클릭하면 옮기고 크기를 바꿀 수 있어요';
+  const guides = snapLines.map((l) => (l.axis === 'x'
+    ? { x1: m.ox + l.at * m.s, y1: m.oy, x2: m.ox + l.at * m.s, y2: m.oy + engine.height * m.s }
+    : { x1: m.ox, y1: m.oy + l.at * m.s, x2: m.ox + engine.width * m.s, y2: m.oy + l.at * m.s }));
+  return { items, guides, size, hint };
+}
+function guideDraw() {
+  if (guideRaf) return;
+  guideRaf = requestAnimationFrame(() => { guideRaf = 0; try { ipcRenderer.send('ov:draw', guideData()); } catch (e) { rlog('warn', 'guide', e); } });
+}
+function guideShow() {
+  const on = engineOk && mode !== 'air' && cfg.guide !== false;
+  ipcRenderer.send('ov:show', on);
+  if (engineOk) engine.setDrawUI(mode !== 'air' && !(ovOk && on));      // 가이드를 못 쓰면 엔진 기본 선택 표시로
+  guideDraw();
+}
+ipcRenderer.on('ov:ready', () => { ovOk = true; guideShow(); });
+$('guideOn').checked = cfg.guide !== false;
+$('guideOn').addEventListener('change', () => { cfg.guide = $('guideOn').checked; save(); guideShow(); });
+ipcRenderer.on('ov:lost', () => { ovOk = false; guideShow(); });
+engine.on('items', () => guideDraw());
 prev.addEventListener('mousedown', (e) => {
   if (!engineOk || e.button !== 0 || mode === 'air') return;
   try {
@@ -340,23 +388,28 @@ window.addEventListener('mousemove', (e) => {
   if (!engineOk) return;
   if (!drag) {
     const now = Date.now(); if (now - hoverT < 60) return; hoverT = now;
-    let cls = '';
+    let cls = '', hov = null;
     const selId = engine.sel.size === 1 ? engine.primary : null;
-    if (selId != null && e.target === prev) {
+    if (e.target === prev && mode !== 'air') {
       try {
-        const it = engine.itemObj(selId), p = toCanvas(e);
-        if (it) { const rect = engine.itemRect(it), c = cornerAt(rect, p); if (c) cls = c === 'tl' || c === 'br' ? 'c-nwse' : 'c-nesw'; else if (p.x >= rect.x && p.x <= rect.x + rect.w && p.y >= rect.y && p.y <= rect.y + rect.h) cls = 'c-move'; }
+        const p = toCanvas(e);
+        const it = selId != null ? engine.itemObj(selId) : null;
+        const c = it ? cornerAt(engine.itemRect(it), p) : null;
+        if (c) cls = c === 'tl' || c === 'br' ? 'c-nwse' : 'c-nesw';
+        else { const h = engine.hitTest(p.x, p.y); if (h) { cls = 'c-move'; hov = h.id; } }
       } catch {}
     }
     prev.className = 'preview has-engine ' + cls;
+    if (hov !== hoverId) { hoverId = hov; guideDraw(); }
     return;
   }
   const p = toCanvas(e);
   const dx = p.x - drag.p0.x, dy = p.y - drag.p0.y, s = drag.start, tol = 12 * p.px;
   if (!s) return;
+  snapLines = [];
   if (drag.mode === 'move') {
     let x = s.x + dx, y = s.y + dy;
-    if (!e.altKey) { x = snap(x, s.w, engine.width, tol); y = snap(y, s.h, engine.height, tol); }
+    if (!e.altKey) { x = snap(x, s.w, engine.width, tol, snapLines, 'x'); y = snap(y, s.h, engine.height, tol, snapLines, 'y'); }
     pending = { id: drag.id, x, y, w: null };
   } else {
     const left = drag.corner.includes('l'), top = drag.corner.includes('t');
@@ -364,13 +417,14 @@ window.addEventListener('mousemove', (e) => {
     const sx = left ? -1 : 1, sy = top ? -1 : 1, ratio = s.w / s.h;
     let w = Math.max(16, s.w + sx * dx), h = Math.max(16, s.h + sy * dy);
     if (w / h > ratio) h = w / ratio; else w = h * ratio;
-    if (!e.altKey) { const ex = ax + sx * w; for (const t of [0, engine.width]) if (Math.abs(ex - t) < tol) { w = Math.abs(t - ax); h = w / ratio; } }
+    if (!e.altKey) { const ex = ax + sx * w; for (const t of [0, engine.width]) if (Math.abs(ex - t) < tol) { w = Math.abs(t - ax); h = w / ratio; snapLines.push({ axis: 'x', at: t }); } }
     pending = { id: drag.id, x: left ? ax - w : ax, y: top ? ay - h : ay, w };
     $('selSize').textContent = `${Math.round(w)} × ${Math.round(h)} · ${Math.round((w / engine.width) * 100)}%`;
   }
-  if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (pending) { try { engine.setItemRect(pending.id, pending.x, pending.y, pending.w); } catch {} pending = null; } });
+  if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (pending) { try { engine.setItemRect(pending.id, pending.x, pending.y, pending.w); } catch {} pending = null; guideDraw(); } });
 });
-window.addEventListener('mouseup', () => { if (drag) { drag = null; updateSizeLabel(); saveScenes(); } });
+window.addEventListener('mouseup', () => { if (drag) { drag = null; snapLines = []; updateSizeLabel(); saveScenes(); guideDraw(); } });
+prev.addEventListener('mouseleave', () => { if (!drag && hoverId != null) { hoverId = null; guideDraw(); } });
 window.addEventListener('keydown', (e) => {
   if (!engineOk || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
   const n = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9'].indexOf(e.key);
@@ -966,6 +1020,8 @@ function layoutDisplay() {
     layoutRaf = 0;
     const r = prev.getBoundingClientRect(), z = window.devicePixelRatio || 1;
     try { engine.moveDisplay(r.left * z, r.top * z, r.width * z, r.height * z); } catch (e) { rlog('warn', 'moveDisplay', e); }
+    ipcRenderer.send('ov:rect', { x: r.left, y: r.top, width: r.width, height: r.height });
+    guideDraw();
   });
 }
 new ResizeObserver(layoutDisplay).observe(prev);
@@ -1013,8 +1069,7 @@ async function boot() {
   try {
     engine.createDisplay(ipcRenderer.sendSync('app:window-handle'));
     prev.classList.add('has-engine');
-    if (mode === 'air') engine.setDrawUI(false);
-    layoutDisplay();
+    layoutDisplay(); guideShow();
   } catch (e) { rlog('error', 'display', e); toast('미리보기 화면을 만들지 못했어요. 설정 → 문제 해결에서 그래픽 가속을 꺼 보세요.', true); }
   renderScenes(); renderSources(); renderMixer(); renderTypes(); renderEncoders();
   if (soundOpen) renderDevices();
@@ -1074,11 +1129,11 @@ function setMode(m, quiet) {
   if (m === 'air') {
     tabBeforeAir = document.querySelector('.tabs button.on')?.dataset.tab || 'stream';
     openTab('chat');
-    if (engineOk) { try { engine.clearSelection(); engine.setDrawUI(false); } catch {} renderSources(); }
+    if (engineOk) { try { engine.clearSelection(); } catch {} renderSources(); }
   } else {
     openTab(tabBeforeAir === 'chat' ? 'stream' : tabBeforeAir);
-    if (engineOk) engine.setDrawUI(true);
   }
+  guideShow();
   layoutDisplay();
   if (!quiet) { cfg.mode = m; save(); }
 }
