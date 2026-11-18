@@ -10,57 +10,58 @@
 <header class="titlebar">
   <div class="brand"><img src="logo.png" alt=""><b>Streamy</b><span>Kit</span><em id="ver"></em></div>
   <div class="live-pill" id="livePill"><i></i><span id="liveText">오프라인</span><small id="liveTime"></small></div>
-  <div class="stats"><span>CPU <b id="sCpu">-</b></span><span>FPS <b id="sFps">-</b></span><span>송출 <b id="sKbps">-</b></span><span>드롭 <b id="sDrop">-</b></span></div>
+  <div class="viewers" id="viewers">
+    <span class="v-label">통합 시청자</span>
+    <b id="viewerTotal" class="v-num masked">•••</b>
+    <span class="v-detail" id="viewerDetail"></span>
+    <button class="v-eye" id="viewerEye" title="시청자 수 보이기/숨기기">👁</button>
+  </div>
+  <div class="stats">
+    <span>CPU <b id="sCpu">-</b></span>
+    <span>FPS <b id="sFps">-</b></span>
+    <span>송출 <b id="sKbps">-</b></span>
+    <span>드롭 <b id="sDrop">-</b></span>
+  </div>
 </header>
 
 <div class="layout">
   <main class="stage">
-    <div class="preview-wrap" id="previewWrap">
+    <div class="preview-wrap">
       <div class="preview" id="preview">
         <div class="preview-empty" id="previewEmpty"><img src="logo.png" alt=""><p id="engineMsg">방송 엔진을 불러오는 중…</p></div>
       </div>
     </div>
     <div class="edit-bar" id="editBar">
-      <span class="sel-name" id="selName">미리보기에서 소스를 클릭하면 선택돼요 · 끌어서 이동 · 모서리를 끌어 크기 조절</span>
+      <span class="sel-name" id="selName"></span>
       <div class="edit-actions">
-        <button data-fit="fit" title="화면에 꽉 맞추기">화면 맞춤</button>
-        <button data-fit="center" title="가운데로">가운데</button>
-        <button data-fit="reset" title="원래 크기">원래 크기</button>
+        <button data-fit="fit">화면 맞춤</button><button data-fit="center">가운데</button><button data-fit="reset">원래 크기</button>
       </div>
     </div>
 
-    <div class="dock">
-      <section class="box scenes-box">
-        <div class="box-head"><h3>장면</h3>
-          <div class="tools"><button id="sceneAdd" title="장면 추가">＋</button><button id="sceneRename" title="이름 바꾸기">✎</button><button id="sceneDel" title="삭제">🗑</button><button id="sceneUp" title="위로">↑</button><button id="sceneDown" title="아래로">↓</button></div>
-        </div>
-        <ul class="list" id="sceneList"></ul>
-      </section>
+    <!-- 장면: 정사각형 버튼 -->
+    <section class="scene-row">
+      <div class="row-head"><h3>장면</h3><small>클릭해서 전환 · 더블클릭으로 이름 바꾸기 · 우클릭으로 삭제</small></div>
+      <div class="scene-tiles" id="sceneTiles"></div>
+    </section>
 
-      <section class="box sources-box">
-        <div class="box-head"><h3>소스</h3>
-          <div class="tools"><button id="srcAdd" class="accent" title="소스 추가">＋ 추가</button><button id="srcEdit" title="속성">⚙</button><button id="srcUp" title="앞으로">↑</button><button id="srcDown" title="뒤로">↓</button><button id="srcDel" title="삭제">🗑</button></div>
-        </div>
-        <ul class="list" id="sourceList"></ul>
-      </section>
-
-      <section class="box mixer-box">
-        <div class="box-head"><h3>오디오</h3><small>막대 뒤 움직임 = 지금 들어오는 소리</small></div>
-        <div class="mixer" id="mixer"></div>
-      </section>
-    </div>
+    <!-- 사운드 -->
+    <section class="sound">
+      <div class="row-head"><h3>사운드</h3><small>막대 뒤 움직임 = 지금 들어오는 소리</small>
+        <button class="gear" id="soundGear" title="사운드 분리 설정">⚙</button>
+      </div>
+      <div class="sound-list" id="mixer"></div>
+    </section>
   </main>
 
   <aside class="panel">
     <nav class="tabs">
       <button data-tab="stream" class="on">방송</button>
+      <button data-tab="sources">소스</button>
       <button data-tab="add">소스 추가</button>
-      <button data-tab="props">속성</button>
-      <button data-tab="audio">사운드 분리</button>
+      <button data-tab="sound">사운드</button>
       <button data-tab="timer">타이머</button>
       <button data-tab="settings">설정</button>
     </nav>
-
     <div class="tab-body">
       <!-- 방송 -->
       <section class="tab on" id="tab-stream">
@@ -74,23 +75,35 @@
         <p class="hint">치지직·SOOP는 8000kbps, 유튜브는 9000kbps로 자동 설정돼요. 그래픽카드 인코더(NVENC 등)가 있으면 자동으로 사용해요.</p>
       </section>
 
+      <!-- 소스 목록 (현재 장면) -->
+      <section class="tab" id="tab-sources">
+        <div class="list-head"><b id="srcSceneName">장면</b>의 소스
+          <div class="tools"><button id="srcAdd" class="accent">＋ 추가</button><button id="srcUp" title="앞으로">↑</button><button id="srcDown" title="뒤로">↓</button><button id="srcDel" title="삭제">🗑</button></div>
+        </div>
+        <ul class="list" id="sourceList"></ul>
+        <div id="propsBody"></div>
+      </section>
+
       <!-- 소스 추가 -->
       <section class="tab" id="tab-add">
         <div class="type-grid" id="typeGrid"></div>
         <div class="add-form" id="addForm"></div>
       </section>
 
-      <!-- 속성 -->
-      <section class="tab" id="tab-props">
-        <div id="propsBody"><p class="hint">소스 목록에서 소스를 고른 뒤 ⚙ 버튼을 누르거나, 소스를 더블클릭하세요.</p></div>
-      </section>
-
-      <!-- 사운드 분리 -->
-      <section class="tab" id="tab-audio">
-        <p class="hint">디스코드, 유튜브(브라우저), 음악 소리를 <b>각각 따로</b> 잡아요. 고르면 왼쪽 아래 오디오에 막대가 생기고, 소리가 나면 막대 뒤가 움직여요.</p>
-        <div class="chips" id="audioApps"></div>
-        <button class="primary-sm" id="btnAudio">적용</button>
-        <p class="hint">프로그램이 지금 꺼져 있어도 괜찮아요. 켜지면 자동으로 잡혀요.<br>같은 소리가 두 번 들리면 <b>데스크톱 소리</b>를 음소거하세요 (게임 소리도 같이 꺼지니 주의).</p>
+      <!-- 사운드 설정 (⚙) -->
+      <section class="tab" id="tab-sound">
+        <h4>소리 따로 잡기</h4>
+        <p class="hint">따로 잡고 싶은 프로그램을 고르세요. 고른 프로그램마다 아래 사운드에 막대가 생기고, 각각 볼륨을 조절할 수 있어요.</p>
+        <div class="row"><select id="appPick"></select><button class="ghost" id="appRefresh" title="다시 찾기">↻</button><button class="primary-sm" id="appAdd">추가</button></div>
+        <p class="hint" style="margin-top:-4px">지금 켜져 있는 프로그램이 목록에 나와요. 없으면 프로그램을 켠 뒤 ↻를 누르세요.</p>
+        <h4>자주 쓰는 프로그램</h4>
+        <div class="chips" id="appPresets"></div>
+        <h4>지금 따로 잡는 소리</h4>
+        <ul class="list sep-list" id="sepList"></ul>
+        <p class="hint">같은 소리가 두 번 들리면 <b>데스크톱 소리</b>를 음소거하세요. (게임 소리도 같이 꺼지니 주의)</p>
+        <h4>기본 장치</h4>
+        <label class="field">데스크톱 소리<select id="devDesktop"></select></label>
+        <label class="field">마이크<select id="devMic"></select></label>
       </section>
 
       <!-- 타이머 -->
@@ -102,16 +115,18 @@
           <label class="field">분 (카운트다운)<input id="tMin" type="number" min="1" max="600" value="10"></label>
           <label class="field">스타일<select id="tTheme"><option value="red">블랙·레드</option><option value="white">화이트</option><option value="solid">레드</option></select></label>
         </div>
-        <label class="field">문구<input id="tLabel" placeholder="예: 방송 시작까지"></label>
+        <label class="field">문구<input id="tLabel" placeholder="방송 시작까지"></label>
         <button id="tApply">설정 적용</button>
         <p class="hint">방송 화면에 띄우려면 <b>소스 추가 → 타이머</b>를 넣으세요.</p>
       </section>
 
       <!-- 설정 -->
       <section class="tab" id="tab-settings">
-        <h4>오디오 장치</h4>
-        <label class="field">데스크톱 소리<select id="devDesktop"></select></label>
-        <label class="field">마이크<select id="devMic"></select></label>
+        <h4>통합 시청자 (채널 연결)</h4>
+        <label class="field">치지직 채널 ID<input id="chzzkId" placeholder="chzzk.naver.com/ 뒤의 32자리"></label>
+        <label class="field">SOOP 아이디<input id="soopId" placeholder="연결 예정" disabled></label>
+        <label class="field">유튜브 채널<input id="ytId" placeholder="연결 예정" disabled></label>
+        <p class="hint">방송 중일 때 1분마다 시청자 수를 가져와 위에 합쳐서 보여 줘요. 위쪽 👁 버튼으로 숨기거나 보일 수 있어요.</p>
         <h4>화질</h4>
         <label class="field"><select id="quality"><option value="1080p60">1080p 60fps (권장)</option><option value="1080p30">1080p 30fps</option><option value="720p60">720p 60fps (저사양 PC)</option></select></label>
         <p class="hint">화질 변경은 다시 시작한 뒤 적용돼요.</p>

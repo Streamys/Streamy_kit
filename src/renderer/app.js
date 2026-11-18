@@ -15,7 +15,7 @@ const DEMO = !!process.env.STREAMY_DEMO;
 // ================================================================== 설정 저장
 const DEFAULTS = {
   platform: 'chzzk', keys: { chzzk: '', youtube: '', soop: '' },
-  audioApps: [], audioState: {}, devices: {},
+  appAudio: [], audioState: {}, devices: {}, showViewers: false, channels: { chzzk: '' },
   timer: { mode: 'stopwatch', minutes: 10, label: '', theme: 'red' }, quality: '1080p60',
 };
 const scenesFile = path.join(path.dirname(info.settingsFile), 'scenes.json');
@@ -24,6 +24,9 @@ function loadSettings() {
   catch { return JSON.parse(JSON.stringify(DEFAULTS)); }
 }
 let cfg = loadSettings();
+// 예전 설정(audioApps 키 목록) → appAudio 로 옮기기
+if (Array.isArray(cfg.audioApps)) { for (const k of cfg.audioApps) { const p = AUDIO_APPS[k]; if (p && !cfg.appAudio.some((a) => a.window === p.window)) cfg.appAudio.push({ window: p.window, label: p.name }); } delete cfg.audioApps; }
+cfg.channels = { chzzk: '', ...(cfg.channels || {}) };
 const writeJson = (f, d) => { try { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(d, null, 2)); fs.renameSync(f + '.tmp', f); } catch (e) { console.error(e); } };
 let saveT = null, sceneT = null;
 function save() { clearTimeout(saveT); saveT = setTimeout(() => writeJson(info.settingsFile, cfg), 300); }
@@ -52,47 +55,51 @@ function openTab(name) {
 }
 document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => openTab(b.dataset.tab)));
 
-// ================================================================== 장면 목록
+// ================================================================== 장면 (정사각형 버튼)
 let renamingScene = null;
 function renderScenes() {
-  const ul = $('sceneList'); ul.innerHTML = '';
-  if (!engineOk && !DEMO) { ul.innerHTML = '<li class="empty">엔진 준비 중…</li>'; return; }
+  const box = $('sceneTiles'); box.innerHTML = '';
+  if (!engineOk && !DEMO) { box.innerHTML = '<div class="hint">엔진 준비 중…</div>'; return; }
   const list = DEMO ? demo.scenes : engine.scenes;
   const cur = DEMO ? demo.current : engine.currentId;
   list.forEach((s, i) => {
-    const li = document.createElement('li');
-    li.className = s.id === cur ? 'on' : '';
+    const b = document.createElement('button');
+    b.className = 'tile' + (s.id === cur ? ' on' : '');
     if (renamingScene === s.id) {
-      li.innerHTML = '<input class="rename">';
-      const inp = li.querySelector('input'); inp.value = s.name;
+      b.innerHTML = '<input>';
+      const inp = b.querySelector('input'); inp.value = s.name;
       let finished = false;
-      const done = (ok) => { if (finished) return; finished = true; renamingScene = null; if (ok) guard(() => { engine.renameScene(s.id, inp.value.trim()); saveScenes(); })(); renderScenes(); };
+      const done = (ok) => { if (finished) return; finished = true; renamingScene = null; if (ok && inp.value.trim()) guard(() => { engine.renameScene(s.id, inp.value.trim()); saveScenes(); })(); renderScenes(); renderSources(); };
       inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); e.stopPropagation(); });
       inp.addEventListener('blur', () => done(true));
+      inp.addEventListener('click', (e) => e.stopPropagation());
       setTimeout(() => { inp.focus(); inp.select(); });
     } else {
-      li.innerHTML = `<span class="nm">${esc(s.name)}</span>${i < 9 ? `<span class="key">F${i + 1}</span>` : ''}`;
-      li.addEventListener('click', guard(() => { if (DEMO) { demo.current = s.id; renderScenes(); return; } engine.switchScene(s.id); saveScenes(); }));
-      li.addEventListener('dblclick', () => { if (DEMO) return; renamingScene = s.id; renderScenes(); });
+      const cnt = DEMO ? (s.n || 0) : s.scene.getItems().length;
+      b.innerHTML = `${i < 9 ? `<kbd>F${i + 1}</kbd>` : ''}<span class="cnt">${cnt}개</span><b>${esc(s.name)}</b>`;
+      b.title = s.name;
+      b.addEventListener('click', guard(() => { if (DEMO) { demo.current = s.id; renderScenes(); return; } engine.switchScene(s.id); saveScenes(); }));
+      b.addEventListener('dblclick', () => { if (DEMO) return; renamingScene = s.id; renderScenes(); });
+      b.addEventListener('contextmenu', guard(async (e) => {
+        e.preventDefault(); if (DEMO) return;
+        const r = await ipcRenderer.invoke('app:confirm', { title: '장면', message: `'${s.name}' 장면을 어떻게 할까요?`, buttons: ['삭제', '왼쪽으로', '오른쪽으로', '취소'] });
+        if (r === 0) engine.removeScene(s.id); if (r === 1) engine.moveScene(s.id, -1); if (r === 2) engine.moveScene(s.id, 1);
+        saveScenes();
+      }));
     }
-    ul.appendChild(li);
+    box.appendChild(b);
   });
+  const add = document.createElement('button'); add.className = 'tile add'; add.textContent = '+'; add.title = '장면 추가';
+  add.addEventListener('click', guard(() => { if (DEMO) return; const sc = engine.addScene(); engine.switchScene(sc.id, true); renamingScene = sc.id; renderScenes(); saveScenes(); }));
+  box.appendChild(add);
 }
-$('sceneAdd').addEventListener('click', guard(() => { const s = engine.addScene(); engine.switchScene(s.id, true); renamingScene = s.id; renderScenes(); saveScenes(); }));
-$('sceneRename').addEventListener('click', guard(() => { renamingScene = engine.currentId; renderScenes(); }));
-$('sceneDel').addEventListener('click', guard(async () => {
-  const s = engine.currentScene; if (!s) return;
-  const r = await ipcRenderer.invoke('app:confirm', { title: '장면 삭제', message: `'${s.name}' 장면을 삭제할까요?`, buttons: ['삭제', '취소'] });
-  if (r === 0) { engine.removeScene(s.id); saveScenes(); }
-}));
-$('sceneUp').addEventListener('click', guard(() => { engine.moveScene(engine.currentId, -1); saveScenes(); }));
-$('sceneDown').addEventListener('click', guard(() => { engine.moveScene(engine.currentId, 1); saveScenes(); }));
 engine.on('scenes', renderScenes);
 
 // ================================================================== 소스 목록
 function selectedItem() { return engine.selected && engine.selected.sceneId === engine.currentId ? engine.selected.itemId : null; }
 function renderSources() {
   const ul = $('sourceList'); ul.innerHTML = '';
+  $('srcSceneName').textContent = DEMO ? '게임 방송' : engineOk && engine.currentScene ? engine.currentScene.name : '장면';
   const items = DEMO ? demo.items : engineOk ? engine.items() : [];
   if (!items.length) ul.innerHTML = '<li class="empty">아직 소스가 없어요.<br><b>＋ 추가</b>에서 모니터 화면이나 게임을 넣어 보세요.</li>';
   for (const it of items) {
@@ -116,9 +123,9 @@ function renderEditBar() {
   bar.classList.toggle('has-sel', !!it);
   name.innerHTML = it ? `선택: <b>${esc(it.name)}</b>` + hint : '미리보기에서 소스를 클릭하면 선택돼요' + hint;
 }
-engine.on('items', renderSources);
+engine.on('items', () => { renderSources(); if (engineOk) { const id = selectedItem(); if (id == null) $('propsBody').innerHTML = ''; else if (propsFor !== id) showProps(true); } renderScenesCountsSoon(); });
+let countT = 0; function renderScenesCountsSoon() { clearTimeout(countT); countT = setTimeout(renderScenes, 150); }
 $('srcAdd').addEventListener('click', () => openTab('add'));
-$('srcEdit').addEventListener('click', guard(() => showProps()));
 $('srcUp').addEventListener('click', guard(() => { const id = selectedItem(); if (id != null) { engine.moveItem(id, 1); saveScenes(); } }));
 $('srcDown').addEventListener('click', guard(() => { const id = selectedItem(); if (id != null) { engine.moveItem(id, -1); saveScenes(); } }));
 $('srcDel').addEventListener('click', guard(() => removeSelected()));
@@ -202,14 +209,16 @@ function renderAddForm() {
     toast(`'${r.name}'을(를) 넣었어요. 미리보기에서 끌어서 위치를 맞추세요.`);
   }));
 }
-function showProps() {
-  openTab('props');
+let propsFor = null;
+function showProps(quiet) {
+  if (!quiet) openTab('sources');
   const id = selectedItem(), body = $('propsBody');
-  if (id == null) { body.innerHTML = '<p class="hint">소스를 먼저 골라 주세요.</p>'; return; }
+  propsFor = id;
+  if (id == null) { body.innerHTML = ''; return; }
   const it = engine.items().find((x) => x.id === id), s = engine.sourceSettings(it.name);
   if (!s) { body.innerHTML = '<p class="hint">이 소스는 바꿀 수 있는 설정이 없어요.</p>'; return; }
   const t = SOURCE_TYPES[s.kind] || {};
-  body.innerHTML = `<label class="field">이름<input id="pName" value="${esc(it.name)}"></label>` + sourceForm(s.kind, 'p', s.settings) +
+  body.innerHTML = `<h4>선택한 소스 설정</h4><label class="field">이름<input id="pName" value="${esc(it.name)}"></label>` + sourceForm(s.kind, 'p', s.settings) +
     '<div class="row"><button class="primary-sm" id="pSave">적용</button><button class="ghost" id="pDel">이 장면에서 빼기</button></div>';
   bindForm(s.kind, 'p');
   if (t.prop) { const cur = s.settings[t.prop]; if (cur != null) $('pPick').value = cur; }
@@ -348,21 +357,83 @@ function meterLoop() {
 }
 requestAnimationFrame(meterLoop);
 
-// ================================================================== 사운드 분리
-let audioSel = [...cfg.audioApps];
-function renderAudioChips() {
-  const box = $('audioApps'); box.innerHTML = '';
-  for (const [k, v] of Object.entries(AUDIO_APPS)) {
-    const b = document.createElement('button'); b.className = 'chip' + (audioSel.includes(k) ? ' on' : ''); b.textContent = v.name;
-    b.addEventListener('click', () => { audioSel = audioSel.includes(k) ? audioSel.filter((x) => x !== k) : [...audioSel, k]; renderAudioChips(); });
-    box.appendChild(b);
+// ================================================================== 사운드 분리 (⚙)
+$('soundGear').addEventListener('click', () => { openTab('sound'); renderSoundSettings(true); });
+function saveAppAudio() { cfg.appAudio = engine.appAudioList().map((a) => ({ window: a.window, label: a.label })); save(); saveAudioState(); }
+function renderSoundSettings(refresh) {
+  // 지금 켜져 있는 프로그램
+  if (refresh && engineOk) {
+    try {
+      const items = engine.appChoices();
+      $('appPick').innerHTML = items.length ? items.map((x) => `<option value="${esc(x.value)}">${esc(x.name)}</option>`).join('') : '<option value="">켜져 있는 프로그램을 찾지 못했어요</option>';
+    } catch (e) { $('appPick').innerHTML = `<option value="">${esc(e.message)}</option>`; }
   }
+  // 자주 쓰는 프로그램
+  const pre = $('appPresets'); pre.innerHTML = '';
+  const using = engineOk ? engine.appAudioList() : DEMO ? [{ window: AUDIO_APPS.discord.window }, { window: AUDIO_APPS.chrome.window }] : [];
+  const exeOf = (w) => String(w).split(':').pop().toLowerCase();
+  for (const p of Object.values(AUDIO_APPS)) {
+    const on = using.some((u) => exeOf(u.window) === exeOf(p.window));
+    const b = document.createElement('button'); b.className = 'chip' + (on ? ' on' : ''); b.textContent = (on ? '✓ ' : '+ ') + p.name;
+    b.addEventListener('click', guard(() => {
+      if (DEMO) return;
+      const ex = engine.appAudioList().find((u) => exeOf(u.window) === exeOf(p.window));
+      if (ex) engine.removeAudio(ex.name); else engine.addAppAudio(p.window, p.name);
+      saveAppAudio(); renderSoundSettings();
+    }));
+    pre.appendChild(b);
+  }
+  // 지금 따로 잡는 소리
+  const ul = $('sepList'); ul.innerHTML = '';
+  const list = engineOk ? engine.appAudioList() : DEMO ? [{ name: 'dc', label: '디스코드', window: 'Discord.exe' }, { name: 'ch', label: '크롬 (유튜브 등)', window: 'chrome.exe' }] : [];
+  if (!list.length) ul.innerHTML = '<li class="empty">아직 없어요. 위에서 프로그램을 골라 추가하세요.</li>';
+  for (const a of list) {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="ic">🔊</span><span class="nm">${esc(a.label)} <small style="color:var(--sub)">${esc(String(a.window).split(':').pop())}</small></span><button class="x" title="빼기">✕</button>`;
+    li.querySelector('.x').addEventListener('click', guard(() => { if (DEMO) return; engine.removeAudio(a.name); saveAppAudio(); renderSoundSettings(); }));
+    ul.appendChild(li);
+  }
+  renderDevices();
 }
-$('btnAudio').addEventListener('click', guard(() => {
+$('appRefresh').addEventListener('click', guard(() => renderSoundSettings(true)));
+$('appAdd').addEventListener('click', guard(() => {
   if (DEMO) return;
-  engine.setAppAudio(audioSel); cfg.audioApps = audioSel; save(); saveAudioState();
-  toast(audioSel.length ? `${audioSel.map((k) => AUDIO_APPS[k].name).join(', ')} 소리를 따로 잡았어요.` : '앱별 소리 분리를 껐어요.');
+  const sel = $('appPick'), v = sel.value; if (!v) return toast('목록에서 프로그램을 골라 주세요.', true);
+  const label = (sel.selectedOptions[0].textContent.replace(/^\[[^\]]*\]:?\s*/, '') || v.split(':').pop()).slice(0, 30);
+  engine.addAppAudio(v, label); saveAppAudio(); renderSoundSettings();
+  toast(`'${label}' 소리를 따로 잡았어요. 아래 사운드에서 볼륨을 조절하세요.`);
 }));
+engine.on('audio', () => { if ($('tab-sound').classList.contains('on')) renderSoundSettings(); });
+
+// ================================================================== 통합 시청자 (👁)
+const viewers = { chzzk: null };
+function renderViewers() {
+  const eye = $('viewerEye'), num = $('viewerTotal'), det = $('viewerDetail');
+  eye.classList.toggle('on', cfg.showViewers);
+  eye.textContent = cfg.showViewers ? '👁' : '🙈';
+  if (!cfg.showViewers) { num.textContent = '•••'; num.classList.add('masked'); det.textContent = ''; return; }
+  num.classList.remove('masked');
+  const parts = [];
+  if (viewers.chzzk != null) parts.push(['치지직', viewers.chzzk]);
+  if (DEMO) { num.textContent = '1,284'; det.textContent = '치지직 912 · 유튜브 372'; return; }
+  if (!cfg.channels.chzzk) { num.textContent = '-'; det.textContent = '설정에서 채널 연결'; return; }
+  const total = parts.reduce((a, [, n]) => a + n, 0);
+  num.textContent = parts.length ? total.toLocaleString('ko-KR') : '-';
+  det.textContent = parts.length ? parts.map(([k, n]) => `${k} ${n.toLocaleString('ko-KR')}`).join(' · ') : '방송 중이 아니에요';
+}
+async function pollViewers() {
+  if (!cfg.channels.chzzk) { viewers.chzzk = null; renderViewers(); return; }
+  try { const r = await ipcRenderer.invoke('viewers:fetch', { chzzk: cfg.channels.chzzk }); viewers.chzzk = r.chzzk ?? null; } catch {}
+  renderViewers();
+}
+$('viewerEye').addEventListener('click', () => { cfg.showViewers = !cfg.showViewers; save(); renderViewers(); if (cfg.showViewers) pollViewers(); });
+$('chzzkId').value = cfg.channels.chzzk || '';
+$('chzzkId').addEventListener('change', () => {
+  const v = $('chzzkId').value.trim().replace(/^.*chzzk\.naver\.com\/(live\/)?/, '').replace(/[/?#].*$/, '');
+  $('chzzkId').value = v; cfg.channels.chzzk = v; save();
+  if (v && !/^[0-9a-f]{32}$/i.test(v)) toast('치지직 채널 ID는 32자리예요. 채널 주소 chzzk.naver.com/ 뒤의 값을 넣어 주세요.', true); else pollViewers();
+});
+setInterval(pollViewers, 60000);
 
 // ================================================================== 방송 / 녹화
 function renderPlatforms() {
@@ -463,7 +534,7 @@ window.addEventListener('resize', layoutDisplay);
 // ================================================================== 시작
 function boot() {
   $('ver').textContent = 'v' + info.version;
-  renderPlatforms(); renderAudioChips(); renderTypes(); setLive('off'); timerListen();
+  renderPlatforms(); renderTypes(); setLive('off'); timerListen(); renderViewers(); pollViewers();
   $('tMode').value = cfg.timer.mode; $('tMin').value = cfg.timer.minutes; $('tLabel').value = cfg.timer.label; $('tTheme').value = cfg.timer.theme;
   timer({ type: 'config', ...cfg.timer });
   const q = { '1080p60': [1920, 1080, 60], '1080p30': [1920, 1080, 30], '720p60': [1280, 720, 60] }[cfg.quality] || [1920, 1080, 60];
@@ -479,7 +550,7 @@ function boot() {
     layoutDisplay();
     const enc = engine.pickEncoder();
     $('encInfo').textContent = '인코더: ' + enc.label + (enc.id === 'obs_x264' ? ' (그래픽카드 인코더를 찾지 못해 CPU를 써요)' : ' (그래픽카드)');
-    renderScenes(); renderSources(); renderMixer(); renderTypes(); renderDevices();
+    renderScenes(); renderSources(); renderMixer(); renderTypes(); renderSoundSettings(true);
     if (!engine.items().length) { openTab('add'); toast('＋ 추가에서 모니터 화면이나 게임부터 넣어 보세요.'); }
   } catch (e) {
     console.error(e);
@@ -492,7 +563,7 @@ function boot() {
 
 // 개발용 화면 미리보기 (윈도우가 아닌 환경에서 STREAMY_DEMO=1)
 const demo = {
-  scenes: [{ id: 'a', name: '게임 방송' }, { id: 'b', name: '저챗' }, { id: 'c', name: '쉬는 시간' }], current: 'a',
+  scenes: [{ id: 'a', name: '게임 방송', n: 3 }, { id: 'b', name: '저챗', n: 2 }, { id: 'c', name: '쉬는 시간', n: 1 }, { id: 'd', name: '합방', n: 4 }], current: 'a',
   items: [{ id: 3, name: '웹캠', kind: 'webcam', visible: true, selected: true }, { id: 2, name: '타이머', kind: 'timer', visible: true }, { id: 1, name: '모니터 1', kind: 'monitor', visible: true }],
   audio: [{ name: 'd', label: '데스크톱 소리', vol: 0.8, muted: false }, { name: 'm', label: '마이크', vol: 0.72, muted: false }, { name: 'dc', label: '디스코드', vol: 0.55, muted: false }, { name: 'ch', label: '크롬 (유튜브 등)', vol: 0.4, muted: false }, { name: 'sp', label: '스포티파이', vol: 0.3, muted: true }],
   level(name, now) { const base = { d: 0.62, m: 0.5, dc: 0.32, ch: 0, sp: 0.5 }[name] || 0; const v = base ? base + Math.sin(now / 170 + name.length) * 0.12 + Math.sin(now / 53) * 0.05 : 0; return { level: Math.max(0, v), peak: Math.max(0, base + 0.15), t: now }; },
@@ -503,7 +574,7 @@ function demoMode() {
   Object.assign(sel.style, { left: '2.5%', top: '62%', width: '27%', height: '34%' }); prev.appendChild(sel);
   prev.classList.add('has-engine');
   $('encInfo').textContent = '인코더: NVIDIA NVENC (그래픽카드)'; $('sCpu').textContent = '6%'; $('sFps').textContent = '60';
-  renderScenes(); renderSources(); renderMixer();
+  renderScenes(); renderSources(); renderMixer(); renderSoundSettings(); renderViewers();
 }
 
 // ================================================================== 종료

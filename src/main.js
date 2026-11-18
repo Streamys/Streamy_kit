@@ -1,6 +1,6 @@
 // Streamy Kit — 메인 프로세스
 // 화면(렌더러)이 방송 엔진을 직접 불러오므로, 여기서는 창 관리·경로·종료 처리만 합니다.
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, dialog, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const server = require('./server');
@@ -85,6 +85,19 @@ ipcMain.handle('app:confirm', async (_e, { title, message, buttons }) => {
 ipcMain.handle('app:pick-image', async () => {
   const r = await dialog.showOpenDialog(win, { title: '이미지 고르기', properties: ['openFile'], filters: [{ name: '이미지', extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'] }] });
   return r.canceled ? null : r.filePaths[0];
+});
+// 통합 시청자: 플랫폼별 현재 시청자 수 (방송 중이 아니면 null)
+ipcMain.handle('viewers:fetch', async (_e, ids = {}) => {
+  const out = {};
+  if (ids.chzzk && /^[0-9a-f]{32}$/i.test(ids.chzzk)) {
+    try {
+      const r = await net.fetch(`https://api.chzzk.naver.com/service/v2/channels/${ids.chzzk}/live-detail`, { headers: { 'User-Agent': 'Mozilla/5.0 StreamyKit' } });
+      const j = await r.json();
+      const c = j && j.content;
+      out.chzzk = c && c.status === 'OPEN' ? Number(c.concurrentUserCount) || 0 : null;
+    } catch { out.chzzk = null; }
+  }
+  return out;
 });
 ipcMain.handle('app:open-path', (_e, p) => shell.openPath(p));
 ipcMain.handle('app:open-url', (_e, u) => { if (/^https:\/\//.test(u)) shell.openExternal(u); });

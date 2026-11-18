@@ -391,7 +391,7 @@ class Engine {
   setupAudio(cfg) {
     this.addAudio('데스크톱 소리', 'wasapi_output_capture', { device_id: 'default' }, '데스크톱 소리', 'desktop');
     this.addAudio('마이크', 'wasapi_input_capture', { device_id: 'default' }, '마이크', 'mic');
-    try { this.setAppAudio(cfg.audioApps || []); } catch (e) { console.warn(e); }
+    for (const a of cfg.appAudio || []) { try { this.addAppAudio(a.window, a.label); } catch (e) { console.warn(e); } }
     for (const [n, v] of Object.entries(cfg.audioState || {})) {
       const a = this.audio[n]; if (!a) continue;
       if (typeof v.vol === 'number') a.fader.deflection = v.vol;
@@ -399,16 +399,33 @@ class Engine {
     }
     this.emit('audio');
   }
-  setAppAudio(keys) {
-    const type = this.types().find((t) => t.startsWith('wasapi_process_output_capture'));
-    if (!type) throw new Error('이 PC에서는 앱별 소리 분리를 쓸 수 없어요. (윈도우 10 2004 이상 필요)');
-    const want = new Set(keys);
-    for (const [k, app] of Object.entries(AUDIO_APPS)) {
-      const name = app.name;
-      if (want.has(k)) this.addAudio(name, type, { window: app.window, priority: 2 }, app.name, 'app');
-      else if (this.audio[name]) this.removeAudio(name);
-    }
+  processType() {
+    const t = this.types().find((x) => x.startsWith('wasapi_process_output_capture'));
+    if (!t) throw new Error('이 PC에서는 프로그램별 소리 분리를 쓸 수 없어요. (윈도우 10 2004 이상 필요)');
+    return t;
   }
+  // 지금 켜져 있는 프로그램 목록 (소리 분리 대상 후보)
+  appChoices() {
+    const type = this.processType();
+    try {
+      const tmp = this.osn.InputFactory.createPrivate(type, '__probe_apps_' + Date.now(), {});
+      const p = tmp.properties.get('window');
+      const items = p && p.details ? p.details.items.filter((x) => x.value).map((x) => ({ name: x.name, value: String(x.value) })) : [];
+      tmp.release();
+      return items;
+    } catch (e) { console.error(e); return []; }
+  }
+  // window 값 "제목:클래스:실행파일.exe" — 실행 파일 이름으로 매칭(priority 2)
+  addAppAudio(windowValue, label) {
+    const type = this.processType();
+    const exe = String(windowValue).split(':').pop() || windowValue;
+    const name = '앱 · ' + (label || exe.replace(/\.exe$/i, ''));
+    if (Object.values(this.audio).some((a) => a.window && a.window.split(':').pop().toLowerCase() === exe.toLowerCase())) throw new Error('이미 따로 잡고 있는 프로그램이에요.');
+    const a = this.addAudio(name, type, { window: windowValue, priority: 2 }, label || exe.replace(/\.exe$/i, ''), 'app');
+    a.window = windowValue;
+    return name;
+  }
+  appAudioList() { return Object.entries(this.audio).filter(([, a]) => a.kind === 'app').map(([name, a]) => ({ name, label: a.label, window: a.window })); }
   audioList() {
     return Object.entries(this.audio).map(([name, a]) => ({ name, label: a.label, kind: a.kind, muted: a.input.muted, vol: a.fader.deflection }));
   }
