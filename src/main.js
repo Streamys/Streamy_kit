@@ -82,6 +82,10 @@ ipcMain.handle('app:confirm', async (_e, { title, message, buttons }) => {
   const r = await dialog.showMessageBox(win, { type: 'question', title, message, buttons, defaultId: 0, cancelId: buttons.length - 1 });
   return r.response;
 });
+ipcMain.handle('app:pick-image', async () => {
+  const r = await dialog.showOpenDialog(win, { title: '이미지 고르기', properties: ['openFile'], filters: [{ name: '이미지', extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'] }] });
+  return r.canceled ? null : r.filePaths[0];
+});
 ipcMain.handle('app:open-path', (_e, p) => shell.openPath(p));
 ipcMain.handle('app:open-url', (_e, u) => { if (/^https:\/\//.test(u)) shell.openExternal(u); });
 ipcMain.handle('timer:action', (_e, a) => { server.applyAction(a); return true; });

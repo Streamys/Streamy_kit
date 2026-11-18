@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file:">
 <title>Streamy Kit</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -10,37 +10,55 @@
 <header class="titlebar">
   <div class="brand"><img src="logo.png" alt=""><b>Streamy</b><span>Kit</span><em id="ver"></em></div>
   <div class="live-pill" id="livePill"><i></i><span id="liveText">오프라인</span><small id="liveTime"></small></div>
-  <div class="stats" id="stats"><span>CPU <b id="sCpu">-</b></span><span>FPS <b id="sFps">-</b></span><span>송출 <b id="sKbps">-</b></span><span>드롭 <b id="sDrop">-</b></span></div>
+  <div class="stats"><span>CPU <b id="sCpu">-</b></span><span>FPS <b id="sFps">-</b></span><span>송출 <b id="sKbps">-</b></span><span>드롭 <b id="sDrop">-</b></span></div>
 </header>
 
 <div class="layout">
-  <!-- 왼쪽: 미리보기 + 장면 + 믹서 -->
   <main class="stage">
-    <div class="preview-wrap">
+    <div class="preview-wrap" id="previewWrap">
       <div class="preview" id="preview">
-        <div class="preview-empty" id="previewEmpty">
-          <img src="logo.png" alt="">
-          <p id="engineMsg">방송 엔진을 불러오는 중…</p>
-        </div>
+        <div class="preview-empty" id="previewEmpty"><img src="logo.png" alt=""><p id="engineMsg">방송 엔진을 불러오는 중…</p></div>
+      </div>
+    </div>
+    <div class="edit-bar" id="editBar">
+      <span class="sel-name" id="selName">미리보기에서 소스를 클릭하면 선택돼요 · 끌어서 이동 · 모서리를 끌어 크기 조절</span>
+      <div class="edit-actions">
+        <button data-fit="fit" title="화면에 꽉 맞추기">화면 맞춤</button>
+        <button data-fit="center" title="가운데로">가운데</button>
+        <button data-fit="reset" title="원래 크기">원래 크기</button>
       </div>
     </div>
 
-    <div class="scenes" id="scenes"></div>
+    <div class="dock">
+      <section class="box scenes-box">
+        <div class="box-head"><h3>장면</h3>
+          <div class="tools"><button id="sceneAdd" title="장면 추가">＋</button><button id="sceneRename" title="이름 바꾸기">✎</button><button id="sceneDel" title="삭제">🗑</button><button id="sceneUp" title="위로">↑</button><button id="sceneDown" title="아래로">↓</button></div>
+        </div>
+        <ul class="list" id="sceneList"></ul>
+      </section>
 
-    <section class="mixer">
-      <div class="sec-head"><h3>오디오 믹서</h3><small>앱별로 따로 조절돼요</small></div>
-      <div class="mixer-list" id="mixer"></div>
-    </section>
+      <section class="box sources-box">
+        <div class="box-head"><h3>소스</h3>
+          <div class="tools"><button id="srcAdd" class="accent" title="소스 추가">＋ 추가</button><button id="srcEdit" title="속성">⚙</button><button id="srcUp" title="앞으로">↑</button><button id="srcDown" title="뒤로">↓</button><button id="srcDel" title="삭제">🗑</button></div>
+        </div>
+        <ul class="list" id="sourceList"></ul>
+      </section>
+
+      <section class="box mixer-box">
+        <div class="box-head"><h3>오디오</h3><small>막대 뒤 움직임 = 지금 들어오는 소리</small></div>
+        <div class="mixer" id="mixer"></div>
+      </section>
+    </div>
   </main>
 
-  <!-- 오른쪽: 기능 패널 -->
   <aside class="panel">
     <nav class="tabs">
       <button data-tab="stream" class="on">방송</button>
-      <button data-tab="sources">화면·캠</button>
+      <button data-tab="add">소스 추가</button>
+      <button data-tab="props">속성</button>
       <button data-tab="audio">사운드 분리</button>
       <button data-tab="timer">타이머</button>
-      <button data-tab="design">문구·디자인</button>
+      <button data-tab="settings">설정</button>
     </nav>
 
     <div class="tab-body">
@@ -53,82 +71,64 @@
         </label>
         <button class="link" id="keyHelp">스트림 키 확인하러 가기 →</button>
         <div class="info-box" id="encInfo">인코더: 확인 중</div>
-        <p class="hint">치지직·SOOP는 1080p 60fps 8000kbps, 유튜브는 9000kbps로 자동 설정돼요. 그래픽카드 인코더(NVENC 등)가 있으면 자동으로 사용해요.</p>
+        <p class="hint">치지직·SOOP는 8000kbps, 유튜브는 9000kbps로 자동 설정돼요. 그래픽카드 인코더(NVENC 등)가 있으면 자동으로 사용해요.</p>
       </section>
 
-      <!-- 화면·캠 -->
-      <section class="tab" id="tab-sources">
-        <h4>게임 / 화면</h4>
-        <p class="hint">메인 장면에는 <b>전체 화면 게임이 자동으로 잡혀요.</b> 게임이 안 잡히면 모니터 화면을 추가하세요.</p>
-        <div class="row"><select id="monitorSel"></select><button id="btnScreen">모니터 화면 추가</button></div>
+      <!-- 소스 추가 -->
+      <section class="tab" id="tab-add">
+        <div class="type-grid" id="typeGrid"></div>
+        <div class="add-form" id="addForm"></div>
+      </section>
 
-        <h4>웹캠 <small>직접 고르고 배치해요</small></h4>
-        <div class="row"><select id="camSel"></select><button id="btnCam">웹캠 추가</button></div>
-        <div class="cam-layout" id="camLayout">
-          <div class="corners">
-            <button data-corner="topLeft">↖</button><button data-corner="topRight">↗</button>
-            <button data-corner="bottomLeft" class="on">↙</button><button data-corner="bottomRight">↘</button>
-          </div>
-          <label class="field">크기 <input id="camSize" type="range" min="15" max="60" value="30"></label>
-          <button class="ghost danger" id="btnCamRemove">웹캠 빼기</button>
-        </div>
-
-        <h4>버추얼</h4>
-        <div class="chips" id="virtualApps"></div>
-        <button id="btnVirtual">버추얼 넣기</button>
-        <p class="hint">VTube Studio·VSeeFace는 설정에서 <b>Spout2 출력</b>을 켜 주세요. 배경이 투명하게 들어와요.</p>
+      <!-- 속성 -->
+      <section class="tab" id="tab-props">
+        <div id="propsBody"><p class="hint">소스 목록에서 소스를 고른 뒤 ⚙ 버튼을 누르거나, 소스를 더블클릭하세요.</p></div>
       </section>
 
       <!-- 사운드 분리 -->
       <section class="tab" id="tab-audio">
-        <p class="hint">디스코드, 유튜브(브라우저), 음악 소리를 <b>각각 따로</b> 잡아요. 왼쪽 믹서에서 따로 조절할 수 있어요.</p>
+        <p class="hint">디스코드, 유튜브(브라우저), 음악 소리를 <b>각각 따로</b> 잡아요. 고르면 왼쪽 아래 오디오에 막대가 생기고, 소리가 나면 막대 뒤가 움직여요.</p>
         <div class="chips" id="audioApps"></div>
-        <label class="check"><input type="checkbox" id="muteDesktop"> 데스크톱 소리 끄기 (같은 소리가 두 번 들어가는 것 방지)</label>
-        <p class="hint">게임 소리는 데스크톱 소리로 들어가요. 데스크톱 소리를 끄면 게임 소리도 같이 꺼지니 주의하세요.</p>
         <button class="primary-sm" id="btnAudio">적용</button>
+        <p class="hint">프로그램이 지금 꺼져 있어도 괜찮아요. 켜지면 자동으로 잡혀요.<br>같은 소리가 두 번 들리면 <b>데스크톱 소리</b>를 음소거하세요 (게임 소리도 같이 꺼지니 주의).</p>
       </section>
 
       <!-- 타이머 -->
       <section class="tab" id="tab-timer">
         <div class="timer-big" id="timerBig">00:00</div>
-        <div class="row">
-          <button class="primary-sm" data-t="start">▶ 시작</button><button data-t="pause">⏸ 멈춤</button><button data-t="reset">↺ 리셋</button>
-        </div>
-        <label class="field">모드
-          <select id="tMode"><option value="stopwatch">경과 시간 (방송 몇 시간째)</option><option value="countdown">카운트다운 (방송 시작까지)</option></select>
-        </label>
+        <div class="row"><button class="primary-sm" data-t="start">▶ 시작</button><button data-t="pause">⏸ 멈춤</button><button data-t="reset">↺ 리셋</button></div>
+        <label class="field">모드<select id="tMode"><option value="stopwatch">경과 시간 (방송 몇 시간째)</option><option value="countdown">카운트다운 (방송 시작까지)</option></select></label>
         <div class="grid2">
           <label class="field">분 (카운트다운)<input id="tMin" type="number" min="1" max="600" value="10"></label>
           <label class="field">스타일<select id="tTheme"><option value="red">블랙·레드</option><option value="white">화이트</option><option value="solid">레드</option></select></label>
         </div>
         <label class="field">문구<input id="tLabel" placeholder="예: 방송 시작까지"></label>
-        <div class="row"><button id="tApply">설정 적용</button><label class="check"><input type="checkbox" id="tVisible" checked> 화면에 보이기</label></div>
+        <button id="tApply">설정 적용</button>
+        <p class="hint">방송 화면에 띄우려면 <b>소스 추가 → 타이머</b>를 넣으세요.</p>
       </section>
 
-      <!-- 문구·디자인 -->
-      <section class="tab" id="tab-design">
-        <label class="field">시작 전 문구<input id="waitingText"></label>
-        <label class="field">자리 비움 문구<input id="awayText"></label>
-        <label class="field">종료 문구<input id="endingText"></label>
-        <label class="field">배경 색<input id="bgColor" type="color"></label>
-        <button class="primary-sm" id="btnTexts">적용</button>
+      <!-- 설정 -->
+      <section class="tab" id="tab-settings">
+        <h4>오디오 장치</h4>
+        <label class="field">데스크톱 소리<select id="devDesktop"></select></label>
+        <label class="field">마이크<select id="devMic"></select></label>
         <h4>화질</h4>
         <label class="field"><select id="quality"><option value="1080p60">1080p 60fps (권장)</option><option value="1080p30">1080p 30fps</option><option value="720p60">720p 60fps (저사양 PC)</option></select></label>
         <p class="hint">화질 변경은 다시 시작한 뒤 적용돼요.</p>
+        <h4>단축키</h4>
+        <p class="hint">F1~F9 장면 전환 · 방향키 소스 이동 (Shift = 10배) · Delete 소스 삭제 · Esc 선택 해제</p>
         <h4>정보</h4>
-        <p class="hint">Streamy Kit은 OBS Studio 엔진(GPL-2.0)과 obs-studio-node(GPL-2.0)를 사용합니다. 소스 코드: <button class="link inline" id="srcLink">GitHub</button></p>
+        <p class="hint">Streamy Kit은 OBS Studio 엔진(GPL-2.0)과 obs-studio-node(GPL-2.0)를 사용합니다. <button class="link inline" id="srcLink">소스 코드</button></p>
       </section>
     </div>
 
     <div class="toast" id="toast"></div>
-
     <div class="actions">
       <button class="go-live" id="btnLive"><i></i><span>방송 시작</span></button>
       <button class="rec" id="btnRec" title="녹화"><i></i>녹화</button>
     </div>
   </aside>
 </div>
-
 <script src="app.js"></script>
 </body>
 </html>

@@ -1,114 +1,385 @@
-// Streamy Kit — 화면 로직
+// Streamy Kit — 화면 로직 (v0.3)
 'use strict';
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const path = require('path');
-const { Engine, SCENES, AUDIO_APPS, VIRTUAL_APPS, PLATFORMS } = require('./engine.js');
+const { Engine, SOURCE_TYPES, AUDIO_APPS, PLATFORMS } = require('./engine.js');
 
 const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const info = ipcRenderer.sendSync('app:info');
 const engine = new Engine();
 let engineOk = false;
+const DEMO = !!process.env.STREAMY_DEMO;
 
-// ------------------------------------------------------------------ 설정 저장
+// ================================================================== 설정 저장
 const DEFAULTS = {
   platform: 'chzzk', keys: { chzzk: '', youtube: '', soop: '' },
-  audioApps: ['discord', 'chrome'], muteDesktop: false,
-  waitingText: '곧 방송이 시작됩니다', awayText: '잠시 자리 비웠어요, 금방 올게요!', endingText: '오늘도 함께해 주셔서 감사합니다', bgColor: '#0E0E10',
-  timer: { mode: 'stopwatch', minutes: 10, label: '', theme: 'red', visible: true },
-  virtualApp: 'vtubestudio', camCorner: 'bottomLeft', camSize: 30, quality: '1080p60',
+  audioApps: [], audioState: {}, devices: {},
+  timer: { mode: 'stopwatch', minutes: 10, label: '', theme: 'red' }, quality: '1080p60',
 };
+const scenesFile = path.join(path.dirname(info.settingsFile), 'scenes.json');
 function loadSettings() {
   try { const s = JSON.parse(fs.readFileSync(info.settingsFile, 'utf8')); return { ...DEFAULTS, ...s, keys: { ...DEFAULTS.keys, ...(s.keys || {}) }, timer: { ...DEFAULTS.timer, ...(s.timer || {}) } }; }
   catch { return JSON.parse(JSON.stringify(DEFAULTS)); }
 }
 let cfg = loadSettings();
-let saveT = null;
-function save() {
-  clearTimeout(saveT);
-  saveT = setTimeout(() => { try { fs.mkdirSync(path.dirname(info.settingsFile), { recursive: true }); fs.writeFileSync(info.settingsFile, JSON.stringify(cfg, null, 2)); } catch (e) { console.error(e); } }, 300);
+const writeJson = (f, d) => { try { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(d, null, 2)); fs.renameSync(f + '.tmp', f); } catch (e) { console.error(e); } };
+let saveT = null, sceneT = null;
+function save() { clearTimeout(saveT); saveT = setTimeout(() => writeJson(info.settingsFile, cfg), 300); }
+function saveScenes() { if (!engineOk) return; clearTimeout(sceneT); sceneT = setTimeout(() => { try { writeJson(scenesFile, engine.serialize()); } catch (e) { console.error(e); } }, 600); }
+function saveAudioState() {
+  if (!engineOk) return;
+  cfg.audioState = {}; for (const a of engine.audioList()) cfg.audioState[a.name] = { vol: a.vol, muted: a.muted }; save();
 }
 
-// ------------------------------------------------------------------ 알림
+// ================================================================== 알림 / 오류 처리
 let toastT = null;
 function toast(msg, err = false) {
-  const t = $('toast');
-  t.textContent = msg; t.className = 'toast show' + (err ? ' err' : '');
+  const t = $('toast'); t.textContent = msg; t.className = 'toast show' + (err ? ' err' : '');
   clearTimeout(toastT); toastT = setTimeout(() => { t.className = 'toast'; }, err ? 7000 : 3500);
 }
 function guard(fn) {
   return (...a) => {
-    if (!engineOk) return toast('방송 엔진이 아직 준비되지 않았어요.', true);
+    if (!engineOk && !DEMO) return toast('방송 엔진이 아직 준비되지 않았어요.', true);
     try { const r = fn(...a); if (r && r.catch) r.catch((e) => toast(e.message || String(e), true)); }
     catch (e) { console.error(e); toast(e.message || String(e), true); }
   };
 }
+function openTab(name) {
+  document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x.dataset.tab === name));
+  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + name));
+}
+document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => openTab(b.dataset.tab)));
 
-// ------------------------------------------------------------------ 탭
-document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => {
-  document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x === b));
-  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + b.dataset.tab));
-}));
-
-// ------------------------------------------------------------------ 장면 버튼 (F1~F4)
+// ================================================================== 장면 목록
+let renamingScene = null;
 function renderScenes() {
-  const box = $('scenes'); box.innerHTML = '';
-  SCENES.forEach((s, i) => {
-    const b = document.createElement('button');
-    b.className = 'scene-btn' + (engine.current === s.key ? ' on' : '');
-    b.innerHTML = `<b></b><small></small><kbd>F${i + 1}</kbd>`;
-    b.querySelector('b').textContent = s.label;
-    b.querySelector('small').textContent = { waiting: '대기 화면', main: '게임 · 캠', away: '잠깐 쉬는 중', ending: '마무리 인사' }[s.key];
-    b.addEventListener('click', guard(() => engine.switchScene(s.key)));
-    box.appendChild(b);
+  const ul = $('sceneList'); ul.innerHTML = '';
+  if (!engineOk && !DEMO) { ul.innerHTML = '<li class="empty">엔진 준비 중…</li>'; return; }
+  const list = DEMO ? demo.scenes : engine.scenes;
+  const cur = DEMO ? demo.current : engine.currentId;
+  list.forEach((s, i) => {
+    const li = document.createElement('li');
+    li.className = s.id === cur ? 'on' : '';
+    if (renamingScene === s.id) {
+      li.innerHTML = '<input class="rename">';
+      const inp = li.querySelector('input'); inp.value = s.name;
+      let finished = false;
+      const done = (ok) => { if (finished) return; finished = true; renamingScene = null; if (ok) guard(() => { engine.renameScene(s.id, inp.value.trim()); saveScenes(); })(); renderScenes(); };
+      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); e.stopPropagation(); });
+      inp.addEventListener('blur', () => done(true));
+      setTimeout(() => { inp.focus(); inp.select(); });
+    } else {
+      li.innerHTML = `<span class="nm">${esc(s.name)}</span>${i < 9 ? `<span class="key">F${i + 1}</span>` : ''}`;
+      li.addEventListener('click', guard(() => { if (DEMO) { demo.current = s.id; renderScenes(); return; } engine.switchScene(s.id); saveScenes(); }));
+      li.addEventListener('dblclick', () => { if (DEMO) return; renamingScene = s.id; renderScenes(); });
+    }
+    ul.appendChild(li);
   });
 }
-engine.on('scene', renderScenes);
+$('sceneAdd').addEventListener('click', guard(() => { const s = engine.addScene(); engine.switchScene(s.id, true); renamingScene = s.id; renderScenes(); saveScenes(); }));
+$('sceneRename').addEventListener('click', guard(() => { renamingScene = engine.currentId; renderScenes(); }));
+$('sceneDel').addEventListener('click', guard(async () => {
+  const s = engine.currentScene; if (!s) return;
+  const r = await ipcRenderer.invoke('app:confirm', { title: '장면 삭제', message: `'${s.name}' 장면을 삭제할까요?`, buttons: ['삭제', '취소'] });
+  if (r === 0) { engine.removeScene(s.id); saveScenes(); }
+}));
+$('sceneUp').addEventListener('click', guard(() => { engine.moveScene(engine.currentId, -1); saveScenes(); }));
+$('sceneDown').addEventListener('click', guard(() => { engine.moveScene(engine.currentId, 1); saveScenes(); }));
+engine.on('scenes', renderScenes);
+
+// ================================================================== 소스 목록
+function selectedItem() { return engine.selected && engine.selected.sceneId === engine.currentId ? engine.selected.itemId : null; }
+function renderSources() {
+  const ul = $('sourceList'); ul.innerHTML = '';
+  const items = DEMO ? demo.items : engineOk ? engine.items() : [];
+  if (!items.length) ul.innerHTML = '<li class="empty">아직 소스가 없어요.<br><b>＋ 추가</b>에서 모니터 화면이나 게임을 넣어 보세요.</li>';
+  for (const it of items) {
+    const li = document.createElement('li');
+    li.className = (it.selected ? 'on' : '') + (it.visible ? '' : ' hidden');
+    const ic = (SOURCE_TYPES[it.kind] || {}).icon || '•';
+    li.innerHTML = `<span class="ic">${ic}</span><span class="nm">${esc(it.name)}</span><button class="eye" title="보이기/숨기기">${it.visible ? '👁' : '◌'}</button>`;
+    li.addEventListener('click', guard(() => { if (DEMO) return; engine.select(engine.currentId, it.id); }));
+    li.addEventListener('dblclick', guard(() => { if (DEMO) return; engine.select(engine.currentId, it.id); showProps(); }));
+    li.querySelector('.eye').addEventListener('click', guard((e) => { e.stopPropagation(); if (DEMO) return; engine.setVisible(it.id, !it.visible); saveScenes(); }));
+    ul.appendChild(li);
+  }
+  renderEditBar();
+}
+function renderEditBar() {
+  const bar = $('editBar'), name = $('selName');
+  const hint = ' · 끌어서 이동 · 모서리를 끌어 크기 조절 · Alt 누르면 자석 끄기';
+  if (DEMO) { bar.classList.add('has-sel'); name.innerHTML = '선택: <b>웹캠</b>' + hint; return; }
+  const id = engineOk ? selectedItem() : null;
+  const it = id != null ? engine.items().find((x) => x.id === id) : null;
+  bar.classList.toggle('has-sel', !!it);
+  name.innerHTML = it ? `선택: <b>${esc(it.name)}</b>` + hint : '미리보기에서 소스를 클릭하면 선택돼요' + hint;
+}
+engine.on('items', renderSources);
+$('srcAdd').addEventListener('click', () => openTab('add'));
+$('srcEdit').addEventListener('click', guard(() => showProps()));
+$('srcUp').addEventListener('click', guard(() => { const id = selectedItem(); if (id != null) { engine.moveItem(id, 1); saveScenes(); } }));
+$('srcDown').addEventListener('click', guard(() => { const id = selectedItem(); if (id != null) { engine.moveItem(id, -1); saveScenes(); } }));
+$('srcDel').addEventListener('click', guard(() => removeSelected()));
+document.querySelectorAll('[data-fit]').forEach((b) => b.addEventListener('click', guard(() => { const id = selectedItem(); if (id != null) { engine.fitItem(id, b.dataset.fit); saveScenes(); } })));
+async function removeSelected() {
+  const id = selectedItem(); if (id == null) return toast('삭제할 소스를 먼저 골라 주세요.');
+  const it = engine.items().find((x) => x.id === id);
+  const r = await ipcRenderer.invoke('app:confirm', { title: '소스 삭제', message: `'${it.name}'을(를) 이 장면에서 뺄까요?`, buttons: ['삭제', '취소'] });
+  if (r === 0) { engine.removeItem(id); saveScenes(); }
+}
+
+// ================================================================== 소스 추가 / 속성 폼
+let addKind = null;
+function renderTypes() {
+  const g = $('typeGrid'); g.innerHTML = '';
+  for (const [k, t] of Object.entries(SOURCE_TYPES)) {
+    const b = document.createElement('button');
+    b.className = 'type' + (addKind === k ? ' on' : '');
+    b.innerHTML = `<span>${t.icon}</span>${esc(t.label)}`;
+    if (engineOk && !engine.available(k)) { b.disabled = true; b.title = '이 PC에서는 쓸 수 없어요'; }
+    b.addEventListener('click', () => { addKind = k; renderTypes(); renderAddForm(); });
+    g.appendChild(b);
+  }
+}
+function optionList(items, empty) {
+  if (!items.length) return empty ? `<option value="">${esc(empty)}</option>` : '';
+  return items.map((x) => `<option value="${esc(x.value)}">${esc(x.name)}</option>`).join('');
+}
+const PICK_LABEL = { monitor: '모니터', window: '프로그램 창', game: '게임 창', webcam: '웹캠' };
+function pickOptions(kind) {
+  const first = kind === 'game' ? '<option value="">전체 화면 게임 자동 감지</option>' : '';
+  return first + optionList(engineOk ? engine.choices(kind) : [], kind === 'game' ? '' : '찾지 못했어요');
+}
+function sourceForm(kind, prefix, cur = {}) {
+  const t = SOURCE_TYPES[kind];
+  let h = '';
+  if (t.prop) {
+    h += `<label class="field">${PICK_LABEL[kind]}<div class="row" style="margin:6px 0 0"><select id="${prefix}Pick">${pickOptions(kind)}</select><button class="ghost" id="${prefix}Refresh" title="다시 찾기">↻</button></div></label>`;
+    if (kind === 'webcam') h += '<p class="hint">웹캠은 처음에 왼쪽 아래에 들어가요. 미리보기에서 <b>끌어서 옮기고 모서리로 크기</b>를 맞추세요.</p>';
+    if (kind === 'game') h += '<p class="hint">특정 게임만 잡으려면 게임을 켠 상태에서 ↻를 누르고 고르세요.</p>';
+  }
+  if (t.file) h += `<label class="field">이미지 파일<div class="key-row"><input id="${prefix}File" readonly placeholder="파일을 골라 주세요" value="${esc(cur.file || '')}"><button class="ghost" id="${prefix}Browse">찾기</button></div></label>`;
+  if (t.text) {
+    h += `<label class="field">내용<textarea id="${prefix}Text" rows="2">${esc(cur.text || '텍스트')}</textarea></label>
+      <div class="grid2"><label class="field">크기<input id="${prefix}Size" type="number" min="12" max="400" value="${esc((cur.font && cur.font.size) || 96)}"></label>
+      <label class="field">색<input id="${prefix}Color" type="color" value="#ffffff"></label></div>
+      <label class="check"><input type="checkbox" id="${prefix}Outline" ${cur.outline ? 'checked' : ''}> 검은 테두리</label>`;
+  }
+  if (t.url) h += `<label class="field">주소 (투네이션·위플랩 알림창 URL 등)<input id="${prefix}Url" placeholder="https://" value="${esc(cur.url || '')}"></label>
+      <div class="grid2"><label class="field">가로<input id="${prefix}W" type="number" value="${esc(cur.width || 800)}"></label><label class="field">세로<input id="${prefix}H" type="number" value="${esc(cur.height || 600)}"></label></div>`;
+  if (kind === 'color') h += `<label class="field">색<input id="${prefix}Color" type="color" value="#0e0e10"></label>`;
+  if (kind === 'virtual') h += '<p class="hint">VTube Studio·VSeeFace 설정에서 <b>Spout2 출력</b>을 켜 주세요. 배경 없이 캐릭터만 들어와요. 다른 프로그램은 <b>게임</b>에서 창을 골라 잡으세요.</p>';
+  if (kind === 'timer') h += '<p class="hint">오른쪽 위에 들어가요. 조작은 <b>타이머</b> 탭에서 해요.</p>';
+  return h;
+}
+function readForm(prefix) {
+  const v = (id) => { const el = $(prefix + id); return el ? (el.type === 'checkbox' ? el.checked : el.value) : undefined; };
+  const pick = $(prefix + 'Pick');
+  return { value: v('Pick'), label: pick && pick.selectedOptions[0] ? pick.selectedOptions[0].textContent : '', file: v('File'), text: v('Text'), size: v('Size'), color: v('Color'), outline: v('Outline'), url: v('Url'), width: v('W'), height: v('H'), timerUrl: info.timerUrl };
+}
+function bindForm(kind, prefix) {
+  const r = $(prefix + 'Refresh');
+  if (r) r.addEventListener('click', guard(() => { $(prefix + 'Pick').innerHTML = pickOptions(kind); }));
+  const b = $(prefix + 'Browse');
+  if (b) b.addEventListener('click', async () => { const f = await ipcRenderer.invoke('app:pick-image'); if (f) $(prefix + 'File').value = f; });
+}
+function renderAddForm() {
+  const box = $('addForm');
+  if (!addKind) { box.innerHTML = ''; return; }
+  const t = SOURCE_TYPES[addKind];
+  box.innerHTML = `<h4>${t.icon} ${esc(t.label)} 추가</h4>` + sourceForm(addKind, 'a') + '<button class="primary-sm" id="aAdd">현재 장면에 추가</button>';
+  bindForm(addKind, 'a');
+  $('aAdd').addEventListener('click', guard(() => {
+    const opt = readForm('a');
+    if (t.prop && addKind !== 'game' && !opt.value) return toast('목록에서 골라 주세요.', true);
+    if (t.file && !opt.file) return toast('이미지 파일을 골라 주세요.', true);
+    if (t.url && !/^https?:\/\//.test(opt.url || '')) return toast('http(s)로 시작하는 주소를 넣어 주세요.', true);
+    if (['webcam', 'monitor', 'window'].includes(addKind) && opt.label) opt.name = opt.label.slice(0, 40);
+    const r = engine.addSource(addKind, opt);
+    saveScenes();
+    toast(`'${r.name}'을(를) 넣었어요. 미리보기에서 끌어서 위치를 맞추세요.`);
+  }));
+}
+function showProps() {
+  openTab('props');
+  const id = selectedItem(), body = $('propsBody');
+  if (id == null) { body.innerHTML = '<p class="hint">소스를 먼저 골라 주세요.</p>'; return; }
+  const it = engine.items().find((x) => x.id === id), s = engine.sourceSettings(it.name);
+  if (!s) { body.innerHTML = '<p class="hint">이 소스는 바꿀 수 있는 설정이 없어요.</p>'; return; }
+  const t = SOURCE_TYPES[s.kind] || {};
+  body.innerHTML = `<label class="field">이름<input id="pName" value="${esc(it.name)}"></label>` + sourceForm(s.kind, 'p', s.settings) +
+    '<div class="row"><button class="primary-sm" id="pSave">적용</button><button class="ghost" id="pDel">이 장면에서 빼기</button></div>';
+  bindForm(s.kind, 'p');
+  if (t.prop) { const cur = s.settings[t.prop]; if (cur != null) $('pPick').value = cur; }
+  $('pSave').addEventListener('click', guard(() => {
+    const opt = readForm('p');
+    if (!(t.prop && !opt.value && s.kind !== 'game')) engine.updateSource(it.name, s.kind, opt);
+    const nn = $('pName').value.trim(); if (nn && nn !== it.name) engine.renameSource(it.name, nn);
+    saveScenes(); toast('적용했어요.'); renderSources();
+  }));
+  $('pDel').addEventListener('click', guard(() => removeSelected()));
+}
+
+// ================================================================== 미리보기에서 끌기 / 크기 조절
+const prev = $('preview');
+let drag = null, raf = 0, pending = null;
+function toCanvas(e) {
+  const r = prev.getBoundingClientRect(), z = window.devicePixelRatio || 1;
+  const pr = engine.previewRect(r.width * z, r.height * z);
+  const k = engine.width / pr.w;                        // 디스플레이 픽셀 → 캔버스 픽셀
+  return { x: ((e.clientX - r.left) * z - pr.x) * k, y: ((e.clientY - r.top) * z - pr.y) * k, px: k * z };
+}
+function cornerAt(rect, p) {
+  const tol = 10 * p.px;
+  const cs = { tl: [rect.x, rect.y], tr: [rect.x + rect.w, rect.y], bl: [rect.x, rect.y + rect.h], br: [rect.x + rect.w, rect.y + rect.h] };
+  for (const [k, [x, y]] of Object.entries(cs)) if (Math.abs(p.x - x) <= tol && Math.abs(p.y - y) <= tol) return k;
+  return null;
+}
+function snap(v, size, total, tol) {
+  for (const t of [0, total / 2 - size / 2, total - size]) if (Math.abs(v - t) < tol) return t;
+  return v;
+}
+prev.addEventListener('mousedown', (e) => {
+  if (!engineOk || e.button !== 0) return;
+  try {
+    const p = toCanvas(e), selId = selectedItem();
+    if (selId != null) {
+      const it = engine.itemObj(selId);
+      if (it) {
+        const c = cornerAt(engine.itemRect(it), p);
+        if (c) { const r = engine.normalize(selId); if (!r || r.w <= 0) return; drag = { mode: 'resize', id: selId, corner: c, start: r, p0: p }; e.preventDefault(); return; }
+      }
+    }
+    const hit = engine.hitTest(p.x, p.y);
+    if (!hit) { engine.clearSelection(); renderSources(); return; }
+    if (hit.id !== selId) engine.select(engine.currentId, hit.id);
+    drag = { mode: 'move', id: hit.id, start: engine.normalize(hit.id), p0: p };
+    e.preventDefault();
+  } catch (err) { console.error(err); }
+});
+let hoverT = 0;
+window.addEventListener('mousemove', (e) => {
+  if (!engineOk) return;
+  if (!drag) {
+    // 마우스 모양 (IPC 호출을 줄이려고 60ms마다만 확인)
+    const now = Date.now(); if (now - hoverT < 60) return; hoverT = now;
+    let cls = '';
+    const selId = selectedItem();
+    if (selId != null && e.target === prev) {
+      try {
+        const it = engine.itemObj(selId), p = toCanvas(e);
+        if (it) { const rect = engine.itemRect(it), c = cornerAt(rect, p); if (c) cls = c === 'tl' || c === 'br' ? 'c-nwse' : 'c-nesw'; else if (p.x >= rect.x && p.x <= rect.x + rect.w && p.y >= rect.y && p.y <= rect.y + rect.h) cls = 'c-move'; }
+      } catch {}
+    }
+    prev.className = 'preview has-engine ' + cls;
+    return;
+  }
+  const p = toCanvas(e);
+  const dx = p.x - drag.p0.x, dy = p.y - drag.p0.y, s = drag.start, tol = 12 * p.px;
+  if (!s) return;
+  if (drag.mode === 'move') {
+    let x = s.x + dx, y = s.y + dy;
+    if (!e.altKey) { x = snap(x, s.w, engine.width, tol); y = snap(y, s.h, engine.height, tol); }
+    pending = { id: drag.id, x, y, w: null };
+  } else {
+    // 반대쪽 모서리를 고정하고 비율 유지
+    const left = drag.corner.includes('l'), top = drag.corner.includes('t');
+    const ax = left ? s.x + s.w : s.x, ay = top ? s.y + s.h : s.y;
+    const sx = left ? -1 : 1, sy = top ? -1 : 1, ratio = s.w / s.h;
+    let w = Math.max(16, s.w + sx * dx), h = Math.max(16, s.h + sy * dy);
+    if (w / h > ratio) h = w / ratio; else w = h * ratio;
+    if (!e.altKey) { const ex = ax + sx * w; for (const t of [0, engine.width]) if (Math.abs(ex - t) < tol) { w = Math.abs(t - ax); h = w / ratio; } }
+    pending = { id: drag.id, x: left ? ax - w : ax, y: top ? ay - h : ay, w };
+  }
+  if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (pending) { try { engine.setItemRect(pending.id, pending.x, pending.y, pending.w); } catch {} pending = null; } });
+});
+window.addEventListener('mouseup', () => { if (drag) { drag = null; saveScenes(); } });
+
 window.addEventListener('keydown', (e) => {
-  const n = ['F1', 'F2', 'F3', 'F4'].indexOf(e.key);
-  if (n >= 0 && engineOk) { e.preventDefault(); engine.switchScene(SCENES[n].key); }
+  if (!engineOk || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  const n = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9'].indexOf(e.key);
+  if (n >= 0 && engine.scenes[n]) { e.preventDefault(); engine.switchScene(engine.scenes[n].id); saveScenes(); return; }
+  const id = selectedItem(); if (id == null) return;
+  const step = e.shiftKey ? 10 : 1, mv = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+  if (mv) { e.preventDefault(); const r = engine.normalize(id); engine.setItemRect(id, r.x + mv[0], r.y + mv[1], null); saveScenes(); }
+  if (e.key === 'Delete') removeSelected();
+  if (e.key === 'Escape') { engine.clearSelection(); renderSources(); }
 });
 
-// ------------------------------------------------------------------ 믹서
+// ================================================================== 오디오 믹서 (막대 뒤에서 소리 레벨이 움직임)
+const meterEls = {};
 function renderMixer() {
-  const box = $('mixer');
-  if (!engineOk) { box.innerHTML = '<div class="mixer-empty">엔진이 준비되면 오디오가 여기 표시돼요.</div>'; return; }
-  const list = engine.audioList();
-  box.innerHTML = '';
+  const box = $('mixer'); box.innerHTML = '';
+  for (const k of Object.keys(meterEls)) delete meterEls[k];
+  const list = DEMO ? demo.audio : engineOk ? engine.audioList() : [];
+  if (!list.length) { box.innerHTML = '<div class="hint">엔진이 준비되면 오디오가 여기 표시돼요.</div>'; return; }
   for (const a of list) {
     const row = document.createElement('div');
     row.className = 'ch' + (a.muted ? ' muted' : '');
-    row.innerHTML = '<button class="mute" title="음소거"></button><div><div class="nm"></div><input type="range" min="0" max="100"></div><span class="pct"></span>';
-    row.querySelector('.mute').textContent = a.muted ? '✕' : '♪';
-    row.querySelector('.nm').textContent = a.label;
-    const r = row.querySelector('input'); r.value = Math.round(a.deflection * 100);
-    const pct = row.querySelector('.pct'); pct.textContent = r.value + '%';
-    r.addEventListener('input', () => { engine.setVolume(a.name, r.value / 100); pct.textContent = r.value + '%'; });
-    row.querySelector('.mute').addEventListener('click', () => engine.setMuted(a.name, !a.muted));
+    row.innerHTML = `<button class="mute" title="음소거">${a.muted ? '✕' : '🔊'}</button><div class="nm">${esc(a.label)}<span class="dot"></span></div><span class="pct"></span>
+      <div class="bar"><div class="lvl"></div><div class="pk"></div><div class="ticks"></div><input type="range" min="0" max="100"></div>`;
+    const r = row.querySelector('input'), pct = row.querySelector('.pct');
+    r.value = Math.round(a.vol * 100); pct.textContent = r.value + '%';
+    r.addEventListener('input', () => { if (!DEMO) engine.setVolume(a.name, r.value / 100); pct.textContent = r.value + '%'; });
+    r.addEventListener('change', saveAudioState);
+    row.querySelector('.mute').addEventListener('click', guard(() => { if (DEMO) return; engine.setMuted(a.name, !a.muted); saveAudioState(); }));
     box.appendChild(row);
+    meterEls[a.name] = { row, lvl: row.querySelector('.lvl'), pk: row.querySelector('.pk'), shown: 0, peak: 0, peakT: 0 };
   }
 }
-engine.on('audio-changed', renderMixer);
+engine.on('audio', renderMixer);
+// 올라갈 땐 바로, 내려갈 땐 천천히 (눈으로 보기 편하게)
+function meterLoop() {
+  const now = Date.now();
+  for (const [name, m] of Object.entries(meterEls)) {
+    const L = DEMO ? demo.level(name, now) : engine.levels[name];
+    const fresh = L && now - L.t < 500;
+    const target = fresh ? L.level : 0;
+    m.shown = target > m.shown ? target : Math.max(target, m.shown - 0.02);
+    m.lvl.style.width = (m.shown * 100).toFixed(1) + '%';
+    const pk = fresh ? L.peak : 0;
+    if (pk >= m.peak || now - m.peakT > 1200) { m.peak = pk; m.peakT = now; }
+    m.pk.style.left = (m.peak * 100).toFixed(1) + '%'; m.pk.style.opacity = m.peak > 0.02 ? 1 : 0;
+    m.row.classList.toggle('active', m.shown > 0.08);
+  }
+  requestAnimationFrame(meterLoop);
+}
+requestAnimationFrame(meterLoop);
 
-// ------------------------------------------------------------------ 방송: 플랫폼 / 키
+// ================================================================== 사운드 분리
+let audioSel = [...cfg.audioApps];
+function renderAudioChips() {
+  const box = $('audioApps'); box.innerHTML = '';
+  for (const [k, v] of Object.entries(AUDIO_APPS)) {
+    const b = document.createElement('button'); b.className = 'chip' + (audioSel.includes(k) ? ' on' : ''); b.textContent = v.name;
+    b.addEventListener('click', () => { audioSel = audioSel.includes(k) ? audioSel.filter((x) => x !== k) : [...audioSel, k]; renderAudioChips(); });
+    box.appendChild(b);
+  }
+}
+$('btnAudio').addEventListener('click', guard(() => {
+  if (DEMO) return;
+  engine.setAppAudio(audioSel); cfg.audioApps = audioSel; save(); saveAudioState();
+  toast(audioSel.length ? `${audioSel.map((k) => AUDIO_APPS[k].name).join(', ')} 소리를 따로 잡았어요.` : '앱별 소리 분리를 껐어요.');
+}));
+
+// ================================================================== 방송 / 녹화
 function renderPlatforms() {
   const box = $('platforms'); box.innerHTML = '';
   for (const [k, p] of Object.entries(PLATFORMS)) {
-    const b = document.createElement('button');
-    b.className = 'plat' + (cfg.platform === k ? ' on' : '');
-    b.innerHTML = `<span></span><small>${p.bitrate}kbps</small>`;
-    b.querySelector('span').textContent = p.name;
+    const b = document.createElement('button'); b.className = 'plat' + (cfg.platform === k ? ' on' : '');
+    b.innerHTML = `${esc(p.name)}<small>${p.bitrate}kbps</small>`;
     b.addEventListener('click', () => { if (engine.stream) return toast('방송 중에는 플랫폼을 바꿀 수 없어요.', true); cfg.platform = k; save(); renderPlatforms(); });
     box.appendChild(b);
   }
   $('streamKey').value = cfg.keys[cfg.platform] || '';
 }
 $('streamKey').addEventListener('input', () => { cfg.keys[cfg.platform] = $('streamKey').value.trim(); save(); });
-$('keyShow').addEventListener('click', () => { const k = $('streamKey'); const show = k.type === 'password'; k.type = show ? 'text' : 'password'; $('keyShow').textContent = show ? '숨기기' : '보기'; });
+$('keyShow').addEventListener('click', () => { const k = $('streamKey'), show = k.type === 'password'; k.type = show ? 'text' : 'password'; $('keyShow').textContent = show ? '숨기기' : '보기'; });
 $('keyHelp').addEventListener('click', () => ipcRenderer.invoke('app:open-url', PLATFORMS[cfg.platform].keyHelp));
-$('srcLink').addEventListener('click', () => ipcRenderer.invoke('app:open-url', 'https://github.com/Onin0782/streamy-kit-studio'));
+$('srcLink').addEventListener('click', () => ipcRenderer.invoke('app:open-url', 'https://github.com/Onin0782/streamy-kit-studio/tree/streamy-kit-app'));
 
-// ------------------------------------------------------------------ 방송 시작/종료
 let liveSince = 0;
 function setLive(state, extra = {}) {
   const pill = $('livePill'), btn = $('btnLive');
@@ -123,33 +394,22 @@ function setLive(state, extra = {}) {
 engine.on('stream', (s) => {
   setLive(s.state, s);
   if (s.state === 'live') toast(`${s.platform} 방송이 시작됐어요! (인코더: ${s.encoder})`);
-  if (s.state === 'off' && s.error) toast(s.error, true);
-  else if (s.state === 'off') toast('방송을 종료했어요.');
+  if (s.state === 'off') s.error ? toast(s.error, true) : toast('방송을 종료했어요.');
 });
 $('btnLive').addEventListener('click', guard(async () => {
-  if (engine.stream) {
-    const r = await ipcRenderer.invoke('app:confirm', { title: '방송 종료', message: '방송을 종료할까요?', buttons: ['종료', '취소'] });
-    if (r === 0) engine.stopStream();
-    return;
-  }
+  if (DEMO) return;
+  if (engine.stream) { const r = await ipcRenderer.invoke('app:confirm', { title: '방송 종료', message: '방송을 종료할까요?', buttons: ['종료', '취소'] }); if (r === 0) engine.stopStream(); return; }
   engine.startStream({ platform: cfg.platform, key: cfg.keys[cfg.platform] });
 }));
-
 engine.on('record', (r) => {
   $('btnRec').classList.toggle('on', r.state === 'on');
   if (r.state === 'on') toast('녹화를 시작했어요. 저장 위치: ' + info.recordDir);
   if (r.state === 'off') r.error ? toast(r.error, true) : toast('녹화를 저장했어요.');
 });
-$('btnRec').addEventListener('click', guard(() => {
-  if (engine.recording) engine.stopRecording(); else engine.startRecording(info.recordDir);
-}));
+$('btnRec').addEventListener('click', guard(() => { if (DEMO) return; engine.recording ? engine.stopRecording() : engine.startRecording(info.recordDir); }));
 
-// ------------------------------------------------------------------ 상태 표시
 setInterval(() => {
-  if (liveSince) {
-    const s = Math.floor((Date.now() - liveSince) / 1000);
-    $('liveTime').textContent = `${Math.floor(s / 3600)}:${String(Math.floor(s % 3600 / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-  }
+  if (liveSince) { const s = Math.floor((Date.now() - liveSince) / 1000); $('liveTime').textContent = `${Math.floor(s / 3600)}:${String(Math.floor(s % 3600 / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; }
   if (!engineOk) return;
   try {
     const st = engine.stats();
@@ -157,58 +417,10 @@ setInterval(() => {
     $('sFps').textContent = st.fps != null ? st.fps.toFixed(0) : '-';
     $('sKbps').textContent = st.kbps != null ? Math.round(st.kbps) + 'kbps' : '-';
     $('sDrop').textContent = st.dropped != null && st.sent ? ((st.dropped / Math.max(1, st.sent)) * 100).toFixed(1) + '%' : '-';
-  } catch { /* 엔진 재시작 중 */ }
+  } catch {}
 }, 1000);
 
-// ------------------------------------------------------------------ 화면·캠·버추얼
-function fillSelect(sel, items, empty) {
-  sel.innerHTML = '';
-  if (!items.length) { const o = document.createElement('option'); o.textContent = empty; o.value = ''; sel.appendChild(o); return; }
-  for (const it of items) { const o = document.createElement('option'); o.value = it.value; o.textContent = it.name; sel.appendChild(o); }
-}
-$('btnScreen').addEventListener('click', guard(() => { engine.addScreen($('monitorSel').value); toast('모니터 화면을 메인 장면에 넣었어요.'); }));
-$('btnCam').addEventListener('click', guard(() => {
-  const id = $('camSel').value;
-  if (!id) return toast('연결된 웹캠이 없어요.', true);
-  engine.addWebcam(id);
-  engine.webcamLayout(cfg.camCorner, cfg.camSize / 100);
-  $('camLayout').classList.add('show');
-  toast('웹캠을 넣었어요. 위치와 크기를 골라 주세요.');
-}));
-document.querySelectorAll('[data-corner]').forEach((b) => b.addEventListener('click', guard(() => {
-  cfg.camCorner = b.dataset.corner; save();
-  document.querySelectorAll('[data-corner]').forEach((x) => x.classList.toggle('on', x === b));
-  engine.webcamLayout(cfg.camCorner, cfg.camSize / 100);
-})));
-$('camSize').addEventListener('input', guard(() => { cfg.camSize = Number($('camSize').value); save(); engine.webcamLayout(cfg.camCorner, cfg.camSize / 100); }));
-$('btnCamRemove').addEventListener('click', guard(() => { engine.removeInput('[Streamy] 웹캠'); $('camLayout').classList.remove('show'); toast('웹캠을 뺐어요.'); }));
-
-function renderChips(boxId, items, selected, multi, onChange) {
-  const box = $(boxId); box.innerHTML = '';
-  for (const [k, v] of Object.entries(items)) {
-    const b = document.createElement('button');
-    b.className = 'chip' + (selected.includes(k) ? ' on' : '');
-    b.textContent = v.name;
-    b.addEventListener('click', () => {
-      let next = multi ? (selected.includes(k) ? selected.filter((x) => x !== k) : [...selected, k]) : [k];
-      onChange(next); renderChips(boxId, items, next, multi, onChange);
-    });
-    box.appendChild(b);
-  }
-}
-let audioSel = [...cfg.audioApps];
-renderChips('audioApps', AUDIO_APPS, audioSel, true, (n) => { audioSel = n; });
-$('muteDesktop').checked = cfg.muteDesktop;
-$('btnAudio').addEventListener('click', guard(() => {
-  engine.setAppAudio(audioSel, $('muteDesktop').checked);
-  cfg.audioApps = audioSel; cfg.muteDesktop = $('muteDesktop').checked; save();
-  toast(audioSel.length ? `${audioSel.map((k) => AUDIO_APPS[k].name).join(', ')} 소리를 따로 잡았어요. 프로그램이 꺼져 있어도 켜지면 자동으로 들어와요.` : '앱별 소리 분리를 껐어요.');
-}));
-let virtualSel = [cfg.virtualApp];
-renderChips('virtualApps', VIRTUAL_APPS, virtualSel, false, (n) => { virtualSel = n; cfg.virtualApp = n[0]; save(); });
-$('btnVirtual').addEventListener('click', guard(() => { const how = engine.addVirtual(cfg.virtualApp); toast(`${VIRTUAL_APPS[cfg.virtualApp].name}을(를) 넣었어요 (${how}).`); }));
-
-// ------------------------------------------------------------------ 타이머
+// ================================================================== 타이머
 let tState = null, tSkew = 0;
 function timerListen() {
   const es = new EventSource(info.timerUrl.replace('/overlay/timer', '/api/timer/events'));
@@ -225,89 +437,82 @@ setInterval(() => {
 }, 200);
 const timer = (a) => ipcRenderer.invoke('timer:action', a);
 document.querySelectorAll('[data-t]').forEach((b) => b.addEventListener('click', () => timer({ type: b.dataset.t, minutes: $('tMin').value })));
-$('tApply').addEventListener('click', () => {
-  cfg.timer = { ...cfg.timer, mode: $('tMode').value, minutes: Number($('tMin').value), label: $('tLabel').value, theme: $('tTheme').value }; save();
-  timer({ type: 'config', ...cfg.timer }); toast('타이머 설정을 적용했어요.');
-});
-$('tVisible').addEventListener('change', guard(() => { cfg.timer.visible = $('tVisible').checked; save(); engine.setTimerVisible(cfg.timer.visible); }));
+$('tApply').addEventListener('click', () => { cfg.timer = { mode: $('tMode').value, minutes: Number($('tMin').value), label: $('tLabel').value, theme: $('tTheme').value }; save(); timer({ type: 'config', ...cfg.timer }); toast('타이머 설정을 적용했어요.'); });
 
-// ------------------------------------------------------------------ 문구·디자인
-for (const k of ['waitingText', 'awayText', 'endingText', 'bgColor']) $(k).value = cfg[k];
-$('btnTexts').addEventListener('click', guard(() => {
-  for (const k of ['waitingText', 'awayText', 'endingText', 'bgColor']) cfg[k] = $(k).value;
-  save(); engine.updateTexts(cfg); toast('문구와 배경을 바꿨어요.');
-}));
+// ================================================================== 설정
 $('quality').value = cfg.quality;
-$('quality').addEventListener('change', () => { cfg.quality = $('quality').value; save(); toast('화질 설정을 저장했어요. Streamy Kit을 다시 시작하면 적용돼요.'); });
+$('quality').addEventListener('change', () => { cfg.quality = $('quality').value; save(); toast('저장했어요. Streamy Kit을 다시 시작하면 적용돼요.'); });
+function renderDevices() {
+  if (!engineOk) return;
+  for (const [sel, name, kind] of [['devDesktop', '데스크톱 소리', 'desktop'], ['devMic', '마이크', 'mic']]) {
+    const el = $(sel); el.innerHTML = optionList(engine.audioDevices(kind), '장치 없음');
+    el.value = cfg.devices[kind] || 'default';
+    el.onchange = guard(() => { engine.setAudioDevice(name, el.value); cfg.devices[kind] = el.value; save(); });
+  }
+}
 
-// ------------------------------------------------------------------ 미리보기 위치 맞추기
+// ================================================================== 미리보기 위치 맞추기
 function layoutDisplay() {
   if (!engineOk) return;
-  const r = $('preview').getBoundingClientRect();
-  const z = window.devicePixelRatio || 1;
+  const r = prev.getBoundingClientRect(), z = window.devicePixelRatio || 1;
   engine.moveDisplay(r.left * z, r.top * z, r.width * z, r.height * z);
 }
-new ResizeObserver(layoutDisplay).observe($('preview'));
+new ResizeObserver(layoutDisplay).observe(prev);
 window.addEventListener('resize', layoutDisplay);
 
-// ------------------------------------------------------------------ 시작
+// ================================================================== 시작
 function boot() {
   $('ver').textContent = 'v' + info.version;
-  renderPlatforms(); renderScenes(); renderMixer(); setLive('off'); timerListen();
-  $('tMode').value = cfg.timer.mode; $('tMin').value = cfg.timer.minutes; $('tLabel').value = cfg.timer.label; $('tTheme').value = cfg.timer.theme; $('tVisible').checked = cfg.timer.visible;
+  renderPlatforms(); renderAudioChips(); renderTypes(); setLive('off'); timerListen();
+  $('tMode').value = cfg.timer.mode; $('tMin').value = cfg.timer.minutes; $('tLabel').value = cfg.timer.label; $('tTheme').value = cfg.timer.theme;
   timer({ type: 'config', ...cfg.timer });
-  $('camSize').value = cfg.camSize;
-  document.querySelectorAll('[data-corner]').forEach((x) => x.classList.toggle('on', x.dataset.corner === cfg.camCorner));
-
   const q = { '1080p60': [1920, 1080, 60], '1080p30': [1920, 1080, 30], '720p60': [1280, 720, 60] }[cfg.quality] || [1920, 1080, 60];
   try {
     engine.start({ osnDir: info.osnDir, dataDir: info.dataDir, width: q[0], height: q[1], fps: q[2] });
     engineOk = true;
-    engine.setupScenes(cfg);
+    let saved = null; try { saved = JSON.parse(fs.readFileSync(scenesFile, 'utf8')); } catch {}
+    if (saved && saved.scenes && saved.scenes.length) engine.load(saved); else engine.addScene('장면 1');
+    engine.setupAudio(cfg);
+    for (const [kind, name] of [['desktop', '데스크톱 소리'], ['mic', '마이크']]) if (cfg.devices[kind]) engine.setAudioDevice(name, cfg.devices[kind]);
     engine.createDisplay(ipcRenderer.sendSync('app:window-handle'));
-    $('preview').classList.add('has-engine');
+    prev.classList.add('has-engine');
     layoutDisplay();
-    if (cfg.audioApps.length || cfg.muteDesktop) { try { engine.setAppAudio(cfg.audioApps, cfg.muteDesktop); } catch (e) { toast(e.message, true); } }
-    engine.addTimer(info.timerUrl);
-    engine.setTimerVisible(cfg.timer.visible);
-    fillSelect($('monitorSel'), engine.monitors(), '모니터 없음');
-    fillSelect($('camSel'), engine.webcams(), '웹캠 없음');
     const enc = engine.pickEncoder();
     $('encInfo').textContent = '인코더: ' + enc.label + (enc.id === 'obs_x264' ? ' (그래픽카드 인코더를 찾지 못해 CPU를 써요)' : ' (그래픽카드)');
-    renderScenes(); renderMixer();
-    toast('준비 완료! F1~F4로 장면을 바꿀 수 있어요.');
+    renderScenes(); renderSources(); renderMixer(); renderTypes(); renderDevices();
+    if (!engine.items().length) { openTab('add'); toast('＋ 추가에서 모니터 화면이나 게임부터 넣어 보세요.'); }
   } catch (e) {
     console.error(e);
     engineOk = false;
-    const box = $('previewEmpty'); box.classList.add('err');
-    $('engineMsg').textContent = e.message || String(e);
+    $('previewEmpty').classList.add('err'); $('engineMsg').textContent = e.message || String(e);
     $('encInfo').textContent = '인코더: 엔진 없음';
-    fillSelect($('monitorSel'), [], '엔진 없음'); fillSelect($('camSel'), [], '엔진 없음');
-    if (process.env.STREAMY_DEMO) demoMode();
+    if (DEMO) demoMode(); else { renderScenes(); renderSources(); renderMixer(); }
   }
 }
 
 // 개발용 화면 미리보기 (윈도우가 아닌 환경에서 STREAMY_DEMO=1)
+const demo = {
+  scenes: [{ id: 'a', name: '게임 방송' }, { id: 'b', name: '저챗' }, { id: 'c', name: '쉬는 시간' }], current: 'a',
+  items: [{ id: 3, name: '웹캠', kind: 'webcam', visible: true, selected: true }, { id: 2, name: '타이머', kind: 'timer', visible: true }, { id: 1, name: '모니터 1', kind: 'monitor', visible: true }],
+  audio: [{ name: 'd', label: '데스크톱 소리', vol: 0.8, muted: false }, { name: 'm', label: '마이크', vol: 0.72, muted: false }, { name: 'dc', label: '디스코드', vol: 0.55, muted: false }, { name: 'ch', label: '크롬 (유튜브 등)', vol: 0.4, muted: false }, { name: 'sp', label: '스포티파이', vol: 0.3, muted: true }],
+  level(name, now) { const base = { d: 0.62, m: 0.5, dc: 0.32, ch: 0, sp: 0.5 }[name] || 0; const v = base ? base + Math.sin(now / 170 + name.length) * 0.12 + Math.sin(now / 53) * 0.05 : 0; return { level: Math.max(0, v), peak: Math.max(0, base + 0.15), t: now }; },
+};
 function demoMode() {
-  const img = document.createElement('img'); img.src = 'demo-preview.png'; img.className = 'demo-shot';
-  $('preview').appendChild(img); $('preview').classList.add('has-engine');
-  engine.current = 'waiting'; renderScenes();
-  $('encInfo').textContent = '인코더: NVIDIA NVENC (그래픽카드)';
-  $('sCpu').textContent = '6%'; $('sFps').textContent = '60';
-  const box = $('mixer'); box.innerHTML = '';
-  for (const [n, v, m] of [['데스크톱 소리', 80, 0], ['마이크', 72, 0], ['디스코드', 55, 0], ['크롬 (유튜브 등)', 40, 0], ['스포티파이', 30, 1]]) {
-    const row = document.createElement('div'); row.className = 'ch' + (m ? ' muted' : '');
-    row.innerHTML = `<button class="mute">${m ? '✕' : '♪'}</button><div><div class="nm">${n}</div><input type="range" min="0" max="100" value="${v}"></div><span class="pct">${v}%</span>`;
-    box.appendChild(row);
-  }
+  const img = document.createElement('img'); img.src = 'demo-preview.png'; img.className = 'demo-shot'; prev.appendChild(img);
+  const sel = document.createElement('div'); sel.className = 'demo-sel'; sel.innerHTML = '<i></i><i></i><i></i><i></i>';
+  Object.assign(sel.style, { left: '2.5%', top: '62%', width: '27%', height: '34%' }); prev.appendChild(sel);
+  prev.classList.add('has-engine');
+  $('encInfo').textContent = '인코더: NVIDIA NVENC (그래픽카드)'; $('sCpu').textContent = '6%'; $('sFps').textContent = '60';
+  renderScenes(); renderSources(); renderMixer();
 }
 
-// ------------------------------------------------------------------ 종료
+// ================================================================== 종료
 ipcRenderer.on('app:request-quit', async () => {
   if (engine.stream) {
     const r = await ipcRenderer.invoke('app:confirm', { title: 'Streamy Kit 종료', message: '방송 중이에요. 방송을 끝내고 종료할까요?', buttons: ['종료', '취소'] });
     if (r !== 0) return;
   }
+  try { if (engineOk) { writeJson(scenesFile, engine.serialize()); saveAudioState(); writeJson(info.settingsFile, cfg); } } catch (e) { console.error(e); }
   try { engine.shutdown(); } catch (e) { console.error(e); }
   ipcRenderer.send('app:ready-to-quit');
 });
