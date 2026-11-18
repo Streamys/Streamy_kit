@@ -400,11 +400,12 @@ function renderMixer() {
     r.addEventListener('input', () => { if (!DEMO) engine.setVolume(a.name, r.value / 100); pct.textContent = r.value + '%'; });
     r.addEventListener('change', saveAudioState);
     row.querySelector('.mute').addEventListener('click', guard(() => { if (DEMO) return; engine.setMuted(a.name, !a.muted); saveAudioState(); }));
+    bindChannelDrag(row, a);
     box.appendChild(row);
     meterEls[a.name] = { row, lvl: row.querySelector('.lvl'), pk: row.querySelector('.pkw'), shown: 0, peak: 0, peakT: 0, drawn: -1, drawnPk: -1 };
   }
 }
-engine.on('audio', () => { renderMixer(); renderSepApps(); });
+engine.on('audio', () => { renderMixer(); renderApps(true); });
 // 레벨은 엔진에서 1초에 수십 번 들쑥날쑥 들어와요 → 화면에서는 시간 기준으로 부드럽게 따라가게 (올라갈 땐 빠르게, 내려갈 땐 천천히)
 let meterT = performance.now();
 const ease = (cur, target, dt, up, down) => cur + (target - cur) * (1 - Math.exp(-dt / (target > cur ? up : down)));
@@ -460,56 +461,93 @@ ipcRenderer.on('audio-sessions', (_e, data) => {
   if (now - liveRenderT > 1000) { liveRenderT = now; renderLiveApps(); }
 });
 function appLabel(a) { return (a.desc || a.title || a.exe.replace(/\.exe$/i, '')).slice(0, 28); }
-function renderLiveApps() {
-  const box = $('liveApps');
+// 켜져 있는 프로그램 = 창 목록(도우미) + 소리 내는 프로그램(오디오 세션). 실행 파일 기준으로 하나씩
+let openWins = [];          // [{ exe, title, cls, value }]
+const HIDE_EXE = /^(streamy kit|obs64|audiodg|explorer|applicationframehost|textinputhost|shellexperiencehost|searchhost|startmenuexperiencehost|lockapp|systemsettings|ctfmon|dwm)\.exe$/i;
+function runningApps() {
+  if (DEMO) return demo.live.concat([{ exe: 'Discord.exe', desc: '디스코드' }, { exe: 'chrome.exe', desc: 'Google Chrome' }, { exe: 'VTube Studio.exe', desc: 'VTube Studio' }]);
+  const m = new Map();
+  for (const w of openWins) { const k = w.exe.toLowerCase(); if (HIDE_EXE.test(w.exe) || m.has(k)) continue; m.set(k, { exe: w.exe, title: w.title }); }
+  for (const a of Object.values(liveSeen)) { const k = a.exe.toLowerCase(); if (HIDE_EXE.test(a.exe)) continue; m.set(k, { ...(m.get(k) || {}), exe: a.exe, desc: a.desc || (m.get(k) || {}).desc, title: (m.get(k) || {}).title || a.title }); }
+  return [...m.values()];
+}
+// 이름: 오디오 세션 이름 → 알려진 프로그램 → 창 제목 끝부분(" - Chrome" 같은) → 실행 파일 이름
+const NICE = { 'chrome.exe': 'Google Chrome', 'msedge.exe': 'Microsoft Edge', 'whale.exe': '네이버 웨일', 'firefox.exe': 'Firefox', 'discord.exe': '디스코드', 'kakaotalk.exe': '카카오톡', 'spotify.exe': 'Spotify', 'melon.exe': '멜론', 'steam.exe': 'Steam', 'vtube studio.exe': 'VTube Studio', 'code.exe': 'VS Code', 'leagueclientux.exe': '리그 오브 레전드', 'league of legends.exe': '리그 오브 레전드 (게임)' };
+function niceName(a) { return (a.desc && !/\.exe$/i.test(a.desc) ? a.desc : NICE[a.exe.toLowerCase()] || (a.title && a.title.length < 40 ? a.title : a.exe.replace(/\.exe$/i, ''))).slice(0, 30); }
+function renderApps(force) {
+  const box = $('appGrid'); if (!box) return;
   const sep = new Set((engineOk ? engine.appAudioList() : DEMO ? demo.sep : []).map((x) => (x.exe || '').toLowerCase()));
-  const list = DEMO ? demo.live : Object.values(liveSeen);
-  const items = list.filter((a) => !sep.has(a.exe.toLowerCase())).sort((a, b) => a.exe.localeCompare(b.exe));
-  const sig = items.map((a) => a.exe).join('|');
-  if (box.dataset.sig === sig && box.children.length) return;   // 목록이 같으면 다시 안 그림 (끌기 중 깜빡임 방지)
+  const items = runningApps().sort((a, b) => niceName(a).localeCompare(niceName(b), 'ko'));
+  const sig = items.map((a) => a.exe + (sep.has(a.exe.toLowerCase()) ? '+' : '')).join('|');
+  if (!force && box.dataset.sig === sig && box.children.length) return;    // 같으면 다시 안 그림 (끌기 중 깜빡임 방지)
   box.dataset.sig = sig; box.innerHTML = '';
-  if (!items.length) { box.innerHTML = `<div class="empty">${DEMO || soundOpen ? '소리를 내는 프로그램이 없어요.<br>유튜브나 음악을 틀어 보세요.' : ''}</div>`; return; }
-  for (const a of items) box.appendChild(card(a, false));
+  if (!items.length) { box.innerHTML = `<div class="empty">${engineOk || DEMO ? '켜져 있는 프로그램을 찾는 중…' : '엔진이 준비되면 보여요'}</div>`; return; }
+  for (const a of items) {
+    const on = sep.has(a.exe.toLowerCase()), label = niceName(a);
+    const c = document.createElement('div');
+    c.className = 'acard' + (on ? ' in' : ''); c.draggable = !on; c.dataset.exe = a.exe;
+    c.title = on ? '이미 사운드에 있어요' : '끌어서 아래 사운드 칸에 놓기 (더블클릭해도 돼요)';
+    c.innerHTML = `<div class="lv"></div><span class="ava">${esc(label.slice(0, 1).toUpperCase())}</span><div class="nm">${esc(label)}<small>${on ? '<b class="tag">✓ 사운드에 있음</b>' : esc(a.exe)}</small></div>`;
+    if (!on) {
+      c.addEventListener('dragstart', (e) => { e.dataTransfer.setData('application/x-streamy-app', JSON.stringify({ exe: a.exe, label })); e.dataTransfer.effectAllowed = 'copy'; c.classList.add('dragging'); document.body.classList.add('drag-app'); });
+      c.addEventListener('dragend', () => { c.classList.remove('dragging'); document.body.classList.remove('drag-app'); });
+      c.addEventListener('dblclick', () => addSep(a.exe, label));
+    }
+    box.appendChild(c);
+  }
 }
-function renderSepApps() {
-  const box = $('sepApps'); box.innerHTML = '';
-  const list = engineOk ? engine.appAudioList() : DEMO ? demo.sep : [];
-  if (!list.length) { box.innerHTML = '<div class="empty">여기로 끌어다 놓으면<br>그 프로그램 소리만 따로 잡혀요</div>'; return; }
-  for (const a of list) box.appendChild(card({ exe: a.exe, desc: a.label, name: a.name }, true));
-}
-function card(a, inSep) {
-  const c = document.createElement('div');
-  c.className = 'acard' + (inSep ? ' in' : ''); c.draggable = true; c.dataset.exe = a.exe;
-  c.innerHTML = `<div class="lv"></div><span class="dot"></span><div class="nm">${esc(inSep ? a.desc : appLabel(a))}<small>${esc(a.exe)}</small></div>${inSep ? '<button class="x" title="빼기">✕</button>' : ''}`;
-  c.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', JSON.stringify({ exe: a.exe, label: inSep ? a.desc : appLabel(a), from: inSep ? 'sep' : 'live', name: a.name })); e.dataTransfer.effectAllowed = 'move'; c.classList.add('dragging'); });
-  c.addEventListener('dragend', () => c.classList.remove('dragging'));
-  if (inSep) c.querySelector('.x').addEventListener('click', guard(() => { if (DEMO) return; engine.removeAudio(a.name); saveAudioState(); renderLiveApps(); }));
-  else c.addEventListener('dblclick', () => addSep(a.exe, appLabel(a)));
-  return c;
-}
+function renderLiveApps() { renderApps(); }
+function renderSepApps() { renderApps(true); }
 const addSep = guard((exe, label) => {
-  if (DEMO) return;
-  engine.addAppAudio(exe, label); saveAudioState();
-  $('liveApps').dataset.sig = ''; renderLiveApps();
-  toast(`'${label}' 소리를 따로 잡았어요. 메인 화면 사운드에서 볼륨을 조절하세요.`);
+  if (DEMO) return toast(`'${label}' 소리를 따로 잡았어요 (데모)`);
+  engine.addAppAudio(exe, label); saveAudioState(); renderApps(true);
+  toast(`'${label}' 소리를 따로 잡았어요. 사운드 칸에서 볼륨을 조절하세요.`);
 });
-for (const [zoneId, accept] of [['sepApps', 'live'], ['liveApps', 'sep']]) {
-  const z = $(zoneId);
-  z.addEventListener('dragover', (e) => { e.preventDefault(); z.classList.add('over'); });
-  z.addEventListener('dragleave', (e) => { if (!z.contains(e.relatedTarget)) z.classList.remove('over'); });
-  z.addEventListener('drop', (e) => {
-    e.preventDefault(); z.classList.remove('over');
-    let d = null; try { d = JSON.parse(e.dataTransfer.getData('text/plain')); } catch {}
-    if (!d || d.from !== accept) return;
-    if (accept === 'live') addSep(d.exe, d.label);
-    else guard(() => { if (DEMO) return; engine.removeAudio(d.name); saveAudioState(); $('liveApps').dataset.sig = ''; renderLiveApps(); })();
+ipcRenderer.on('windows', (_e, data) => {
+  if (!Array.isArray(data)) { if (data && data.error) rlog('warn', 'windows', data.error); return; }
+  openWins = data;
+  if (soundOpen) renderApps();
+  virtualTick();
+});
+// 사운드 칸: 프로그램을 놓으면 넣기 / 막대를 끌어서 밖에 놓으면 빼기
+const soundBox = document.querySelector('.sound');
+let chDrag = null;          // 끌고 있는 사운드 막대 { name, label }
+soundBox.addEventListener('dragover', (e) => {
+  if (e.dataTransfer.types.includes('application/x-streamy-app')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; soundBox.classList.add('drop-on'); }
+  else if (chDrag) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+});
+soundBox.addEventListener('dragleave', (e) => { if (!soundBox.contains(e.relatedTarget)) soundBox.classList.remove('drop-on'); });
+soundBox.addEventListener('drop', (e) => {
+  soundBox.classList.remove('drop-on');
+  const raw = e.dataTransfer.getData('application/x-streamy-app');
+  if (raw) { e.preventDefault(); let d = null; try { d = JSON.parse(raw); } catch {} if (d) addSep(d.exe, d.label); return; }
+  if (chDrag) { e.preventDefault(); chDrag.keep = true; }       // 사운드 칸 안에 다시 놓음 → 그대로
+});
+// 막대를 끄는 중에는 어디든 놓을 수 있게 (놓은 곳이 사운드 칸 밖이면 빼기)
+document.addEventListener('dragover', (e) => { if (chDrag) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } });
+document.addEventListener('drop', (e) => { if (chDrag && !soundBox.contains(e.target)) e.preventDefault(); });
+function bindChannelDrag(row, a) {
+  if (a.kind !== 'app') return;
+  const h = row.querySelector('.nm');
+  h.draggable = true; h.classList.add('grab'); h.title = '끌어서 사운드 칸 밖에 놓으면 빠져요';
+  h.addEventListener('dragstart', (e) => {
+    chDrag = { name: a.name, label: a.label, keep: false };
+    e.dataTransfer.setData('application/x-streamy-ch', a.name); e.dataTransfer.effectAllowed = 'move';
+    row.classList.add('dragging'); document.body.classList.add('drag-ch');
+  });
+  h.addEventListener('dragend', () => {
+    const d = chDrag; chDrag = null;
+    row.classList.remove('dragging'); document.body.classList.remove('drag-ch');
+    if (!d || d.keep) return;
+    guard(() => { if (DEMO) return toast(`'${d.label}'을(를) 뺐어요 (데모)`); engine.removeAudio(d.name); saveAudioState(); renderApps(true); toast(`'${d.label}' 소리를 사운드에서 뺐어요.`); })();
   });
 }
 function renderDevices() {
   if (!engineOk) { for (const id of ['devDesktop', 'devMic']) $(id).innerHTML = '<option>엔진 준비 중</option>'; return; }
   for (const [sel, name, kind] of [['devDesktop', '데스크톱 소리', 'desktop'], ['devMic', '마이크', 'mic']]) {
     const el = $(sel); el.innerHTML = optionList(engine.audioDevices(kind), '장치 없음');
-    el.value = cfg.devices[kind] || 'default';
+    const opts = [...el.options].map((o) => o.value);
+    el.value = opts.includes(cfg.devices[kind]) ? cfg.devices[kind] : opts.includes('default') ? 'default' : (opts[0] || '');
     el.onchange = guard(() => { engine.setAudioDevice(name, el.value); cfg.devices[kind] = el.value; save(); toast('장치를 바꿨어요.'); });
   }
 }
@@ -988,7 +1026,7 @@ async function boot() {
 const demo = {
   scenes: [{ id: 'a', name: '게임 방송', n: 3 }, { id: 'b', name: '저챗', n: 2 }, { id: 'c', name: '쉬는 시간', n: 1 }, { id: 'd', name: '합방', n: 4 }], current: 'a',
   items: [{ id: 3, name: '웹캠', icon: '📷', visible: true, selected: true }, { id: 2, name: '타이머', icon: '⏱️', visible: true, selected: true }, { id: 1, name: '모니터 1', icon: '🖥️', visible: true }],
-  audio: [{ name: 'd', label: '데스크톱 소리', vol: 0.8, muted: false }, { name: 'm', label: '마이크', vol: 0.72, muted: false }, { name: 'dc', label: '디스코드', vol: 0.55, muted: false }, { name: 'ch', label: 'Google Chrome', vol: 0.4, muted: false }],
+  audio: [{ name: 'd', label: '데스크톱 소리', vol: 0.8, muted: false }, { name: 'm', label: '마이크', vol: 0.72, muted: false }, { name: 'dc', label: '디스코드', vol: 0.55, muted: false, kind: 'app' }, { name: 'ch', label: 'Google Chrome', vol: 0.4, muted: false, kind: 'app' }],
   sep: [{ name: 'dc', label: '디스코드', exe: 'Discord.exe' }, { name: 'ch', label: 'Google Chrome', exe: 'chrome.exe' }],
   live: [{ exe: 'Spotify.exe', desc: 'Spotify', peak: 0.4 }, { exe: 'msedge.exe', desc: 'Microsoft Edge', peak: 0.2 }, { exe: 'League of Legends.exe', desc: 'League of Legends', peak: 0.6 }, { exe: 'KakaoTalk.exe', desc: '카카오톡', peak: 0 }],
   level(name, now) { const base = { d: 0.62, m: 0.5, dc: 0.32, ch: 0 }[name] || 0; const v = base ? base + Math.sin(now / 170 + name.length) * 0.12 + Math.sin(now / 53) * 0.05 : 0; return { level: Math.max(0, v), peak: Math.max(0, base + 0.15), t: now }; },
@@ -1096,7 +1134,11 @@ setInterval(() => { try { ipcRenderer.send('mini:state', miniState()); } catch {
 
 // ================================================================== 버추얼: 원클릭 연결 · 자동 감지 · 세부 설정
 const VT_TIP = '배경이 안 지워지면: 버추얼 프로그램 설정에서 <b>투명 배경</b>을 켜거나, 아래 배경 처리에서 <b>크로마키</b>를 고르세요.';
-function virtualApps() { try { return engineOk ? engine.findVirtualApps() : []; } catch (e) { rlog('warn', 'findVirtualApps', e); return []; } }
+function virtualApps() {
+  const out = [], seen = new Set();
+  for (const w of openWins) { const app = appOfExe(w.exe); if (!app || seen.has(app.id)) continue; seen.add(app.id); out.push({ app, value: w.value, title: w.title }); }
+  return out;
+}
 function virtualSourceFor(exe) { return engineOk ? engine.virtualSources().find((v) => v.exe === exe) : null; }
 function connectVirtual(found, { auto = false } = {}) {
   const exe = exeOf(found.value);
@@ -1133,6 +1175,7 @@ function renderVtFound(list, note) {
 let vtLastSeen = [];
 $('vtGo').addEventListener('click', guard(() => {
   if (DEMO) { renderVtFound([], '데모 화면이에요.'); return; }
+  openWins = ipcRenderer.sendSync('windows:get') || openWins;
   const list = virtualApps(); vtLastSeen = list;
   if (!list.length) return renderVtFound([], `켜져 있는 버추얼 프로그램을 찾지 못했어요. 먼저 프로그램을 켜 주세요.<br>지원: ${VIRTUAL_APPS.map((a) => a.name).join(' · ')}<br>목록에 없는 프로그램은 ＋ 추가 → 🧸 버추얼에서 창을 직접 고르면 돼요.`);
   if (list.length > 1) return renderVtFound(list);
@@ -1140,13 +1183,14 @@ $('vtGo').addEventListener('click', guard(() => {
 }));
 $('vtAuto').checked = cfg.virtualAuto !== false;
 $('vtAuto').addEventListener('change', () => { cfg.virtualAuto = $('vtAuto').checked; save(); });
-// 4초마다: 새로 켜진 버추얼 프로그램 → (처음 한 번) 자동으로 띄우기, 껐다 켰으면 다시 잡기
-let vtPrev = new Set();
-setInterval(() => {
-  if (!engineOk || DEMO || !cfg.virtualAuto) return;
+// 창 목록이 올 때마다(2초): 새로 켜진 버추얼 프로그램 → (처음 한 번) 자동으로 띄우기, 껐다 켰으면 다시 잡기
+let vtPrev = null;
+function virtualTick() {
+  if (!engineOk || DEMO) return;
   const list = virtualApps(); vtLastSeen = list;
   const now = new Set(list.map((f) => exeOf(f.value)));
-  for (const f of list) {
+  if (vtPrev === null) vtPrev = new Set();
+  if (cfg.virtualAuto) for (const f of list) {
     const exe = exeOf(f.value);
     if (vtPrev.has(exe)) continue;                          // 계속 켜져 있던 건 그대로
     const have = virtualSourceFor(exe);
@@ -1156,11 +1200,11 @@ setInterval(() => {
   }
   vtPrev = now;
   if (document.querySelector('#tab-sources.on')) renderVtFound();
-}, 4000);
+}
 
 // 소스 탭에서 버추얼 항목을 골랐을 때 나오는 세부 설정
 function virtualPickOptions(cur) {
-  let wins = []; try { wins = engineOk ? engine.listProp(engine.resolveType('window') || 'window_capture', 'window') : []; } catch {}
+  const wins = openWins.filter((w) => !HIDE_EXE.test(w.exe)).map((w) => ({ name: `[${w.exe}] ${w.title}`.slice(0, 70), value: w.value }));
   const known = wins.filter((w) => appOfExe(exeOf(w.value))), rest = wins.filter((w) => !appOfExe(exeOf(w.value)));
   if (cur && !wins.some((w) => w.value === cur)) known.unshift({ name: `${appOfExe(exeOf(cur))?.name || exeOf(cur)} (꺼져 있음)`, value: cur });
   const o = (w) => `<option value="${esc(w.value)}"${w.value === cur ? ' selected' : ''}>${esc(w.name)}</option>`;
@@ -1198,7 +1242,7 @@ function renderVirtualProps(name, v, curWindow, method) {
   $('vColor')?.addEventListener('change', () => set({ color: $('vColor').value }, { layout: false }));
   body.querySelectorAll('[data-crop]').forEach((inp) => inp.addEventListener('change', () => set({ crop: { [inp.dataset.crop]: Math.max(0, Number(inp.value) || 0) } }, { layout: false })));
   $('vPick')?.addEventListener('change', guard(() => { if (DEMO) return; engine.updateSource(name, 'virtual', { value: $('vPick').value, virt: engine.getVirtual(name) }); saveScenes(); }));
-  $('vRefresh')?.addEventListener('click', () => { $('vPick').innerHTML = virtualPickOptions($('vPick').value); });
+  $('vRefresh')?.addEventListener('click', () => { openWins = ipcRenderer.sendSync('windows:get') || openWins; $('vPick').innerHTML = virtualPickOptions($('vPick').value); });
   $('vAll').addEventListener('click', guard(() => { if (DEMO) return; const n = engine.virtualToAllScenes(name); saveScenes(); toast(n ? `${n}개 장면에 더 넣었어요.` : '이미 모든 장면에 있어요.'); }));
   $('vRehook').addEventListener('click', guard(() => { if (DEMO) return; engine.rehookVirtual(name); toast('창을 다시 잡았어요.'); }));
   $('vSaveDef').addEventListener('click', () => { const cur = DEMO ? v : engine.getVirtual(name); cfg.virtualLast = { spot: cur.spot, size: cur.size, flip: cur.flip, bg: cur.bg, color: cur.color }; save(); toast('다음 버추얼부터 이 설정으로 띄울게요.'); });

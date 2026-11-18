@@ -140,18 +140,11 @@
         <label class="field">데스크톱 소리 (스피커/헤드셋)<select id="devDesktop"></select></label>
         <label class="field">마이크<select id="devMic"></select></label>
 
-        <h4>사운드 분리 <small>왼쪽에서 오른쪽으로 끌어다 놓으세요</small></h4>
-        <div class="sep-board">
-          <div class="sep-col">
-            <div class="sep-title">지금 나오는 소리</div>
-            <div class="sep-zone" id="liveApps"></div>
-          </div>
-          <div class="sep-col">
-            <div class="sep-title">따로 잡는 소리</div>
-            <div class="sep-zone drop" id="sepApps"></div>
-          </div>
-        </div>
-        <p class="hint">따로 잡은 프로그램은 메인 화면 사운드에 막대가 따로 생겨요. 빼려면 다시 왼쪽으로 끌거나 ✕를 누르세요.<br>같은 소리가 두 번 들리면 <b>데스크톱 소리</b>를 음소거하세요 (게임 소리도 같이 꺼지니 주의).</p>
+        <h4>사운드 분리 <small>켜져 있는 프로그램</small></h4>
+        <div class="app-grid" id="appGrid"></div>
+        <p class="hint"><b>넣기</b>: 프로그램을 끌어서 화면 아래 <b>사운드</b> 칸에 놓으면 그 프로그램 소리만 따로 막대가 생겨요 (더블클릭해도 돼요).<br>
+        <b>빼기</b>: 사운드 칸에서 막대 이름을 잡고 끌어서 <b>아무 데나</b> 놓으면 빠져요.<br>
+        같은 소리가 두 번 들리면 <b>데스크톱 소리</b>를 음소거하세요 (게임 소리도 같이 꺼지니 주의).</p>
       </section>
 
       <!-- 타이머 -->

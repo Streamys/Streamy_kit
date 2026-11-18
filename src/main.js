@@ -135,7 +135,7 @@ function main() {
   async function forceQuit(why) {
     if (quitting) return;
     quitting = true;
-    stopAudioSessions();
+    stopAudioSessions(); stopWinWatch();
     try { chat.flushLog(); chat.stopAll(); } catch {}
     try { if (mini && !mini.isDestroyed()) mini.destroy(); } catch {}
     log.warn('main', 'force quit:', why);
@@ -173,6 +173,31 @@ function main() {
     sessionProc.on('exit', (code) => { log.info('main', 'audio sessions exit', code); sessionProc = null; sessionBuf = ''; });
   }
   function stopAudioSessions() { if (sessionProc) { try { sessionProc.kill(); } catch {} sessionProc = null; } }
+
+  // 켜져 있는 프로그램 창 목록 (사운드 분리 · 버추얼 감지용). 엔진과 따로 도는 도우미가 2초마다 알려 줌
+  let winProc = null, winBuf = '', winLast = null, winRetry = 0;
+  function startWinWatch() {
+    if (process.platform !== 'win32' || winProc || quitting) return;
+    const script = path.join(__dirname, 'windows.ps1');
+    winProc = require('child_process').spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script], { windowsHide: true });
+    log.info('main', 'window watch start pid', winProc.pid);
+    winProc.stdout.setEncoding('utf8');
+    winProc.stdout.on('data', (chunk) => {
+      winBuf += chunk;
+      let i;
+      while ((i = winBuf.indexOf('\n')) >= 0) {
+        const line = winBuf.slice(0, i).trim(); winBuf = winBuf.slice(i + 1);
+        if (!line) continue;
+        try { const data = JSON.parse(line); if (Array.isArray(data)) { winLast = data; winRetry = 0; } if (win && !win.isDestroyed()) win.webContents.send('windows', data); } catch {}
+      }
+    });
+    winProc.stderr.on('data', (d) => log.warn('windows', String(d).slice(0, 500)));
+    winProc.on('exit', (code) => {
+      log.info('main', 'window watch exit', code); winProc = null; winBuf = '';
+      if (!quitting && winRetry < 5) setTimeout(startWinWatch, 3000 * ++winRetry);     // 죽으면 다시 (최대 5번)
+    });
+  }
+  function stopWinWatch() { if (winProc) { const p = winProc; winProc = null; winRetry = 99; try { p.kill(); } catch {} } }
 
   function createTray() {
     tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'tray.png')));
@@ -279,6 +304,7 @@ function main() {
   ipcMain.on('win:close', () => win && win.close());
   ipcMain.on('audio-sessions:start', startAudioSessions);
   ipcMain.on('audio-sessions:stop', stopAudioSessions);
+  ipcMain.on('windows:get', (e) => { e.returnValue = winLast || []; });
   ipcMain.on('app:window-handle', (e) => { e.returnValue = win.getNativeWindowHandle(); });
   // 엔진 시작 전에 지난번에 남은 엔진 프로세스부터 정리
   ipcMain.handle('engine:prepare', async () => { if (!enginePrepared) enginePrepared = killOwnEngine('startup'); await enginePrepared; return true; });
@@ -292,7 +318,7 @@ function main() {
   ipcMain.on('app:ready-to-quit', async () => {
     if (quitting) return;
     quitting = true;
-    stopAudioSessions();
+    stopAudioSessions(); stopWinWatch();
     try { chat.flushLog(); chat.stopAll(); } catch {}
     try { if (mini && !mini.isDestroyed()) mini.destroy(); } catch {}
     await killOwnEngine('after shutdown');
@@ -342,7 +368,8 @@ function main() {
     try { server.start(); } catch (e) { log.error('main', 'server', e); }
     createWindow();
     createTray();
-    setTimeout(() => { try { updater.cleanupLocal(); } catch {} updater.check(false); }, 5000);            // 켜고 5초 뒤 한 번 (바탕화면 폴더 → GitHub 순)
+    setTimeout(() => { try { updater.cleanupLocal(); } catch {} updater.check(false); }, 5000);
+    setTimeout(startWinWatch, 1500);                   // 켜져 있는 프로그램 창 목록 도우미
     setInterval(() => updater.check(false), 6 * 3600 * 1000); // 이후 6시간마다 (폴더는 파일이 들어오면 바로 감지)
   });
   app.on('window-all-closed', () => { if (!quitting) forceQuit('all windows closed'); });

@@ -387,3 +387,21 @@ input[type=range]{accent-color:var(--red)}
 .tab .seg button{background:var(--card)!important;border:1px solid var(--line)!important;color:var(--sub)!important}
 .tab .seg button:hover{border-color:var(--line2)!important;color:var(--text)!important}
 .tab .seg button.on{background:rgba(225,29,46,.18)!important;border-color:var(--red)!important;color:#fff!important}
+
+/* ---------------------------------------------------------------- 사운드 분리: 켜져 있는 프로그램 → 사운드 칸 */
+.app-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;max-height:420px;overflow:auto;padding:2px}
+.app-grid .empty{grid-column:1/-1;color:var(--sub);font-size:12px;padding:14px;text-align:center;background:var(--card);border:1px solid var(--line);border-radius:10px}
+.acard .ava{position:relative;flex:none;width:24px;height:24px;border-radius:7px;background:var(--card2);border:1px solid var(--line2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--sub)}
+.acard.playing .ava{color:#fff;border-color:var(--red)}
+.acard.in{opacity:.55;cursor:default;border-color:var(--line)}
+.acard .tag{font-weight:700;color:var(--red2)}
+.acard:not(.in):hover{border-color:var(--red)}
+/* 끄는 동안: 사운드 칸을 놓을 곳으로 강조 */
+.sound{position:relative;transition:border-color .12s,background .12s}
+body.drag-app .sound{border:1px dashed var(--red);background:rgba(225,29,46,.06)}
+body.drag-app .sound::after{content:'여기에 놓으면 사운드에 추가';position:absolute;right:14px;top:10px;font-size:12px;font-weight:800;color:var(--red2)}
+.sound.drop-on{background:rgba(225,29,46,.16)!important;border-style:solid!important}
+body.drag-ch .sound::after{content:'사운드 칸 밖에 놓으면 빠져요';position:absolute;right:60px;top:10px;font-size:12px;font-weight:800;color:var(--yellow)}
+.ch .nm.grab{cursor:grab}.ch .nm.grab:active{cursor:grabbing}
+.ch .nm.grab::before{content:'⠿';color:var(--sub);margin-right:4px;font-size:11px}
+.ch.dragging{opacity:.35}
