@@ -1,9 +1,9 @@
-// Streamy Kit — 화면 로직 (v0.7)
+// Streamy Kit — 화면 로직 (v0.8)
 'use strict';
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const path = require('path');
-const { Engine, SOURCE_TYPES, PLATFORMS, ENCODERS } = require('./engine.js');
+const { Engine, SOURCE_TYPES, PLATFORMS, ENCODERS, VIRTUAL_APPS, VIRTUAL_SPOTS, VIRTUAL_DEFAULT, appOfExe, exeOf } = require('./engine.js');
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -20,12 +20,15 @@ const DEFAULTS = {
   keys: { chzzk: '', youtube: '', soop: '' }, encoder: 'auto',
   appAudio: [], audioState: {}, devices: {}, showViewers: false, channels: { chzzk: '', youtube: '', soop: '' },
   timer: { mode: 'stopwatch', minutes: 10, label: '', theme: 'red' }, quality: '1080p60',
+  mode: 'setup', airOnLive: true, chatLog: false,
+  mini: { on: true, platforms: ['chzzk', 'youtube', 'soop'], opacity: 30, count: 5 },
+  virtualAuto: true, virtualAutoDone: [],
 };
 const scenesFile = path.join(path.dirname(info.settingsFile), 'scenes.json');
 function loadSettings() {
   try {
     const s = JSON.parse(fs.readFileSync(info.settingsFile, 'utf8'));
-    return { ...DEFAULTS, ...s, keys: { ...DEFAULTS.keys, ...(s.keys || {}) }, timer: { ...DEFAULTS.timer, ...(s.timer || {}) }, channels: { ...DEFAULTS.channels, ...(s.channels || {}) } };
+    return { ...DEFAULTS, ...s, keys: { ...DEFAULTS.keys, ...(s.keys || {}) }, timer: { ...DEFAULTS.timer, ...(s.timer || {}) }, channels: { ...DEFAULTS.channels, ...(s.channels || {}) }, mini: { ...DEFAULTS.mini, ...(s.mini || {}) } };
   } catch { return JSON.parse(JSON.stringify(DEFAULTS)); }
 }
 let cfg = loadSettings();
@@ -56,6 +59,7 @@ function guard(fn) {
     catch (e) { rlog('error', e); toast(e.message || String(e), true); }
   };
 }
+let mode = 'setup', tabBeforeAir = 'stream';
 function openTab(name) {
   document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x.dataset.tab === name));
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + name));
@@ -218,9 +222,10 @@ function optionList(items, empty) {
   if (!items.length) return empty ? `<option value="">${esc(empty)}</option>` : '';
   return items.map((x) => `<option value="${esc(x.value)}">${esc(x.name)}</option>`).join('');
 }
-const PICK_LABEL = { monitor: '모니터', window: '프로그램 창', game: '게임 창', webcam: '웹캠' };
+const PICK_LABEL = { monitor: '모니터', window: '프로그램 창', game: '게임 창', webcam: '웹캠', virtual: '버추얼 프로그램 창' };
 function pickOptions(kind) {
   const first = kind === 'game' ? '<option value="">전체 화면 게임 자동 감지</option>' : '';
+  if (kind === 'virtual') return virtualPickOptions('') || '<option value="">찾지 못했어요 — 프로그램을 켜고 ↻</option>';
   let items = []; try { items = engineOk ? engine.choices(kind) : []; } catch (e) { rlog('error', 'choices', e); }
   return first + optionList(items, kind === 'game' ? '' : '찾지 못했어요');
 }
@@ -242,14 +247,15 @@ function sourceForm(kind, prefix, cur = {}) {
   if (t.url) h += `<label class="field">주소 (투네이션·위플랩 알림창 URL 등)<input id="${prefix}Url" placeholder="https://" value="${esc(cur.url || '')}"></label>
       <div class="grid2"><label class="field">가로<input id="${prefix}W" type="number" value="${esc(cur.width || 800)}"></label><label class="field">세로<input id="${prefix}H" type="number" value="${esc(cur.height || 600)}"></label></div>`;
   if (kind === 'color') h += `<label class="field">색<input id="${prefix}Color" type="color" value="#0e0e10"></label>`;
-  if (kind === 'virtual') h += '<p class="hint">VTube Studio·VSeeFace 설정에서 <b>Spout2 출력</b>을 켜 주세요. 다른 프로그램은 <b>게임</b>에서 창을 골라 잡으세요.</p>';
+  if (kind === 'virtual') h += `<label class="field">연결 방식<select id="${prefix}Method"><option value="game">창 바로 잡기 · 투명 배경 (추천)</option><option value="spout">Spout2 (VTube Studio·VSeeFace·Warudo에서 Spout2를 켰을 때)</option></select></label>
+      <p class="hint">켜져 있는 프로그램만 목록에 나와요. 더 쉬운 방법: 위의 <b>🧸 버추얼 원클릭 연결</b>.</p>`;
   if (kind === 'timer') h += '<p class="hint">오른쪽 위에 들어가요. 조작은 <b>타이머</b> 탭에서 해요.</p>';
   return h;
 }
 function readForm(prefix) {
   const v = (id) => { const el = $(prefix + id); return el ? (el.type === 'checkbox' ? el.checked : el.value) : undefined; };
   const pick = $(prefix + 'Pick');
-  return { value: v('Pick'), label: pick && pick.selectedOptions[0] ? pick.selectedOptions[0].textContent : '', file: v('File'), text: v('Text'), size: v('Size'), color: v('Color'), outline: v('Outline'), url: v('Url'), width: v('W'), height: v('H'), timerUrl: info.timerUrl };
+  return { virt: $(prefix + 'Method') ? { ...VIRTUAL_DEFAULT, ...(cfg.virtualLast || {}), method: v('Method') } : undefined, value: v('Pick'), label: pick && pick.selectedOptions[0] ? pick.selectedOptions[0].textContent : '', file: v('File'), text: v('Text'), size: v('Size'), color: v('Color'), outline: v('Outline'), url: v('Url'), width: v('W'), height: v('H'), timerUrl: info.timerUrl };
 }
 function bindForm(kind, prefix) {
   const r = $(prefix + 'Refresh');
@@ -265,7 +271,8 @@ function renderAddForm() {
   bindForm(addKind, 'a');
   $('aAdd').addEventListener('click', guard(() => {
     const opt = readForm('a');
-    if (t.prop && addKind !== 'game' && !opt.value) return toast('목록에서 골라 주세요.', true);
+    if (t.prop && addKind !== 'game' && !opt.value && !(addKind === 'virtual' && opt.virt?.method === 'spout')) return toast('목록에서 골라 주세요.', true);
+    if (addKind === 'virtual') opt.name = appOfExe(exeOf(opt.value))?.name || '버추얼';
     if (t.file && !opt.file) return toast('이미지 파일을 골라 주세요.', true);
     if (t.url && !/^https?:\/\//.test(opt.url || '')) return toast('http(s)로 시작하는 주소를 넣어 주세요.', true);
     if (['webcam', 'monitor', 'window'].includes(addKind) && opt.label) opt.name = opt.label.replace(/^\[[^\]]*\]:?\s*/, '').slice(0, 40);
@@ -280,6 +287,7 @@ function showProps() {
   if (propsFor == null) { body.innerHTML = ''; return; }
   const it = engine.items().find((x) => x.id === propsFor); if (!it) { body.innerHTML = ''; return; }
   const s = engine.sourceSettings(it.name);
+  if (s && s.kind === 'virtual') { renderVirtualProps(it.name, engine.getVirtual(it.name), s.settings.window, engine.getVirtual(it.name).method); return; }
   const t = s ? SOURCE_TYPES[s.kind] || {} : {};
   if (!s || !(t.prop || t.file || t.text || t.url || s.kind === 'color')) { body.innerHTML = ''; return; }
   body.innerHTML = `<h4>${esc(it.icon)} ${esc(it.name)} 설정</h4>` + sourceForm(s.kind, 'p', s.settings) + '<button class="primary-sm" id="pSave">적용</button>';
@@ -309,7 +317,7 @@ function cornerAt(rect, p) {
 }
 function snap(v, size, total, tol) { for (const t of [0, total / 2 - size / 2, total - size]) if (Math.abs(v - t) < tol) return t; return v; }
 prev.addEventListener('mousedown', (e) => {
-  if (!engineOk || e.button !== 0) return;
+  if (!engineOk || e.button !== 0 || mode === 'air') return;
   try {
     const p = toCanvas(e), selId = engine.sel.size === 1 ? engine.primary : null;
     if (selId != null) {
@@ -367,6 +375,7 @@ window.addEventListener('keydown', (e) => {
   if (!engineOk || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
   const n = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9'].indexOf(e.key);
   if (n >= 0 && engine.scenes[n]) { e.preventDefault(); engine.switchScene(engine.scenes[n].id); saveScenes(); return; }
+  if (mode === 'air') return;     // ON AIR 화면에서는 소스 이동/삭제 단축키 막기
   if (e.key === 'Delete' && engine.sel.size) { removeSelected(); return; }
   if (e.key === 'Escape') { engine.clearSelection(); renderSources(); return; }
   const id = engine.sel.size === 1 ? engine.primary : null; if (id == null) return;
@@ -385,36 +394,41 @@ function renderMixer() {
     const row = document.createElement('div');
     row.className = 'ch' + (a.muted ? ' muted' : '');
     row.innerHTML = `<button class="mute" title="음소거">${a.muted ? '✕' : '🔊'}</button><div class="nm">${esc(a.label)}<span class="dot"></span></div><span class="pct"></span>
-      <div class="bar"><div class="lvl"></div><div class="pk"></div><div class="ticks"></div><input type="range" min="0" max="100"></div>`;
+      <div class="bar"><div class="lvl"></div><div class="pkw"><div class="pk"></div></div><div class="ticks"></div><input type="range" min="0" max="100"></div>`;
     const r = row.querySelector('input'), pct = row.querySelector('.pct');
     r.value = Math.round(a.vol * 100); pct.textContent = r.value + '%';
     r.addEventListener('input', () => { if (!DEMO) engine.setVolume(a.name, r.value / 100); pct.textContent = r.value + '%'; });
     r.addEventListener('change', saveAudioState);
     row.querySelector('.mute').addEventListener('click', guard(() => { if (DEMO) return; engine.setMuted(a.name, !a.muted); saveAudioState(); }));
     box.appendChild(row);
-    meterEls[a.name] = { row, lvl: row.querySelector('.lvl'), pk: row.querySelector('.pk'), shown: 0, peak: 0, peakT: 0 };
+    meterEls[a.name] = { row, lvl: row.querySelector('.lvl'), pk: row.querySelector('.pkw'), shown: 0, peak: 0, peakT: 0, drawn: -1, drawnPk: -1 };
   }
 }
 engine.on('audio', () => { renderMixer(); renderSepApps(); });
-function meterLoop() {
+// 레벨은 엔진에서 1초에 수십 번 들쑥날쑥 들어와요 → 화면에서는 시간 기준으로 부드럽게 따라가게 (올라갈 땐 빠르게, 내려갈 땐 천천히)
+let meterT = performance.now();
+const ease = (cur, target, dt, up, down) => cur + (target - cur) * (1 - Math.exp(-dt / (target > cur ? up : down)));
+function meterLoop(ts = performance.now()) {
+  const dt = Math.min(0.1, Math.max(0, (ts - meterT) / 1000)); meterT = ts;
   const now = Date.now();
   for (const [name, m] of Object.entries(meterEls)) {
     const L = DEMO ? demo.level(name, now) : engine.levels[name];
     const fresh = L && now - L.t < 500;
-    const target = fresh ? L.level : 0;
-    m.shown = target > m.shown ? target : Math.max(target, m.shown - 0.02);
-    m.lvl.style.width = (m.shown * 100).toFixed(1) + '%';
+    m.shown = ease(m.shown, fresh ? L.level : 0, dt, 0.05, 0.28);
     const pk = fresh ? L.peak : 0;
-    if (pk >= m.peak || now - m.peakT > 1200) { m.peak = pk; m.peakT = now; }
-    m.pk.style.left = (m.peak * 100).toFixed(1) + '%'; m.pk.style.opacity = m.peak > 0.02 ? 1 : 0;
+    if (pk >= m.peak) { m.peak = pk; m.peakT = now; }
+    else if (now - m.peakT > 900) m.peak = Math.max(pk, m.peak - dt * 0.45);     // 잠깐 멈췄다가 천천히 내려옴
+    const w = Math.round(m.shown * 1000) / 10, p = Math.round(m.peak * 1000) / 10;
+    if (w !== m.drawn) { m.lvl.style.clipPath = `inset(0 ${(100 - w).toFixed(1)}% 0 0)`; m.drawn = w; }
+    if (p !== m.drawnPk) { m.pk.style.transform = `translateX(${p}%)`; m.pk.style.opacity = m.peak > 0.02 ? 1 : 0; m.drawnPk = p; }
     m.row.classList.toggle('active', m.shown > 0.08);
   }
   // 사운드 탭 카드 레벨
   for (const c of document.querySelectorAll('.acard[data-exe]')) {
     const s = liveLevels[c.dataset.exe.toLowerCase()];
     const v = s && now - s.t < 800 ? s.v : 0;
-    const prevV = Number(c.dataset.v || 0), shown = v > prevV ? v : Math.max(v, prevV - 0.03);
-    c.dataset.v = shown; c.querySelector('.lv').style.width = (shown * 100).toFixed(1) + '%';
+    const shown = ease(Number(c.dataset.v || 0), v, dt, 0.06, 0.35);
+    c.dataset.v = shown; c.querySelector('.lv').style.clipPath = `inset(0 ${(100 - shown * 100).toFixed(1)}% 0 0)`;
     c.classList.toggle('playing', shown > 0.03);
   }
   requestAnimationFrame(meterLoop);
@@ -775,7 +789,7 @@ engine.on('stream', (states) => {
   const before = streamStates; streamStates = states;
   for (const [k, s] of Object.entries(states)) {
     const b = before[k] || {};
-    if (s.state === 'live' && b.state !== 'live') toast(`${PLATFORMS[k].name} 방송이 시작됐어요!`);
+    if (s.state === 'live' && b.state !== 'live') { toast(`${PLATFORMS[k].name} 방송이 시작됐어요!`); if (cfg.airOnLive) setMode('air'); }
     if (s.state === 'off' && b.state && b.state !== 'off') s.error ? toast(`${PLATFORMS[k].name}: ${s.error}`, true) : toast(`${PLATFORMS[k].name} 방송을 종료했어요.`);
   }
   renderPlatformStates(); setTopState();
@@ -918,6 +932,8 @@ async function boot() {
   $('gpuOff').checked = !!info.gpuOff;
   engine.encoderPref = cfg.encoder || 'auto';
   renderPlatforms(); renderEncoders(); setTopState(); timerListen(); renderViewers(); pollViewers(); renderUpdate(); if (!DEMO) chatConfigure(); else renderChatState();
+  renderMiniSettings(); miniConfigSend(); setChatLog(cfg.chatLog, true);
+  if (cfg.mode === 'air' || process.env.STREAMY_MODE === 'air') setMode('air', true);
   $('tMode').value = cfg.timer.mode; $('tMin').value = cfg.timer.minutes; $('tLabel').value = cfg.timer.label; $('tTheme').value = cfg.timer.theme;
   timer({ type: 'config', ...cfg.timer });
   renderScenes(); renderSources(); renderMixer();
@@ -943,6 +959,7 @@ async function boot() {
   try {
     engine.createDisplay(ipcRenderer.sendSync('app:window-handle'));
     prev.classList.add('has-engine');
+    if (mode === 'air') engine.setDrawUI(false);
     layoutDisplay();
   } catch (e) { rlog('error', 'display', e); toast('미리보기 화면을 만들지 못했어요. 설정 → 문제 해결에서 그래픽 가속을 꺼 보세요.', true); }
   renderScenes(); renderSources(); renderMixer(); renderTypes(); renderEncoders();
@@ -984,8 +1001,191 @@ function demoMode() {
     { p: 'chzzk', nick: 'ㅇㅇ', parts: [{ t: 'text', v: 'ㅋㅋㅋㅋㅋㅋㅋ' }] },
   ]);
   renderChatState(); if (process.env.STREAMY_TAB) openTab(process.env.STREAMY_TAB);
+  if (process.env.STREAMY_TAB === 'sources') {
+    renderVtFound([], '');
+    $('vtFound').innerHTML = '<span class="vf on"><i></i>VTube Studio · 연결됨</span><span class="vf"><i></i>VSeeFace · 꺼짐</span>';
+    renderVirtualProps('VTube Studio', { ...VIRTUAL_DEFAULT, crop: { left: 320, right: 320, top: 0, bottom: 0 } }, 'VTube Studio:UnityWndClass:VTube Studio.exe', 'game');
+  }
   upd = { status: 'available', info: { version: '0.6.1', notes: '- 사운드 탭 개선\n- 버그 수정' } }; renderUpdate();
   setInterval(() => { const now = Date.now(); for (const a of demo.live) liveLevels[a.exe.toLowerCase()] = { v: a.peak ? a.peak + Math.sin(now / 120 + a.exe.length) * 0.15 : 0, t: now }; for (const a of demo.sep) liveLevels[a.exe.toLowerCase()] = { v: 0.35 + Math.sin(now / 90) * 0.1, t: now }; }, 100);
+}
+
+
+// ================================================================== 세팅 / ON AIR 화면
+function setMode(m, quiet) {
+  if (m === mode) return;
+  mode = m;
+  document.body.classList.toggle('mode-air', m === 'air');
+  $('modeSw').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.m === m));
+  if (m === 'air') {
+    tabBeforeAir = document.querySelector('.tabs button.on')?.dataset.tab || 'stream';
+    openTab('chat');
+    if (engineOk) { try { engine.clearSelection(); engine.setDrawUI(false); } catch {} renderSources(); }
+  } else {
+    openTab(tabBeforeAir === 'chat' ? 'stream' : tabBeforeAir);
+    if (engineOk) engine.setDrawUI(true);
+  }
+  layoutDisplay();
+  if (!quiet) { cfg.mode = m; save(); }
+}
+$('modeSw').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setMode(b.dataset.m); });
+$('airOnLive').checked = cfg.airOnLive !== false;
+$('airOnLive').addEventListener('change', () => { cfg.airOnLive = $('airOnLive').checked; save(); });
+
+// ================================================================== 채팅 기록 (파일 저장)
+async function setChatLog(on, quiet) {
+  cfg.chatLog = !!on; save();
+  try { await ipcRenderer.invoke('chat:log', { on: cfg.chatLog }); } catch (e) { rlog('error', 'chat log', e); }
+  $('chatLog').classList.toggle('on', cfg.chatLog); $('chatLog').textContent = cfg.chatLog ? '기록 중' : '기록';
+  $('chatLogOn').checked = cfg.chatLog;
+  if (!quiet) toast(cfg.chatLog ? '채팅 기록을 시작했어요. 문서 › Streamy Kit › 채팅 로그에 날짜별로 저장돼요.' : '채팅 기록을 껐어요.');
+}
+$('chatLog').addEventListener('click', () => setChatLog(!cfg.chatLog));
+$('chatLogOn').addEventListener('change', () => setChatLog($('chatLogOn').checked));
+$('chatLogDir').addEventListener('click', () => ipcRenderer.invoke('chat:log-open'));
+$('chatLogDir2').addEventListener('click', () => ipcRenderer.invoke('chat:log-open'));
+
+// ================================================================== 최소화 오버레이
+function miniConfigSend() { ipcRenderer.send('mini:config', { ...cfg.mini }); }
+function renderMiniSettings() {
+  const m = cfg.mini;
+  $('miniOn').checked = m.on;
+  $('miniOp').value = m.opacity; $('miniOpV').textContent = m.opacity + '%';
+  $('miniCount').value = String(m.count);
+  $('miniPlat').querySelectorAll('button').forEach((b) => b.classList.toggle('on', m.platforms.includes(b.dataset.p)));
+}
+$('miniOn').addEventListener('change', () => { cfg.mini.on = $('miniOn').checked; save(); miniConfigSend(); });
+$('miniOp').addEventListener('input', () => { cfg.mini.opacity = Number($('miniOp').value); $('miniOpV').textContent = cfg.mini.opacity + '%'; save(); miniConfigSend(); });
+$('miniCount').addEventListener('change', () => { cfg.mini.count = Number($('miniCount').value); save(); miniConfigSend(); });
+$('miniPlat').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  const set = new Set(cfg.mini.platforms); set.has(b.dataset.p) ? set.delete(b.dataset.p) : set.add(b.dataset.p);
+  cfg.mini.platforms = [...set]; save(); renderMiniSettings(); miniConfigSend();
+});
+$('miniTest').addEventListener('click', () => ipcRenderer.send('mini:toggle'));
+// 오버레이에 보낼 방송 상태 (1초마다)
+function miniState() {
+  const live = Object.entries(streamStates).filter(([, s]) => s.state === 'live');
+  const any = Object.values(streamStates).some((s) => s.state && s.state !== 'off');
+  let st = {}; try { st = engineOk ? engine.stats() : {}; } catch {}
+  const total = viewers.chzzk;
+  return {
+    state: live.length ? 'live' : any ? 'wait' : 'off', label: $('liveText').textContent, time: $('liveTime').textContent,
+    platforms: live.map(([k]) => k), viewers: cfg.showViewers && total != null ? total : null,
+    kbps: st.kbps != null ? Math.round(st.kbps) : null, drop: st.dropped != null && st.sent ? (st.dropped / Math.max(1, st.sent)) * 100 : null,
+    fps: st.fps != null ? Math.round(st.fps) : null, rec: !!(engineOk && engine.recording), scene: engineOk && engine.currentScene ? engine.currentScene.name : (DEMO ? '게임 방송' : ''),
+  };
+}
+setInterval(() => { try { ipcRenderer.send('mini:state', miniState()); } catch {} }, 1000);
+
+// ================================================================== 버추얼: 원클릭 연결 · 자동 감지 · 세부 설정
+const VT_TIP = '배경이 안 지워지면: 버추얼 프로그램 설정에서 <b>투명 배경</b>을 켜거나, 아래 배경 처리에서 <b>크로마키</b>를 고르세요.';
+function virtualApps() { try { return engineOk ? engine.findVirtualApps() : []; } catch (e) { rlog('warn', 'findVirtualApps', e); return []; } }
+function virtualSourceFor(exe) { return engineOk ? engine.virtualSources().find((v) => v.exe === exe) : null; }
+function connectVirtual(found, { auto = false } = {}) {
+  const exe = exeOf(found.value);
+  const have = virtualSourceFor(exe);
+  if (have) {
+    // 이미 있으면 현재 장면에 없을 때만 넣고, 창을 다시 잡아요
+    const inScene = engine.items().find((x) => x.name === have.name);
+    if (!inScene) { engine.currentScene.scene.add(engine.sources[have.name].input); engine.applyVirtual(have.name); }
+    engine.rehookVirtual(have.name, found.value);
+    const it = engine.items().find((x) => x.name === have.name); if (it) engine.select(it.id, 'single');
+    saveScenes();
+    if (!auto) toast(`${found.app.name}을(를) 다시 연결했어요.`);
+    return;
+  }
+  const r = engine.addSource('virtual', { value: found.value, name: found.app.name, virt: { ...VIRTUAL_DEFAULT, ...(cfg.virtualLast || {}), crop: { ...VIRTUAL_DEFAULT.crop } } });
+  saveScenes();
+  if (mode !== 'air') openTab('sources');
+  toast(`${auto ? '자동으로 ' : ''}${found.app.name}을(를) 화면에 띄웠어요. 위치·크기·배경은 소스 탭에서 바꿀 수 있어요.`);
+  return r;
+}
+function renderVtFound(list, note) {
+  const box = $('vtFound');
+  const have = engineOk ? engine.virtualSources() : [];
+  if (list && list.length > 1) {
+    box.innerHTML = list.map((f, i) => `<button class="vf run" data-i="${i}"><i></i>${esc(f.app.name)} 연결</button>`).join('') + '<div class="vf-note">여러 개가 켜져 있어요. 띄울 프로그램을 골라 주세요.</div>';
+    box.querySelectorAll('button.vf').forEach((b) => b.addEventListener('click', guard(() => { connectVirtual(list[Number(b.dataset.i)]); renderVtFound(); })));
+    return;
+  }
+  const run = new Set((list || vtLastSeen).map((f) => exeOf(f.value)));
+  box.innerHTML = have.map((v) => { const app = appOfExe(v.exe); const on = run.has(v.exe);
+    return `<span class="vf ${on ? 'on' : ''}" title="${on ? '연결됨' : '프로그램이 꺼져 있어요'}"><i></i>${esc(app ? app.name : v.name)} · ${on ? '연결됨' : '꺼짐'}</span>`; }).join('')
+    + (note ? `<div class="vf-note">${note}</div>` : '');
+}
+let vtLastSeen = [];
+$('vtGo').addEventListener('click', guard(() => {
+  if (DEMO) { renderVtFound([], '데모 화면이에요.'); return; }
+  const list = virtualApps(); vtLastSeen = list;
+  if (!list.length) return renderVtFound([], `켜져 있는 버추얼 프로그램을 찾지 못했어요. 먼저 프로그램을 켜 주세요.<br>지원: ${VIRTUAL_APPS.map((a) => a.name).join(' · ')}<br>목록에 없는 프로그램은 ＋ 추가 → 🧸 버추얼에서 창을 직접 고르면 돼요.`);
+  if (list.length > 1) return renderVtFound(list);
+  connectVirtual(list[0]); renderVtFound(list);
+}));
+$('vtAuto').checked = cfg.virtualAuto !== false;
+$('vtAuto').addEventListener('change', () => { cfg.virtualAuto = $('vtAuto').checked; save(); });
+// 4초마다: 새로 켜진 버추얼 프로그램 → (처음 한 번) 자동으로 띄우기, 껐다 켰으면 다시 잡기
+let vtPrev = new Set();
+setInterval(() => {
+  if (!engineOk || DEMO || !cfg.virtualAuto) return;
+  const list = virtualApps(); vtLastSeen = list;
+  const now = new Set(list.map((f) => exeOf(f.value)));
+  for (const f of list) {
+    const exe = exeOf(f.value);
+    if (vtPrev.has(exe)) continue;                          // 계속 켜져 있던 건 그대로
+    const have = virtualSourceFor(exe);
+    if (have) { try { engine.rehookVirtual(have.name, f.value); } catch {} continue; }
+    if ((cfg.virtualAutoDone || []).includes(exe)) continue; // 한 번 자동으로 띄웠다가 사용자가 지운 건 다시 안 띄움
+    try { connectVirtual(f, { auto: true }); cfg.virtualAutoDone = [...new Set([...(cfg.virtualAutoDone || []), exe])]; save(); } catch (e) { rlog('warn', 'auto virtual', e); }
+  }
+  vtPrev = now;
+  if (document.querySelector('#tab-sources.on')) renderVtFound();
+}, 4000);
+
+// 소스 탭에서 버추얼 항목을 골랐을 때 나오는 세부 설정
+function virtualPickOptions(cur) {
+  let wins = []; try { wins = engineOk ? engine.listProp(engine.resolveType('window') || 'window_capture', 'window') : []; } catch {}
+  const known = wins.filter((w) => appOfExe(exeOf(w.value))), rest = wins.filter((w) => !appOfExe(exeOf(w.value)));
+  if (cur && !wins.some((w) => w.value === cur)) known.unshift({ name: `${appOfExe(exeOf(cur))?.name || exeOf(cur)} (꺼져 있음)`, value: cur });
+  const o = (w) => `<option value="${esc(w.value)}"${w.value === cur ? ' selected' : ''}>${esc(w.name)}</option>`;
+  return (known.length ? `<optgroup label="버추얼 프로그램">${known.map(o).join('')}</optgroup>` : '') + (rest.length ? `<optgroup label="다른 창">${rest.map(o).join('')}</optgroup>` : '');
+}
+function renderVirtualProps(name, v, curWindow, method) {
+  const body = $('propsBody');
+  const app = appOfExe(exeOf(curWindow));
+  const seg = (id, items, val) => `<div class="seg" id="${id}">${items.map(([k, l]) => `<button data-v="${k}" class="${k === val ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  const c = v.crop || {};
+  body.innerHTML = `<div class="vprops"><h4>🧸 ${esc(name)} <small>버추얼 설정 · 바꾸면 바로 적용돼요</small></h4>
+    ${method === 'spout' ? '<div class="vsec"><b>연결</b><p class="hint" style="margin:4px 0 0">Spout2로 받는 중이에요. 버추얼 프로그램에서 Spout2 출력을 켜 주세요.</p></div>'
+      : `<div class="vsec"><b>연결할 창</b><div class="row" style="margin:6px 0 0"><select id="vPick">${virtualPickOptions(curWindow)}</select><button class="ghost" id="vRefresh" title="다시 찾기">↻</button></div></div>`}
+    <div class="vsec"><b>위치</b>${seg('vSpot', Object.entries(VIRTUAL_SPOTS).map(([k, x]) => [k, x.label]), v.spot)}
+      <label class="field" style="margin-top:8px">크기 <b id="vSizeV">${v.size}%</b> <small>(화면 높이 기준)</small><input type="range" id="vSize" min="20" max="120" step="5" value="${v.size}"></label>
+      <label class="check" style="margin-top:6px"><input type="checkbox" id="vFlip" ${v.flip ? 'checked' : ''}> 좌우 반전 (거울처럼)</label></div>
+    <div class="vsec"><b>배경 처리</b>${seg('vBg', [['transparent', '투명 (추천)'], ['green', '초록 크로마키'], ['blue', '파랑 크로마키'], ['custom', '색 직접 고르기']], v.bg)}
+      <div class="vcolor" id="vColorRow" ${v.bg === 'custom' ? '' : 'hidden'}><input type="color" id="vColor" value="${esc(v.color || '#00FF00')}"><small class="hint" style="margin:0">지울 배경색</small></div>
+      <p class="hint" style="margin:6px 0 0">${VT_TIP}</p></div>
+    <div class="vsec"><b>가장자리 자르기</b> <small class="hint">아바타 옆 빈 공간을 잘라내면 끌기·배치가 편해져요 (픽셀)</small>
+      <div class="crop">${[['left', '왼쪽'], ['right', '오른쪽'], ['top', '위'], ['bottom', '아래']].map(([k, l]) => `<label>${l}<input type="number" min="0" max="4000" step="10" data-crop="${k}" value="${c[k] | 0}"></label>`).join('')}</div></div>
+    <div class="row"><button id="vAll">모든 장면에 넣기</button><button id="vRehook">다시 잡기</button><button id="vSaveDef" title="다음에 버추얼을 띄울 때 이 위치·크기·배경으로">기본값으로 저장</button></div>
+    ${app ? `<p class="hint">${esc(app.name)} 연결됨 · 프로그램을 껐다 켜도 자동으로 다시 잡아요.</p>` : ''}</div>`;
+  const set = guard((patch, opts) => { if (DEMO) return; engine.setVirtual(name, patch, opts); saveScenes(); });
+  const segBind = (id, fn) => $(id).addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; $(id).querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); fn(b.dataset.v); });
+  segBind('vSpot', (k) => set({ spot: k }, { layout: true }));
+  segBind('vBg', (k) => { $('vColorRow').hidden = k !== 'custom'; set({ bg: k }, { layout: false }); });
+  let szT = 0;
+  $('vSize').addEventListener('input', () => { $('vSizeV').textContent = $('vSize').value + '%'; clearTimeout(szT); szT = setTimeout(() => {
+    const patch = { size: Number($('vSize').value) };
+    if (!DEMO && engine.getVirtual(name)?.spot === 'full') { patch.spot = 'bottom-right'; $('vSpot').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x.dataset.v === 'bottom-right')); }
+    set(patch, { layout: true });
+  }, 60); });
+  $('vFlip').addEventListener('change', () => set({ flip: $('vFlip').checked }, { layout: false }));
+  $('vColor')?.addEventListener('change', () => set({ color: $('vColor').value }, { layout: false }));
+  body.querySelectorAll('[data-crop]').forEach((inp) => inp.addEventListener('change', () => set({ crop: { [inp.dataset.crop]: Math.max(0, Number(inp.value) || 0) } }, { layout: false })));
+  $('vPick')?.addEventListener('change', guard(() => { if (DEMO) return; engine.updateSource(name, 'virtual', { value: $('vPick').value, virt: engine.getVirtual(name) }); saveScenes(); }));
+  $('vRefresh')?.addEventListener('click', () => { $('vPick').innerHTML = virtualPickOptions($('vPick').value); });
+  $('vAll').addEventListener('click', guard(() => { if (DEMO) return; const n = engine.virtualToAllScenes(name); saveScenes(); toast(n ? `${n}개 장면에 더 넣었어요.` : '이미 모든 장면에 있어요.'); }));
+  $('vRehook').addEventListener('click', guard(() => { if (DEMO) return; engine.rehookVirtual(name); toast('창을 다시 잡았어요.'); }));
+  $('vSaveDef').addEventListener('click', () => { const cur = DEMO ? v : engine.getVirtual(name); cfg.virtualLast = { spot: cur.spot, size: cur.size, flip: cur.flip, bg: cur.bg, color: cur.color }; save(); toast('다음 버추얼부터 이 설정으로 띄울게요.'); });
 }
 
 // ================================================================== 종료

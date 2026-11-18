@@ -1,4 +1,4 @@
-// Streamy Kit 방송 엔진 래퍼 (v0.5)
+// Streamy Kit 방송 엔진 래퍼 (v0.8)
 // OBS 엔진(libobs)을 obs-studio-node 모듈로 불러와서 Streamy Kit에 필요한 기능만 감쌉니다.
 // - 장면/소스는 사용자가 직접 만들고, 미리보기에서 끌어서 옮기고 크기를 바꿉니다.
 // - 오디오(데스크톱/마이크/프로그램별)는 장면과 상관없이 항상 들리는 "오디오 버스"에 둡니다.
@@ -24,9 +24,33 @@ const SOURCE_TYPES = {
   text: { label: '텍스트', icon: '🔤', type: 'text_gdiplus', text: true, fit: false },
   web: { label: '웹페이지 (알림창)', icon: '🌐', type: 'browser_source', url: true, fit: false },
   timer: { label: '타이머', icon: '⏱️', type: 'browser_source', timer: true, fit: false },
-  virtual: { label: '버추얼 (Spout2)', icon: '🧸', type: 'spout_capture', fit: false },
+  virtual: { label: '버추얼', icon: '🧸', type: 'game_capture', prop: 'window', fit: false },
   color: { label: '단색 배경', icon: '🟥', type: 'color_source', fit: true },
 };
+
+// 버추얼 프로그램 (실행 파일 이름으로 알아봄). 기본 연결 = 게임 캡처 + 투명 배경
+const VIRTUAL_APPS = [
+  { id: 'vts', name: 'VTube Studio', exe: ['vtube studio.exe'], spout: true },
+  { id: 'vseeface', name: 'VSeeFace', exe: ['vseeface.exe'], spout: true },
+  { id: 'warudo', name: 'Warudo', exe: ['warudo.exe'], spout: true },
+  { id: 'vnyan', name: 'VNyan', exe: ['vnyan.exe'], spout: true },
+  { id: 'vmm', name: 'VMagicMirror', exe: ['vmagicmirror.exe'] },
+  { id: 'nizima', name: 'nizima LIVE', exe: ['nizima live.exe', 'nizimalive.exe'] },
+  { id: 'prpr', name: 'PrprLive', exe: ['prprlive.exe'] },
+  { id: 'animaze', name: 'Animaze', exe: ['animaze.exe', 'animaze-win64-shipping.exe'] },
+  { id: '3tene', name: '3tene', exe: ['3tene.exe'] },
+  { id: 'luppet', name: 'Luppet', exe: ['luppet.exe'] },
+  { id: 'vup', name: 'VUP', exe: ['vup.exe'] },
+  { id: 'wmc', name: 'Webcam Motion Capture', exe: ['webcam motion capture.exe', 'webcammotioncapture.exe'] },
+];
+// 위치 프리셋 (캔버스 비율) — 박스 안에 비율 유지로 맞춤
+const VIRTUAL_SPOTS = {
+  'bottom-left': { label: '왼쪽 아래', ax: 0, ay: 1 }, 'bottom-center': { label: '가운데 아래', ax: 0.5, ay: 1 },
+  'bottom-right': { label: '오른쪽 아래', ax: 1, ay: 1 }, center: { label: '가운데', ax: 0.5, ay: 0.5 }, full: { label: '꽉 차게', ax: 0.5, ay: 0.5 },
+};
+const VIRTUAL_DEFAULT = { spot: 'bottom-right', size: 75, flip: false, bg: 'transparent', color: '#00FF00', method: 'game', crop: { left: 0, top: 0, right: 0, bottom: 0 } };
+const exeOf = (v) => String(v || '').split(':').pop().toLowerCase();
+const appOfExe = (exe) => VIRTUAL_APPS.find((a) => a.exe.includes(String(exe).toLowerCase())) || null;
 
 // 플랫폼별 송출 프리셋 (OBS 엔진에 들어 있는 rtmp-services 값 기준)
 const PLATFORMS = {
@@ -244,7 +268,11 @@ class Engine {
       case 'text': return { text: opt.text || '텍스트', font: { face: opt.font || 'Malgun Gothic', size: Number(opt.size) || 96, style: 'Bold', flags: 1 }, color: abgr(opt.color || '#FFFFFF') & 0xffffff, outline: !!opt.outline, outline_size: 6, outline_color: 0x000000 };
       case 'web': return { url: opt.url, width: Number(opt.width) || 800, height: Number(opt.height) || 600, css: 'body{background-color:rgba(0,0,0,0);margin:0;overflow:hidden}', reroute_audio: false };
       case 'timer': return { url: opt.timerUrl, width: 600, height: 200, css: '', reroute_audio: false };
-      case 'virtual': return {};
+      case 'virtual': {
+        const v = { ...VIRTUAL_DEFAULT, ...(opt.virt || {}) };
+        if (v.method === 'spout') return {};
+        return { capture_mode: 'window', window: opt.value, priority: 2, capture_cursor: false, allow_transparency: v.bg === 'transparent', anti_cheat_hook: true, hook_rate: 1 };
+      }
       case 'color': return { color: abgr(opt.color || '#0E0E10'), width: this.width, height: this.height };
     }
     return {};
@@ -253,21 +281,27 @@ class Engine {
   addSource(kind, opt = {}) {
     const scene = this.currentScene; if (!scene) throw new Error('장면을 먼저 만들어 주세요.');
     const def = SOURCE_TYPES[kind];
-    const type = this.resolveType(kind);
-    if (!type) throw new Error(`이 PC에서는 '${def.label}'을(를) 쓸 수 없어요.` + (kind === 'virtual' ? ' (Spout2 플러그인 필요)' : ''));
+    const type = kind === 'virtual' && opt.virt?.method === 'spout' ? (this.types().find((t) => t.startsWith('spout_capture')) || null) : this.resolveType(kind);
+    if (!type) throw new Error(`이 PC에서는 '${def.label}'을(를) 쓸 수 없어요.` + (kind === 'virtual' ? ' (Spout2를 쓸 수 없어요 — 게임 캡처로 바꿔 주세요)' : ''));
     const name = this.uniqueName(opt.name || def.label, (n) => this.nameTaken(n));
     const input = this.osn.InputFactory.create(type, name, this.settingsFor(kind, opt));
     this.sources[name] = { input, kind, icon: def.icon };
+    if (kind === 'virtual') this.sources[name].virt = { ...VIRTUAL_DEFAULT, ...(opt.virt || {}), crop: { ...VIRTUAL_DEFAULT.crop, ...(opt.virt?.crop || {}) } };
     const item = scene.scene.add(input);
     item.alignment = E.Align.TopLeft;
+    if (kind === 'virtual') {
+      this.applyVirtual(name);
+      this.select(item.id, 'single'); this.emit('items');
+      return { name, item };
+    }
     if (def.fit) {
       item.position = { x: 0, y: 0 };
       item.boundsType = E.Bounds.ScaleInner; item.boundsAlignment = E.Align.Center;
       item.bounds = { x: this.width, y: this.height };
       if (kind === 'color') item.moveBottom();
-    } else if (kind === 'webcam' || kind === 'virtual') {
-      const w = kind === 'webcam' ? this.width * 0.3 : this.width * 0.4, h = kind === 'webcam' ? this.height * 0.3 : this.height * 0.8;
-      item.position = { x: kind === 'webcam' ? 30 : this.width - w - 30, y: this.height - h - 30 };
+    } else if (kind === 'webcam') {
+      const w = this.width * 0.3, h = this.height * 0.3;
+      item.position = { x: 30, y: this.height - h - 30 };
       item.boundsType = E.Bounds.ScaleInner; item.boundsAlignment = E.Align.Center; item.bounds = { x: w, y: h };
     } else if (kind === 'timer') {
       item.position = { x: this.width - 630, y: 30 };
@@ -340,7 +374,8 @@ class Engine {
   // ================================================================ 끌기 / 크기 조절 (캔버스 좌표)
   itemRect(it) {
     const src = it.source;
-    const sw = src.width || 0, sh = src.height || 0;
+    let c = null; try { c = it.crop; } catch {}
+    const sw = Math.max(0, (src.width || 0) - (c ? c.left + c.right : 0)), sh = Math.max(0, (src.height || 0) - (c ? c.top + c.bottom : 0));
     const pos = it.position, al = it.alignment;
     let w, h, x, y;
     if (it.boundsType !== E.Bounds.None) {
@@ -350,9 +385,9 @@ class Engine {
       if (sw > 0 && sh > 0) { const k = Math.min(b.x / sw, b.y / sh); w = sw * k; h = sh * k; } else { w = b.x; h = b.y; }
       x = bx + (b.x - w) / 2; y = by + (b.y - h) / 2;
     } else {
-      const sc = it.scale; w = sw * sc.x; h = sh * sc.y;
-      x = pos.x - (al & E.Align.Right ? w : al & E.Align.Left ? 0 : w / 2);
-      y = pos.y - (al & E.Align.Bottom ? h : al & E.Align.Top ? 0 : h / 2);
+      const sc = it.scale; w = sw * Math.abs(sc.x); h = sh * Math.abs(sc.y);
+      x = pos.x - (al & E.Align.Right ? w : al & E.Align.Left ? 0 : w / 2) - (sc.x < 0 ? w : 0);   // 좌우 반전이면 왼쪽으로 그려짐
+      y = pos.y - (al & E.Align.Bottom ? h : al & E.Align.Top ? 0 : h / 2) - (sc.y < 0 ? h : 0);
     }
     return { x, y, w, h, sw, sh };
   }
@@ -372,24 +407,117 @@ class Engine {
     const it = this.itemObj(itemId); if (!it) return null;
     const r = this.itemRect(it);
     if (r.sw > 0 && r.sh > 0) {
+      const flip = it.scale.x < 0;
       it.boundsType = E.Bounds.None; it.alignment = E.Align.TopLeft;
-      it.scale = { x: r.w / r.sw, y: r.h / r.sh }; it.position = { x: r.x, y: r.y };
+      this.place(it, r.x, r.y, r.w / r.sw, flip);
     }
     return this.itemRect(it);
   }
+  // 왼쪽 위 (x,y) · 배율 k · 좌우 반전 여부로 배치 (TopLeft 정렬 기준)
+  place(it, x, y, k, flip = it.scale.x < 0) {
+    let c = null; try { c = it.crop; } catch {}
+    const sw = Math.max(0, (it.source.width || 0) - (c ? c.left + c.right : 0));
+    it.scale = { x: flip ? -k : k, y: k };
+    it.position = { x: flip ? x + sw * k : x, y };
+  }
   setItemRect(itemId, x, y, w) {
     const it = this.itemObj(itemId); if (!it) return;
-    const sw = it.source.width || 0;
-    if (sw > 0 && w) { const k = Math.max(0.02, w / sw); it.scale = { x: k, y: k }; }
-    it.position = { x, y };
+    const r = this.itemRect(it);
+    const k = r.sw > 0 && w ? Math.max(0.02, w / r.sw) : Math.abs(it.scale.x);
+    this.place(it, x, y, k);
   }
   fitItem(itemId, mode) {
     const it = this.itemObj(itemId); if (!it) return;
     const r = this.normalize(itemId); if (!r || !r.sw) return;
-    if (mode === 'fit') { const k = Math.min(this.width / r.sw, this.height / r.sh); it.scale = { x: k, y: k }; it.position = { x: (this.width - r.sw * k) / 2, y: (this.height - r.sh * k) / 2 }; }
-    if (mode === 'center') it.position = { x: (this.width - r.w) / 2, y: (this.height - r.h) / 2 };
-    if (mode === 'reset') { it.scale = { x: 1, y: 1 }; it.position = { x: (this.width - r.sw) / 2, y: (this.height - r.sh) / 2 }; }
+    if (mode === 'fit') { const k = Math.min(this.width / r.sw, this.height / r.sh); this.place(it, (this.width - r.sw * k) / 2, (this.height - r.sh * k) / 2, k); }
+    if (mode === 'center') this.place(it, (this.width - r.w) / 2, (this.height - r.h) / 2, r.w / r.sw);
+    if (mode === 'reset') this.place(it, (this.width - r.sw) / 2, (this.height - r.sh) / 2, 1);
   }
+
+  // ================================================================ 버추얼
+  // 지금 켜져 있는 버추얼 프로그램 창 찾기 → [{ app, value, title }]
+  findVirtualApps() {
+    const out = [], seen = new Set();
+    for (const w of this.listProp(this.resolveType('window') || 'window_capture', 'window')) {   // 창 캡처 목록으로 조회 (게임 캡처 조회 소스는 후킹을 시도할 수 있어서 피함)
+      const app = appOfExe(exeOf(w.value));
+      if (!app || seen.has(app.id)) continue;
+      seen.add(app.id);
+      out.push({ app, value: w.value, title: w.name });
+    }
+    return out;
+  }
+  virtualSources() {
+    return Object.entries(this.sources).filter(([, s]) => s.kind === 'virtual').map(([name, s]) => ({ name, virt: s.virt || { ...VIRTUAL_DEFAULT }, exe: exeOf(s.input.settings?.window) }));
+  }
+  getVirtual(name) { const s = this.sources[name]; return s && s.kind === 'virtual' ? (s.virt ||= { ...VIRTUAL_DEFAULT, crop: { ...VIRTUAL_DEFAULT.crop } }) : null; }
+  // 버추얼 설정을 엔진에 반영: 배경(투명/크로마키) · 자르기 · 위치/크기 · 반전 (모든 장면의 해당 항목)
+  applyVirtual(name, { layout = true } = {}) {
+    const s = this.sources[name]; if (!s) return;
+    const v = this.getVirtual(name);
+    // 배경
+    if (v.method !== 'spout') { try { s.input.update({ allow_transparency: v.bg === 'transparent' }); } catch {} }
+    let f = null; try { f = s.input.findFilter('Streamy 크로마키'); } catch {}
+    if (v.bg !== 'transparent') {
+      const ftype = (this.osn.FilterFactory.types?.() || []).filter((t) => t.startsWith('chroma_key_filter')).sort().pop() || 'chroma_key_filter_v2';
+      const col = v.bg === 'green' ? 'green' : v.bg === 'blue' ? 'blue' : 'custom';
+      const set = { key_color_type: col, key_color: abgr(v.color || '#00FF00') & 0xffffff, similarity: 420, smoothness: 80, spill: 100 };
+      try { if (f) f.update(set); else s.input.addFilter(this.osn.FilterFactory.create(ftype, 'Streamy 크로마키', set)); } catch (e) { console.warn('chroma', e); }
+    } else if (f) { try { s.input.removeFilter(f); f.release?.(); } catch {} }
+    // 장면 항목들
+    for (const sc of this.scenes) for (const it of sc.scene.getItems()) {
+      if (it.source.name !== name) continue;
+      const c = v.crop || {};
+      const keep = it.boundsType === E.Bounds.None && it.scale.x < 0 ? this.itemRect(it) : null;   // 반전 상태에서 자르면 왼쪽 끝이 그대로이게
+      try { it.crop = { left: c.left | 0, top: c.top | 0, right: c.right | 0, bottom: c.bottom | 0 }; } catch {}
+      if (keep && !layout) this.place(it, keep.x, keep.y, Math.abs(it.scale.x), true);
+      if (layout) this.layoutVirtualItem(it, v);
+      else if ((it.scale.x < 0) !== !!v.flip) {
+        if (it.boundsType !== E.Bounds.None) { const sc = it.scale; it.scale = { x: (v.flip ? -1 : 1) * Math.abs(sc.x || 1), y: Math.abs(sc.y || 1) }; }
+        else { const r = this.itemRect(it); this.place(it, r.x, r.y, Math.abs(it.scale.x), !!v.flip); }
+      }
+    }
+    this.emit('items');
+  }
+  // 위치 프리셋 + 크기(캔버스 높이 %) → 박스. 소스 크기를 몰라도(아직 연결 전) 박스 기준으로 맞춰짐
+  layoutVirtualItem(it, v) {
+    const spot = VIRTUAL_SPOTS[v.spot] || VIRTUAL_SPOTS['bottom-right'];
+    const full = v.spot === 'full';
+    const bh = full ? this.height : this.height * Math.max(10, Math.min(120, v.size)) / 100;
+    const bw = full ? this.width : Math.min(this.width, bh * 16 / 9);
+    const m = full ? 0 : 20;
+    const x = (this.width - bw) * spot.ax + (spot.ax === 0 ? m : spot.ax === 1 ? -m : 0);
+    const y = (this.height - bh) * spot.ay + (spot.ay === 1 ? 0 : 0);
+    it.alignment = E.Align.TopLeft;
+    it.boundsType = E.Bounds.ScaleInner;
+    it.boundsAlignment = spot.ay === 1 ? (spot.ax === 0 ? E.Align.BottomLeft : spot.ax === 1 ? E.Align.BottomRight : E.Align.Bottom) : E.Align.Center;
+    it.bounds = { x: bw, y: bh };
+    it.position = { x, y };
+    it.scale = { x: v.flip ? -1 : 1, y: 1 };     // 박스 모드에서는 부호만 반전에 쓰임
+  }
+  setVirtual(name, patch, opts) {
+    const v = this.getVirtual(name); if (!v) return;
+    Object.assign(v, patch, patch.crop ? { crop: { ...v.crop, ...patch.crop } } : {});
+    this.applyVirtual(name, opts);
+  }
+  // 버추얼 창 다시 잡기 (프로그램을 껐다 켰을 때)
+  rehookVirtual(name, value) {
+    const s = this.sources[name]; if (!s) return;
+    const v = this.getVirtual(name);
+    if (v.method === 'spout') return;
+    const w = value || s.input.settings?.window;
+    try { s.input.update({ window: '', capture_mode: 'window' }); s.input.update(this.settingsFor('virtual', { value: w, virt: v })); } catch (e) { console.warn('rehook', e); }
+  }
+  // 모든 장면에 같은 버추얼 넣기 (위치는 같은 설정으로)
+  virtualToAllScenes(name) {
+    const s = this.sources[name]; if (!s) return 0;
+    let n = 0;
+    for (const sc of this.scenes) {
+      if (sc.scene.getItems().some((it) => it.source.name === name)) continue;
+      try { sc.scene.add(s.input); n++; } catch {}
+    }
+    this.applyVirtual(name); return n;
+  }
+  setDrawUI(on) { try { if (this.display) this.osn.NodeObs.OBS_content_setShouldDrawUI(this.display, !!on); } catch {} }
 
   // ================================================================ 오디오 (항상 켜짐: 데스크톱 / 마이크 / 프로그램별)
   addAudio(name, type, settings, label, kind) {
@@ -471,7 +599,7 @@ class Engine {
     return {
       version: 5,
       current: this.currentScene ? this.currentScene.name : null,
-      sources: Object.entries(this.sources).map(([name, s]) => ({ name, kind: s.kind, icon: s.icon, type: s.input.id, settings: s.input.settings, muted: s.input.muted })),
+      sources: Object.entries(this.sources).map(([name, s]) => ({ name, kind: s.kind, icon: s.icon, type: s.input.id, settings: s.input.settings, muted: s.input.muted, virt: s.virt })),
       scenes: this.scenes.map((s) => ({ name: s.name, items: items(s) })),
     };
   }
@@ -482,6 +610,7 @@ class Engine {
         const input = osn.InputFactory.create(src.type, src.name, src.settings || {});
         if (src.muted) input.muted = true;
         this.sources[src.name] = { input, kind: src.kind, icon: src.icon || SOURCE_TYPES[src.kind]?.icon || '•' };
+        if (src.kind === 'virtual') this.sources[src.name].virt = { ...VIRTUAL_DEFAULT, ...(src.virt || {}), crop: { ...VIRTUAL_DEFAULT.crop, ...(src.virt?.crop || {}) } };
       } catch (e) { console.warn('source load failed', src.name, e); }
     }
     for (const sc of data.scenes || []) {
@@ -500,6 +629,7 @@ class Engine {
         }
       } catch (e) { console.warn('scene load failed', sc.name, e); }
     }
+    for (const [n, src] of Object.entries(this.sources)) if (src.kind === 'virtual') { try { this.applyVirtual(n, { layout: false }); } catch (e) { console.warn('virtual load', e); } }
     const cur = this.scenes.find((s) => s.name === data.current) || this.scenes[0];
     if (cur) this.switchScene(cur.id, true);
     this.emit('scenes'); this.emit('items');
@@ -619,4 +749,4 @@ function streamError(sig) {
   return (msg || '방송 오류') + (sig.error ? ' (' + sig.error + ')' : '');
 }
 
-module.exports = { Engine, SOURCE_TYPES, PLATFORMS, ENCODERS };
+module.exports = { Engine, SOURCE_TYPES, PLATFORMS, ENCODERS, VIRTUAL_APPS, VIRTUAL_SPOTS, VIRTUAL_DEFAULT, appOfExe, exeOf };

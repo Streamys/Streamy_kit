@@ -9,6 +9,9 @@
 <body>
 <header class="titlebar">
   <div class="brand"><img src="logo.png" alt=""><b>Streamy</b><span>Kit</span><em id="ver"></em></div>
+  <div class="mode-sw" id="modeSw" title="세팅: 화면·소스·사운드 꾸미기 / ON AIR: 방송 화면 + 장면 + 채팅만">
+    <button data-m="setup" class="on">세팅</button><button data-m="air"><i></i>ON AIR</button>
+  </div>
   <div class="live-pill" id="livePill"><i></i><span id="liveText">오프라인</span><small id="liveTime"></small></div>
   <div class="viewers" id="viewers">
     <span class="v-label">통합 시청자</span>
@@ -98,7 +101,8 @@
           <button data-v="soop"><i class="pd soop"></i>SOOP</button>
         </div>
         <div class="chat-all" id="chatAll">
-          <div class="chat-state" id="chatState"></div>
+          <div class="chat-top"><div class="chat-state" id="chatState"></div>
+            <div class="chat-tools"><button id="chatLog" title="채팅 기록 저장 켜기/끄기">기록</button><button id="chatLogDir" title="채팅 기록 폴더 열기">📁</button></div></div>
           <div class="chat-feed" id="chatFeed"></div>
           <button class="chat-more" id="chatMore" hidden>새 채팅 ↓</button>
         </div>
@@ -115,6 +119,11 @@
             <button id="srcDown" title="뒤로">▼</button>
             <button id="srcDel" title="선택한 소스 삭제">🗑</button>
           </div>
+        </div>
+        <div class="vt-card" id="vtCard">
+          <button class="vt-go" id="vtGo"><span>🧸</span><b>버추얼 원클릭 연결</b><small>켜져 있는 버추얼 프로그램을 찾아서 화면에 띄워요</small></button>
+          <div class="vt-row"><label class="check tiny"><input type="checkbox" id="vtAuto"> 버추얼 프로그램을 켜면 자동으로 띄우기</label></div>
+          <div class="vt-found" id="vtFound"></div>
         </div>
         <div class="add-box" id="addBox" hidden>
           <div class="type-grid" id="typeGrid"></div>
@@ -166,6 +175,20 @@
         <label class="field">유튜브 채널<input id="ytId" placeholder="@핸들 또는 채널 주소"></label>
         <label class="field">SOOP 아이디<input id="soopId" placeholder="방송국 주소 sooplive.com/ 뒤의 아이디"></label>
         <p class="hint">한 번만 넣으면 방송이 켜질 때 채팅 탭에 자동으로 붙어요. 스트림 키로는 채널을 알 수 없어서 여기에 따로 넣어야 해요.<br>시청자 수는 지금은 치지직만 합쳐 보여 줘요 (위쪽 👁 버튼).</p>
+        <h4>최소화 오버레이 <small>창을 내리면 방송 상태 + 최근 채팅</small></h4>
+        <label class="check"><input type="checkbox" id="miniOn"> 프로그램을 최소화하면 오버레이 띄우기</label>
+        <div class="field">채팅을 보여줄 플랫폼<div class="seg" id="miniPlat"><button data-p="chzzk"><i class="pd chzzk"></i>치지직</button><button data-p="youtube"><i class="pd youtube"></i>유튜브</button><button data-p="soop"><i class="pd soop"></i>SOOP</button></div></div>
+        <div class="grid2">
+          <label class="field">투명도 <b id="miniOpV"></b><input type="range" id="miniOp" min="0" max="80" step="5"></label>
+          <label class="field">최근 채팅<select id="miniCount"><option value="3">3개</option><option value="5">5개</option></select></label>
+        </div>
+        <div class="row"><button id="miniTest">오버레이 미리 보기</button></div>
+        <p class="hint">오버레이는 끌어서 옮길 수 있고, 위치는 기억해요. ⤢ 누르면 원래 창으로 돌아와요.</p>
+        <h4>ON AIR 화면</h4>
+        <label class="check"><input type="checkbox" id="airOnLive"> 방송이 시작되면 자동으로 ON AIR 화면으로 바꾸기</label>
+        <h4>채팅 기록</h4>
+        <label class="check"><input type="checkbox" id="chatLogOn"> 채팅을 파일로 저장하기 (날짜별 .txt)</label>
+        <div class="row"><button id="chatLogDir2">기록 폴더 열기</button></div>
         <h4>화질</h4>
         <label class="field"><select id="quality"><option value="1080p60">1080p 60fps (권장)</option><option value="1080p30">1080p 30fps</option><option value="720p60">720p 60fps (저사양 PC)</option></select></label>
         <p class="hint">화질 변경은 다시 시작한 뒤 적용돼요.</p>

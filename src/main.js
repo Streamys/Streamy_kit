@@ -1,6 +1,6 @@
 // Streamy Kit — 메인 프로세스
 // 화면(렌더러)이 방송 엔진을 불러오고, 여기서는 창 관리 · 경로 · 로그 · 충돌 복구 · 종료 처리를 맡습니다.
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, dialog, net } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, dialog, net, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
@@ -84,6 +84,10 @@ function main() {
 
     const sendMax = () => { try { win.webContents.send('win:maximized', win.isMaximized()); } catch {} };
     win.on('maximize', sendMax); win.on('unmaximize', sendMax);
+    // 최소화하면 미니 오버레이, 다시 열면 숨김
+    win.on('minimize', () => { if (miniCfg.on) miniShow(); });
+    win.on('restore', () => miniHide());
+    win.on('focus', () => { if (!win.isMinimized()) miniHide(); });
     win.on('closed', () => { stopAudioSessions(); win = null; });
     win.webContents.setWindowOpenHandler(({ url }) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return { action: 'deny' }; });
     win.webContents.on('will-navigate', (e) => e.preventDefault());
@@ -130,7 +134,8 @@ function main() {
     if (quitting) return;
     quitting = true;
     stopAudioSessions();
-    try { chat.stopAll(); } catch {}
+    try { chat.flushLog(); chat.stopAll(); } catch {}
+    try { if (mini && !mini.isDestroyed()) mini.destroy(); } catch {}
     log.warn('main', 'force quit:', why);
     try { if (win && !win.isDestroyed()) win.hide(); } catch {}
     await killOwnEngine('force quit');
@@ -180,9 +185,50 @@ function main() {
   }
 
   // ---------------------------------------------------------------- 업데이트 (GitHub Releases)
+  // ---------------------------------------------------------------- 미니 오버레이 (최소화했을 때)
+  let mini = null, miniState = null, miniTimer = null;
+  let miniCfg = { on: true, platforms: ['chzzk', 'youtube', 'soop'], opacity: 30, count: 5 };
+  const recentChats = [];                       // 오버레이에 바로 보여줄 최근 채팅
+  const miniPosFile = path.join(app.getPath('userData'), 'mini-overlay.json');
+  const miniSend = (ch, d) => { try { if (mini && !mini.isDestroyed()) mini.webContents.send(ch, d); } catch {} };
+  function miniCreate() {
+    if (mini && !mini.isDestroyed()) return mini;
+    let pos = null; try { pos = JSON.parse(fs.readFileSync(miniPosFile, 'utf8')); } catch {}
+    const W = 340, H = 248;
+    const disp = pos ? screen.getDisplayMatching({ x: pos.x, y: pos.y, width: W, height: H }) : screen.getDisplayMatching(win && !win.isDestroyed() ? win.getBounds() : screen.getPrimaryDisplay().bounds);
+    const wa = disp.workArea;
+    const inside = pos && pos.x >= wa.x - W + 40 && pos.x <= wa.x + wa.width - 40 && pos.y >= wa.y && pos.y <= wa.y + wa.height - 40;
+    mini = new BrowserWindow({
+      width: W, height: H, x: inside ? pos.x : wa.x + wa.width - W - 16, y: inside ? pos.y : wa.y + wa.height - H - 16,
+      frame: false, transparent: true, resizable: false, maximizable: false, minimizable: false, fullscreenable: false,
+      alwaysOnTop: true, skipTaskbar: true, show: false, hasShadow: false, backgroundColor: '#00000000', title: 'Streamy Kit 미니',
+      webPreferences: { nodeIntegration: true, contextIsolation: false, spellcheck: false, backgroundThrottling: false },
+    });
+    mini.setAlwaysOnTop(true, 'screen-saver');
+    mini.loadFile(path.join(__dirname, 'renderer', 'mini.html'));
+    mini.webContents.on('did-finish-load', () => { miniSend('mini:config', miniCfg); if (miniState) miniSend('mini:state', miniState); miniSend('chat:messages', recentChats.slice(-20)); });
+    mini.webContents.on('will-navigate', (e) => e.preventDefault());
+    mini.on('moved', () => { try { const b = mini.getBounds(); fs.writeFileSync(miniPosFile, JSON.stringify({ x: b.x, y: b.y })); } catch {} });
+    mini.on('closed', () => { mini = null; });
+    return mini;
+  }
+  function miniShow() { const m = miniCreate(); if (m.webContents.isLoading()) m.once('ready-to-show', () => m.showInactive()); else m.showInactive(); }
+  function miniHide() { if (mini && !mini.isDestroyed() && mini.isVisible()) mini.hide(); }
+  ipcMain.on('mini:config', (_e, c) => { miniCfg = { ...miniCfg, ...c }; miniSend('mini:config', miniCfg); if (!miniCfg.on && win && win.isMinimized()) miniHide(); });
+  ipcMain.on('mini:state', (_e, st) => { miniState = st; if (mini && mini.isVisible()) miniSend('mini:state', st); });
+  ipcMain.on('mini:toggle', () => { if (mini && !mini.isDestroyed() && mini.isVisible()) miniHide(); else miniShow(); });
+  ipcMain.on('mini:restore', () => { miniHide(); if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); } });
+  ipcMain.on('mini:hide', () => miniHide());
+
   // ---------------------------------------------------------------- 통합 채팅
   const chat = require('./chat');
-  chat.init({ net, log, send: (ch, d) => { try { if (win && !win.isDestroyed()) win.webContents.send(ch, d); } catch {} } });
+  chat.init({ net, log, send: (ch, d) => {
+    try { if (win && !win.isDestroyed()) win.webContents.send(ch, d); } catch {}
+    if (ch === 'chat:messages') { recentChats.push(...d.filter((m) => !m.recent)); if (recentChats.length > 60) recentChats.splice(0, recentChats.length - 60); miniSend(ch, d); }
+  } });
+  const chatLogDir = path.join(app.getPath('documents'), 'Streamy Kit', '채팅 로그');
+  ipcMain.handle('chat:log', (_e, c = {}) => chat.setLog({ on: !!c.on, dir: chatLogDir }));
+  ipcMain.handle('chat:log-open', () => { try { fs.mkdirSync(chatLogDir, { recursive: true }); } catch {} shell.openPath(chatLogDir); return chatLogDir; });
   ipcMain.handle('chat:configure', (_e, ch) => chat.configure(ch));
   ipcMain.handle('chat:kick', () => { chat.kick(); return true; });
   // 채팅창 webview 안전장치: Node 끄기, 새 창은 기본 브라우저로
@@ -242,7 +288,8 @@ function main() {
     if (quitting) return;
     quitting = true;
     stopAudioSessions();
-    try { chat.stopAll(); } catch {}
+    try { chat.flushLog(); chat.stopAll(); } catch {}
+    try { if (mini && !mini.isDestroyed()) mini.destroy(); } catch {}
     await killOwnEngine('after shutdown');
     log.info('main', 'quit');
     app.exit(0);

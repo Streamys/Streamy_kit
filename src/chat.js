@@ -8,7 +8,32 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 const RETRY_OFFLINE = { chzzk: 30000, soop: 30000, youtube: 60000 };   // 방송 꺼져 있을 때 다시 확인 간격
 const RETRY_ERROR = 20000;
 
+const fs = require('fs');
+const path = require('path');
 let ctx = null;            // { net, log, send }
+const PNAME = { chzzk: '치지직', youtube: '유튜브', soop: 'SOOP' };
+// 채팅 기록 (켜져 있을 때만, 날짜별 txt)
+const logCfg = { on: false, dir: '' };
+let logLines = [];
+function setLog(c = {}) {
+  Object.assign(logCfg, c);
+  if (logCfg.on && logCfg.dir) { try { fs.mkdirSync(logCfg.dir, { recursive: true }); } catch (e) { ctx.log.warn('chat', 'log dir', e.message); } }
+  return { ...logCfg };
+}
+const pad = (n) => String(n).padStart(2, '0');
+function logLine(m) {
+  const d = new Date(m.ts || Date.now());
+  const body = (m.parts || []).map((x) => (x.t === 'img' ? `:${x.alt}:` : x.v)).join('').replace(/\s+/g, ' ').trim();
+  const kind = m.kind === 'donation' ? `💰${m.amount} ` : m.kind === 'sub' ? `⭐${m.amount} ` : '';
+  return { day: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, text: `[${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}] [${PNAME[m.p] || m.p}] ${kind}${m.nick || ''}${m.badge ? `(${m.badge})` : ''}: ${body}` };
+}
+function flushLog() {
+  if (!logLines.length) return;
+  const byDay = {};
+  for (const l of logLines) (byDay[l.day] ||= []).push(l.text);
+  logLines = [];
+  for (const [day, lines] of Object.entries(byDay)) fs.appendFile(path.join(logCfg.dir, `채팅 ${day}.txt`), lines.join('\r\n') + '\r\n', 'utf8', (e) => { if (e) ctx.log.warn('chat', 'log write', e.message); });
+}
 const conns = {};          // platform → connector
 let queue = [];
 let flushT = null;
@@ -19,7 +44,8 @@ function emitMessage(m) {
   m.ts = m.ts || Date.now();
   queue.push(m);
   if (queue.length > 400) queue = queue.slice(-400);
-  if (!flushT) flushT = setTimeout(() => { flushT = null; const q = queue; queue = []; if (q.length) ctx.send('chat:messages', q); }, 120);
+  if (logCfg.on && logCfg.dir && !m.recent && m.kind !== 'system') logLines.push(logLine(m));
+  if (!flushT) flushT = setTimeout(() => { flushT = null; const q = queue; queue = []; if (q.length) ctx.send('chat:messages', q); if (logCfg.on) flushLog(); }, 120);
 }
 const status = {};         // platform → { state, detail, url, videoId }
 function setStatus(p, s) {
@@ -341,4 +367,4 @@ function kick() { for (const c of Object.values(conns)) c.kick(); }      // 방�
 function snapshot() { return { ...status }; }
 function stopAll() { for (const c of Object.values(conns)) c.stop(); }
 
-module.exports = { init, configure, kick, snapshot, stopAll, _test: { ytLiveUrl, ytAllMessages, soopPacket, Soop, Chzzk, YouTube } };
+module.exports = { init, configure, kick, snapshot, stopAll, setLog, flushLog, _test: { ytLiveUrl, ytAllMessages, soopPacket, Soop, Chzzk, YouTube } };
