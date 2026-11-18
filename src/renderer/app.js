@@ -33,7 +33,7 @@ const DEFAULTS = {
   keys: { chzzk: '', youtube: '', soop: '' }, encoder: 'auto',
   appAudio: [], audioState: {}, devices: {}, showViewers: false, channels: { chzzk: '', youtube: '', soop: '' },
   timer: { mode: 'stopwatch', minutes: 10, label: '', theme: 'red' }, quality: '1080p60',
-  mode: 'setup', airOnLive: true, chatLog: false, autoUpdate: true, guide: true, phone: true, phoneOrient: 'v',
+  mode: 'setup', airOnLive: true, chatLog: false, autoUpdate: true, guide: true, phone: true, phoneOrient: 'v', phoneSplit: { v: 0.28, h: 0.45 },
   mini: { on: true, platforms: ['chzzk', 'youtube', 'soop'], opacity: 30, count: 5 },
   virtualAuto: true, virtualAutoDone: [],
 };
@@ -1359,9 +1359,16 @@ function phoneLayout() {
     try { engine.movePhoneDisplay(r.left * z, r.top * z, r.width * z, r.height * z); } catch (e) { rlog('warn', 'phone move', e); }
   });
 }
+const SPLIT_DEF = { v: 0.28, h: 0.45 };
+function phoneApplySplit() {
+  const o = cfg.phoneOrient === 'h' ? 'h' : 'v';
+  const k = Math.max(0.15, Math.min(0.7, Number((cfg.phoneSplit || {})[o]) || SPLIT_DEF[o]));
+  $('phoneCol').style.width = (k * 100).toFixed(1) + '%';
+}
 function phoneSync() {
   const on = phoneVisible();
-  $('phoneCol').hidden = !on;
+  $('phoneCol').hidden = !on; $('phSplit').hidden = !on;
+  phoneApplySplit();
   $('phToggle').classList.toggle('on', cfg.phone !== false);
   $('phone').className = 'phone ' + (cfg.phoneOrient === 'h' ? 'h' : 'v');
   $('phOrient').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.o === (cfg.phoneOrient === 'h' ? 'h' : 'v')));
@@ -1374,6 +1381,20 @@ function phoneSync() {
   }
   layoutDisplay(); phoneLayout();
 }
+// 비율 조절 막대: 끌어서 폰 화면 폭 바꾸기 (세로/가로 따로 기억), 더블클릭 = 기본값
+$('phSplit').addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return; e.preventDefault();
+  const box = document.querySelector('.stage-top').getBoundingClientRect(), o = cfg.phoneOrient === 'h' ? 'h' : 'v';
+  document.body.classList.add('splitting'); $('phSplit').classList.add('on');
+  const move = (ev) => {
+    const k = Math.max(0.15, Math.min(0.7, (box.right - ev.clientX) / box.width));
+    cfg.phoneSplit = { ...SPLIT_DEF, ...(cfg.phoneSplit || {}), [o]: Math.round(k * 1000) / 1000 };
+    phoneApplySplit();
+  };
+  const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); document.body.classList.remove('splitting'); $('phSplit').classList.remove('on'); save(); layoutDisplay(); phoneLayout(); };
+  window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+});
+$('phSplit').addEventListener('dblclick', () => { const o = cfg.phoneOrient === 'h' ? 'h' : 'v'; cfg.phoneSplit = { ...SPLIT_DEF, ...(cfg.phoneSplit || {}), [o]: SPLIT_DEF[o] }; save(); phoneApplySplit(); });
 $('phToggle').addEventListener('click', () => { cfg.phone = cfg.phone === false; save(); phoneSync(); });
 $('phOrient').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; cfg.phoneOrient = b.dataset.o; save(); phoneSync(); });
 new ResizeObserver(phoneLayout).observe($('phVideo'));

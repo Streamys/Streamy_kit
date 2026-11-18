@@ -412,13 +412,13 @@ body.drag-ch .sound::after{content:'사운드 칸 밖에 놓으면 빠져요';po
 .ph-toggle{display:none;margin-left:auto;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;color:var(--sub)}
 .ph-toggle.on{border-color:var(--red);color:#fff;background:rgba(225,29,46,.16)}
 body.mode-air .ph-toggle{display:block}
-.phone-col{flex:none;display:flex;flex-direction:column;align-items:center;gap:8px;min-height:0}
+.phone-col{flex:none;width:28%;min-width:200px;display:flex;flex-direction:column;align-items:center;gap:8px;min-height:0}
 .phone-col[hidden]{display:none}
 .ph-head{display:flex;align-items:center;gap:10px;width:100%;justify-content:space-between;font-size:12px}
 .ph-seg{margin:0}.ph-seg button{padding:3px 10px!important;font-size:11px!important}
-.phone{flex:1;min-height:0;background:#050506;border:3px solid #2c2c33;border-radius:34px;padding:9px;box-shadow:0 10px 30px rgba(0,0,0,.5),inset 0 0 0 1px #000}
-.phone.v{aspect-ratio:9/19.5;max-height:100%;height:100%;max-width:310px}
-.phone.h{aspect-ratio:19.5/9;width:min(560px,100%);height:auto;flex:none;margin-top:auto;margin-bottom:auto}
+.phone{flex:none;box-sizing:border-box;background:#050506;border:3px solid #2c2c33;border-radius:34px;padding:9px;box-shadow:0 10px 30px rgba(0,0,0,.5),inset 0 0 0 1px #000}
+.phone.v{aspect-ratio:9/19.5;width:min(100cqw,calc(100cqh * 9 / 19.5));height:auto}
+.phone.h{aspect-ratio:19.5/9;width:min(100cqw,calc(100cqh * 19.5 / 9));height:auto}
 .ph-screen{position:relative;width:100%;height:100%;border-radius:26px;overflow:hidden;background:#0f0f12;display:flex;flex-direction:column}
 .ph-status{display:flex;justify-content:space-between;align-items:center;padding:6px 16px 4px;font-size:10px;font-weight:700;color:#ddd;flex:none}
 .ph-status i{width:70px;height:16px;border-radius:10px;background:#000}
@@ -438,3 +438,12 @@ body.mode-air .ph-toggle{display:block}
 .phone.h .ph-status,.phone.h .ph-info,.phone.h .ph-chat,.phone.h .ph-input{display:none}
 .phone.h .ph-video{flex:1;aspect-ratio:auto;height:100%}
 .ph-hint{font-size:11px;color:var(--sub);text-align:center;max-width:310px;margin:0;line-height:1.5}
+
+.ph-area{flex:1;min-height:0;width:100%;container-type:size;display:flex;align-items:center;justify-content:center}
+.ph-hint{max-width:none}
+/* 방송 화면 ↔ 폰 화면 비율 조절 막대 */
+.splitter{flex:none;width:10px;margin:0 -7px;cursor:col-resize;display:flex;align-items:center;justify-content:center;position:relative;z-index:2}
+.splitter[hidden]{display:none}
+.splitter i{width:4px;height:64px;border-radius:4px;background:var(--line2);transition:background .12s,height .12s}
+.splitter:hover i,.splitter.on i{background:var(--red);height:120px}
+body.splitting,body.splitting *{cursor:col-resize!important;user-select:none}
