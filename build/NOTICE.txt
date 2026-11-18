@@ -14,7 +14,7 @@ Streamy Kit은 다음 오픈소스 소프트웨어를 사용하며, GPL-2.0-or-l
 - Electron — MIT
   https://github.com/electron/electron
 
-Streamy Kit 소스 코드: https://github.com/Onin0782/streamy-kit-studio
+Streamy Kit 소스 코드: https://github.com/Streamys/Streamy_kit
 라이선스 전문: LICENSE.txt
 
 설정 파일 위치: %APPDATA%\Streamy Kit

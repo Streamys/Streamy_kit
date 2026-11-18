@@ -1,36 +1,280 @@
-# Streamy Kit v0.3 (OBS 엔진 + 자체 UI)
+<div align="center">
 
-치지직 · 유튜브 · SOOP 스트리머를 위한 방송 프로그램.
-화면(UI)은 Electron으로 새로 만들고, 캡처 · 인코딩 · 송출은 **OBS Studio 엔진**(obs-studio-node 경유)을 사용합니다.
+<img src="docs/images/logo.png" width="96" alt="Streamy Kit">
 
-## 기능
-- 장면: 사용자가 직접 추가 · 이름 변경 · 삭제 · 순서 변경, F1~F9 전환, 페이드 전환
-- 소스: 모니터 화면 · 프로그램 창 · 게임 · 웹캠 · 이미지 · 텍스트 · 웹페이지(알림창) · 타이머 · 버추얼(Spout2) · 단색 배경
-- 미리보기에서 소스를 클릭해 선택, 끌어서 이동, 모서리를 끌어 크기 조절 (자석: 가장자리/가운데, Alt로 끄기), 방향키 미세 이동
-- 오디오 믹서: 데스크톱 · 마이크 · 앱별 소리마다 실시간 레벨 막대(막대 뒤에서 소리에 따라 움직임) + 볼륨 + 음소거
-- 사운드 분리: 디스코드 · 크롬 · 엣지 · 웨일 · 스포티파이 · 멜론 앱별 캡처
-- 장면 / 소스 / 오디오 설정 자동 저장 (%APPDATA%\Streamy Kit)
-- 보이는 타이머 (경과 시간 / 카운트다운)
-- 송출: 치지직 · 유튜브 · SOOP 프리셋, 그래픽카드 인코더 자동 선택, 자동 재연결
-- 녹화 (MKV, 내 동영상\Streamy Kit)
+# Streamy Kit
 
-## 구조
+**치지직 · 유튜브 · SOOP 스트리머를 위한 방송 프로그램**
+
+OBS의 검증된 방송 엔진 위에, 한국 스트리머에게 맞춘 화면과 기능을 새로 얹었습니다.
+
+![version](https://img.shields.io/badge/version-0.3.0-E11D2E)
+![platform](https://img.shields.io/badge/platform-Windows%2010%2B%20x64-0B0B0D)
+![engine](https://img.shields.io/badge/engine-OBS%20(libobs)-2A2A31)
+![license](https://img.shields.io/badge/license-GPL--2.0--or--later-3A3A42)
+
+</div>
+
+<p align="center"><img src="docs/images/main.png" alt="Streamy Kit 메인 화면" width="900"></p>
+
+---
+
+## 목차
+1. [Streamy 서비스 전체 구조](#1-streamy-서비스-전체-구조)
+2. [Streamy Kit 주요 기능](#2-streamy-kit-주요-기능)
+3. [기술 구조](#3-기술-구조)
+4. [폴더 구조](#4-폴더-구조)
+5. [개발 / 빌드 방법](#5-개발--빌드-방법)
+6. [수익 모델 방안](#6-수익-모델-방안)
+7. [로드맵](#7-로드맵)
+8. [라이선스 (GPL) 정책](#8-라이선스-gpl-정책)
+
+---
+
+## 1. Streamy 서비스 전체 구조
+
+Streamy는 **방송 도구 + 커뮤니티 + 홍보 플랫폼**을 하나로 묶은 스트리머 생태계입니다.
+
 ```
-src/main.js              Electron 메인 (창, 트레이, 종료 처리)
-src/server.js            로컬 서버 127.0.0.1:17890 (타이머 오버레이)
-src/renderer/engine.js   OBS 엔진 래퍼 (장면, 소스, 오디오, 송출, 녹화)
-src/renderer/app.js      화면 로직
-src/renderer/index.html  화면
-build/installer.nsi      윈도우 설치 파일 (NSIS)
+                         ┌──────────────────────────────┐
+                         │            Streamy           │  전체 브랜드 / 계정 / 토큰
+                         └──────────────┬───────────────┘
+              ┌─────────────────────────┼─────────────────────────┐
+              ▼                         ▼                         ▼
+   ┌────────────────────┐   ┌────────────────────┐   ┌────────────────────┐
+   │    Streamy Kit     │   │       Clubby       │   │   Streamy 메인     │
+   │   (방송 프로그램)   │   │ (스트리머 커뮤니티) │   │  (스포트라이트/홍보) │
+   │  ← 이 저장소        │   │  트게더 역할        │   │                    │
+   └─────────┬──────────┘   └─────────┬──────────┘   └─────────┬──────────┘
+             │  방송 켜짐/꺼짐 자동 공지 │  인기글·클립·대회 홍보    │
+             └────────────── 연동 ──────┴──────────────────────────┘
+                                  │
+                                  ▼
+                     최종 목표: 상원 MCN 설립
 ```
 
-## 빌드 (리눅스/맥에서도 윈도우용 생성 가능)
+| 서비스 | 역할 | 상태 |
+|---|---|---|
+| **Streamy Kit** | OBS 엔진 기반 방송 프로그램. 화면 구성 · 사운드 분리 · 송출 · 녹화 | **v0.3 개발 중 (이 저장소)** |
+| **Clubby** | 스트리머별 커뮤니티 (게시판, 태그, 유저 갤러리, 팬아트, 영구제 꾸미기). 스트리머마다 이름 앞글자를 바꿔 쓰는 구조 | 기획 |
+| **Streamy 메인** | 출석(토큰), 지금 방송 중인 스트리머 스포트라이트(대 3칸 + 소 5칸), 핫클립, 방송 홍보, 게임대회 홍보, 공지·건의 | 기획 |
+
+> 지원 플랫폼: **치지직 · 유튜브 · SOOP** 3곳 전용
+
+---
+
+## 2. Streamy Kit 주요 기능
+
+<p align="center"><img src="docs/images/add-source.png" alt="소스 추가 화면" width="760"></p>
+
+### 화면 구성 — 내가 직접 짜는 장면
+- **장면** 추가 · 이름 변경 · 삭제 · 순서 변경, `F1`~`F9`로 전환 (페이드 효과)
+- **소스 10종**: 모니터 화면 · 프로그램 창 · 게임 · 웹캠 · 이미지 · 텍스트 · 웹페이지(투네이션/위플랩 알림창) · 타이머 · 버추얼(Spout2) · 단색 배경
+- **미리보기에서 바로 편집**
+  - 클릭해서 선택 → 빨간 테두리
+  - 끌어서 이동, 모서리를 끌어 크기 조절 (비율 유지)
+  - 가장자리·가운데 **자석 정렬** (Alt로 끄기), 방향키 미세 이동 (Shift = 10배)
+  - `화면 맞춤` · `가운데` · `원래 크기` 버튼
+- **원칙: 카메라(웹캠)는 사용자가 직접 추가하고 직접 배치** — 프로그램이 임의로 건드리지 않음
+
+### 오디오 — 들어오는 소리가 눈에 보이는 믹서
+- 데스크톱 소리 · 마이크 · 앱별 소리마다 **실시간 레벨 막대** (막대 뒤가 소리에 맞춰 차오름, 피크 표시)
+- 소리가 들어오는 중이면 이름 옆 초록불, 볼륨 / 음소거 / 장치 선택
+- **앱별 사운드 분리**: 디스코드 · 크롬(유튜브) · 엣지 · 웨일 · 스포티파이 · 멜론
+  → 디스코드와 유튜브 소리가 섞이는 문제 해결
+
+### 송출 / 녹화
+- 플랫폼 선택 + 스트림 키만 넣으면 끝 (OBS 엔진 내장 프리셋 기준)
+
+  | 플랫폼 | 서버 | 비트레이트 | 키프레임 |
+  |---|---|---|---|
+  | 치지직 | `rtmp://global-rtmp.lip2.navercorp.com:8080/relay` | 8000 kbps | 1초, B프레임 0 |
+  | 유튜브 | `rtmps://a.rtmps.youtube.com:443/live2` | 9000 kbps | 2초 |
+  | SOOP | `rtmp://stream.sooplive.co.kr/app/` | 8000 kbps | 2초 |
+
+- 그래픽카드 인코더 자동 선택: NVIDIA NVENC → AMD → Intel QSV → CPU(x264)
+- 끊기면 자동 재연결 (10초 간격, 최대 20회)
+- 녹화: MKV, `내 동영상\Streamy Kit`
+
+### 기타
+- 보이는 타이머 (경과 시간 / 카운트다운, 3가지 스타일)
+- 장면 · 소스 배치 · 오디오 설정 **자동 저장**
+- 창을 닫아도 트레이에서 실행 유지, 방송 중 종료 시 확인
+
+---
+
+## 3. 기술 구조
+
+OBS Studio를 **고쳐 쓰지 않고**, OBS의 방송 엔진(libobs)만 부품으로 가져와 화면은 처음부터 새로 만들었습니다.
+(Streamlabs Desktop과 같은 방식)
+
+```
+┌─────────────────────────── Streamy Kit (Electron 43) ───────────────────────────┐
+│                                                                                 │
+│  메인 프로세스 (src/main.js)            렌더러 = 화면 (src/renderer)               │
+│  ├ 창 · 트레이 · 종료 처리              ├ index.html / style.css  블랙·레드 UI     │
+│  ├ 파일 선택 · 외부 링크                ├ app.js     장면/소스 목록, 끌기·크기 조절, │
+│  └ 로컬 서버 127.0.0.1:17890            │            믹서, 송출 버튼, 설정 저장     │
+│     (src/server.js → 타이머 오버레이)    └ engine.js  OBS 엔진 래퍼 ─────────┐       │
+│                                                                         │       │
+└─────────────────────────────────────────────────────────────────────────┼───────┘
+                                                                          │ N-API
+                                         ┌────────────────────────────────▼───────┐
+                                         │ obs-studio-node (Streamlabs, GPL-2.0)  │
+                                         │ obs_studio_client.node                 │
+                                         └────────────────┬───────────────────────┘
+                                                          │ IPC (named pipe)
+                                         ┌────────────────▼───────────────────────┐
+                                         │ obs64.exe  =  libobs + 플러그인          │
+                                         │ 게임/화면/창 캡처 · WASAPI 앱별 오디오     │
+                                         │ NVENC/AMF/QSV/x264 · RTMP(S) · Spout2   │
+                                         │ 브라우저 소스(CEF)                        │
+                                         └──────────────┬──────────────────────────┘
+                                                        │ 미리보기 = 자식 창(HWND)
+                                                        ▼ 마우스는 통과 → 화면이 받아 편집 처리
+```
+
+### 핵심 설계
+| 항목 | 방식 |
+|---|---|
+| 미리보기 | 엔진이 Electron 창 위에 자식 창으로 직접 그림. 마우스 입력은 투명하게 통과시켜, 화면(JS)이 받아서 클릭 위치 → 캔버스 좌표로 변환 후 선택 · 이동 · 크기 조절 |
+| 장면 전환 | 출력 채널 0 = 페이드 전환 → 현재 장면 |
+| 오디오 | 출력 채널 9 = **오디오 버스**(영상 없는 숨은 장면). 데스크톱 · 마이크 · 앱별 소리를 여기 두어 **어떤 장면에서도 항상 들림** |
+| 레벨 막대 | 볼륨미터(IEC) 콜백 → dB를 0~1로 변환 (−60dB~0dB) → 올라갈 땐 즉시, 내려갈 땐 천천히 |
+| 앱별 소리 | `wasapi_process_output_capture`, 실행 파일 이름으로 매칭 (`priority: 2`) → 앱이 꺼져 있다 켜져도 자동으로 잡힘 |
+| 저장 | `%APPDATA%\Streamy Kit\settings.json` (스트림 키, 오디오, 화질) / `scenes.json` (장면 · 소스 · 배치) |
+
+---
+
+## 4. 폴더 구조
+
+```
+Streamy_kit/
+├─ src/
+│  ├─ main.js               Electron 메인 프로세스 (창, 트레이, IPC, 종료)
+│  ├─ server.js             로컬 HTTP 서버 — 타이머 상태 + 오버레이 페이지 (SSE)
+│  ├─ tray.png
+│  ├─ overlays/
+│  │  └─ timer.html         방송 화면용 타이머 (브라우저 소스로 들어감)
+│  └─ renderer/
+│     ├─ index.html         화면 구조
+│     ├─ style.css          블랙·레드 디자인
+│     ├─ app.js             화면 로직 (장면·소스·믹서·송출·끌기 편집·저장)
+│     ├─ engine.js          OBS 엔진 래퍼 (장면/소스/오디오/송출/녹화)
+│     └─ demo-preview.png   개발용 미리보기 이미지 (STREAMY_DEMO=1)
+├─ build/
+│  ├─ build-win.sh          윈도우 설치 파일 원클릭 빌드
+│  ├─ installer.nsi         NSIS 설치 스크립트 (한국어/영어, VC++ 런타임, GPL 페이지)
+│  ├─ LICENSE.txt           GPL-2.0 전문 (설치 화면에 표시)
+│  ├─ NOTICE.txt            오픈소스 고지
+│  └─ icon.ico / icon.png
+├─ docs/
+│  ├─ PLAN.md               서비스 기획 (브랜드, 수익 모델, Clubby, 로드맵)
+│  └─ images/
+├─ package.json
+└─ LICENSE
+```
+
+---
+
+## 5. 개발 / 빌드 방법
+
+### 화면만 띄워 보기 (어느 OS든)
+방송 엔진은 윈도우 전용이라, 다른 OS에서는 예시 화면으로 UI만 확인할 수 있습니다.
+```bash
+npm install
+STREAMY_DEMO=1 npm start
+```
+
+### 윈도우 설치 파일 만들기 (리눅스 / 맥 / WSL)
+```bash
+sudo apt install nsis        # macOS: brew install makensis
+npm run build:win            # → dist/StreamyKit-Setup-<버전>-x64.exe
+```
+`build/build-win.sh`가 하는 일:
 1. `npm install`
-2. obs-studio-node 윈도우 빌드 받기: `https://s3-us-west-2.amazonaws.com/obsstudionodes3.streamlabs.com/osn-0.27.40-release-win64.tar.gz`
-   (Electron 43.7.6용. 버전을 바꾸면 Electron 버전도 맞춰야 함)
-3. `npx electron-packager . "Streamy Kit" --platform=win32 --arch=x64 --electron-version=43.7.6 --out=dist --no-asar --ignore='^/dist' --ignore='^/build'`
-4. 받은 `obs-studio-node` 폴더를 `dist/Streamy Kit-win32-x64/resources/app/node_modules/`에 복사 (.pdb 삭제 가능)
-5. `build/`에 `vc_redist.x64.exe`를 받아 두고 `makensis -DVERSION=0.3.0 build/installer.nsi` → `dist/StreamyKit-Setup-<버전>-x64.exe`
+2. Streamlabs가 공개한 **obs-studio-node 0.27.40 윈도우 빌드**를 내려받음 (약 300MB, `.cache/`에 보관)
+3. Electron **43.7.6** 윈도우용 패키징 (asar 미사용)
+4. 엔진을 `resources/app/node_modules/obs-studio-node`에 넣고 `.pdb` 디버그 파일 삭제
+5. NSIS로 설치 파일 생성 (VC++ 런타임 자동 설치 포함)
 
-## 라이선스
-GPL-2.0-or-later. OBS Studio(GPL-2.0-or-later), obs-studio-node(GPL-2.0)를 사용합니다. `build/NOTICE.txt` 참고.
+> ⚠️ **Electron 버전과 obs-studio-node 버전은 짝이 맞아야 합니다.** 엔진을 올리면 Streamlabs Desktop의 `scripts/repositories.json`과 obs-studio-node CI의 `ElectronVersion`을 확인해 Electron도 같이 맞추세요.
+
+### 윈도우에서 바로 실행 (개발용)
+```powershell
+npm install
+# obs-studio-node 압축을 풀어 node_modules\obs-studio-node 에 넣은 뒤
+npm start
+```
+
+---
+
+## 6. 수익 모델 방안
+
+> 원칙: **프로그램은 무료로 뿌리고**, 계정 · 서버 기능 · 디자인 콘텐츠로 번다.
+> (GPL 특성상 프로그램 자체 판매는 의미가 약함 — 아래 8번 참고)
+
+| 구분 | 내용 | 예시 |
+|---|---|---|
+| **무료** | 기본 방송 기능 전부 + 광고 | 장면/소스 편집, 사운드 분리, 송출, 녹화 |
+| **광고 토큰** | 광고 시청 · 출석으로 토큰 → 기능 잠깐 해금 / 홍보에 사용 | 스포트라이트 노출, 프리미엄 테마 하루 사용 |
+| **월 구독** | 서버 비용이 계속 드는 기능 | AI 자동 배치(카메라 제외), 클라우드 설정 백업, 고급 매니저 봇, 멀티 송출 |
+| **영구제** | 한 번 만들면 끝나는 콘텐츠 | 오버레이·타이머 스킨, 장면 테마 팩, Clubby 꾸미기(스킨/배너/이름) |
+
+### 토큰 경제 체크포인트
+- 부계정 출석 농사 방지 → 본인인증 또는 방송 채널 인증
+- 스포트라이트 8칸 배분 → 토큰 경매 / 시간제 / 랜덤 순환 중 결정
+- 유료 토큰 구매 허용 여부 → 허용 시 직접 매출원
+
+---
+
+## 7. 로드맵
+
+| 단계 | 내용 | 상태 |
+|---|---|---|
+| v0.1 | OBS 도우미(외부에서 OBS 조작) 프로토타입 | ✅ 완료 → 방향 전환 |
+| v0.2 | OBS 엔진 + 자체 UI 첫 버전, 설치 파일 | ✅ 완료 |
+| **v0.3** | 사용자 장면/소스, 미리보기 끌기·크기 조절, 실시간 레벨 믹서 | ✅ 완료 · **윈도우 실기 테스트 중** |
+| v0.4 | 실기 테스트 버그 수정, 소스 자르기(크롭)·회전, 필터(크로마키·노이즈 제거), 단축키 설정 | 예정 |
+| v0.5 | 송출 설정 화면(해상도·비트레이트 직접 조절), 멀티 송출(치지직+유튜브 동시), 리플레이 버퍼 | 예정 |
+| v0.6 | Streamy 계정 로그인, 무료/유료 구분, 자동 업데이트, 코드 서명 | 예정 |
+| v0.7 | 채팅 독(치지직·SOOP·유튜브), 전용 매니저 봇(모찌), AI 자동 배치 | 예정 |
+| — | **Streamy 메인 / Clubby** 웹 서비스 오픈, Kit 연동 (방송 켜짐 자동 공지) | 예정 |
+| — | 상원 MCN 설립 | 최종 목표 |
+
+### 출시 전 체크리스트
+- [ ] 윈도우 10 / 11, NVIDIA · AMD · 인텔 그래픽 실기 테스트
+- [ ] 코드 서명 인증서 (SmartScreen 경고 제거)
+- [ ] 상표 확인 — KIPRIS에서 "스트리미 / Streamy" (미국 *Streamy Awards* 존재)
+- [ ] 도메인 확보 (`streamy.kr`, `streamy.gg` 등)
+- [ ] 치지직 · SOOP · 유튜브 API 이용 약관 확인 (채팅·방송 상태 연동)
+- [ ] 오픈소스 라이선스 검토 (변호사)
+
+---
+
+## 8. 라이선스 (GPL) 정책
+
+Streamy Kit은 다음을 사용하므로 **GPL-2.0-or-later**로 배포됩니다.
+
+| 구성 요소 | 라이선스 |
+|---|---|
+| [OBS Studio](https://github.com/obsproject/obs-studio) (libobs, 플러그인) | GPL-2.0-or-later |
+| [obs-studio-node](https://github.com/stream-labs/obs-studio-node) (Streamlabs) | GPL-2.0 |
+| [Electron](https://github.com/electron/electron) | MIT |
+
+**지키는 것**
+- ✅ 이 저장소에 소스 코드 공개
+- ✅ 설치 화면에 GPL 전문, 시작 메뉴에 "오픈소스 고지"
+- ✅ 제품명 · 로고에 "OBS"를 쓰지 않음 (OBS는 엔진으로만 사용)
+
+**수익과의 관계**
+- 프로그램은 누구나 재배포할 수 있으므로 **프로그램 자체 판매는 비추천**
+- **서버에서 돌아가는 기능**(계정, AI 배치, 클라우드, 커뮤니티)과 **디자인 콘텐츠**(테마, 스킨)는 공개 의무 대상이 아님 → 여기서 수익화
+
+> 이 문서는 법률 자문이 아닙니다. 정식 출시 전 오픈소스 라이선스에 밝은 변호사 검토를 권장합니다.
+
+---
+
+<div align="center">
+<sub>Streamy · 치지직 · 유튜브 · SOOP 스트리머를 위해</sub>
+</div>

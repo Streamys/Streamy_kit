@@ -378,7 +378,7 @@ function renderPlatforms() {
 $('streamKey').addEventListener('input', () => { cfg.keys[cfg.platform] = $('streamKey').value.trim(); save(); });
 $('keyShow').addEventListener('click', () => { const k = $('streamKey'), show = k.type === 'password'; k.type = show ? 'text' : 'password'; $('keyShow').textContent = show ? '숨기기' : '보기'; });
 $('keyHelp').addEventListener('click', () => ipcRenderer.invoke('app:open-url', PLATFORMS[cfg.platform].keyHelp));
-$('srcLink').addEventListener('click', () => ipcRenderer.invoke('app:open-url', 'https://github.com/Onin0782/streamy-kit-studio/tree/streamy-kit-app'));
+$('srcLink').addEventListener('click', () => ipcRenderer.invoke('app:open-url', 'https://github.com/Streamys/Streamy_kit'));
 
 let liveSince = 0;
 function setLive(state, extra = {}) {

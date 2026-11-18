@@ -8,10 +8,14 @@
   "license": "GPL-2.0-or-later",
   "scripts": {
     "start": "electron .",
+    "demo": "STREAMY_DEMO=1 electron .",
     "build:win": "bash build/build-win.sh"
   },
   "devDependencies": {
-    "@electron/packager": "^20.3.0",
     "electron": "43.7.6"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Streamys/Streamy_kit.git"
   }
 }

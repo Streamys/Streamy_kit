@@ -117,7 +117,7 @@ Section "Streamy Kit" SecMain
   WriteRegStr HKLM "${UNINST_KEY}" "DisplayIcon" "$INSTDIR\icon.ico"
   WriteRegStr HKLM "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
   WriteRegStr HKLM "${UNINST_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
-  WriteRegStr HKLM "${UNINST_KEY}" "URLInfoAbout" "https://github.com/Onin0782/streamy-kit-studio"
+  WriteRegStr HKLM "${UNINST_KEY}" "URLInfoAbout" "https://github.com/Streamys/Streamy_kit"
   WriteRegDWORD HKLM "${UNINST_KEY}" "NoModify" 1
   WriteRegDWORD HKLM "${UNINST_KEY}" "NoRepair" 1
   WriteUninstaller "$INSTDIR\Uninstall.exe"
