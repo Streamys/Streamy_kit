@@ -162,11 +162,37 @@ function unzipExe(zip, dir, dest) {
 }
 
 // 설치 파일을 조용히(/S) 실행. 설치가 끝나면 설치 파일이 Streamy Kit을 다시 켬(/relaunch)
+// 설치 파일 실행. 설치 파일은 관리자 권한이 필요해서, 일반 실행(spawn)으로는 윈도우 허용 창이 안 뜨고 막혀요(EACCES).
+// → PowerShell Start-Process -Verb RunAs 로 실행해서 윈도우 허용(UAC) 창을 띄움.
+//   "예"를 누르면 설치 시작 → true, "아니요"를 누르거나 실패하면 오류 (앱은 그대로 켜져 있음)
 function launchInstaller() {
-  if (!file || !fs.existsSync(file)) throw new Error('설치 파일이 없어요.');
-  ctx.log.info('update', 'launch installer', file);
-  const p = spawn(file, ['/S', '/relaunch'], { detached: true, stdio: 'ignore', windowsHide: false });
-  p.unref();
+  return new Promise((resolve, reject) => {
+    if (!file || !fs.existsSync(file)) return reject(new Error('설치 파일이 없어요.'));
+    ctx.log.info('update', 'launch installer (elevated)', file);
+    const q = (x) => "'" + String(x).replace(/'/g, "''") + "'";
+    const ps = `try { Start-Process -FilePath ${q(file)} -ArgumentList '/S','/relaunch' -Verb RunAs -ErrorAction Stop; exit 0 } catch { if ($_.Exception.Message -match 'cancel|취소') { exit 2 } ; Write-Error $_.Exception.Message; exit 1 }`;
+    let err = '';
+    const p = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', ps], { windowsHide: true });
+    p.stderr.on('data', (d) => { err += d.toString(); });
+    p.on('error', (e) => { ctx.log.error('update', 'powershell failed', e); reject(new Error('설치 파일을 실행하지 못했어요: ' + e.message)); });
+    p.on('exit', (code) => {
+      if (code === 0) { ctx.log.info('update', 'installer started'); return resolve(true); }
+      ctx.log.warn('update', 'installer not started', code, err.trim());
+      if (code === 2 || /cancel|취소/i.test(err)) return reject(new Error('윈도우 허용 창에서 "아니요"를 눌러서 업데이트를 취소했어요.'));
+      reject(new Error('설치 파일을 실행하지 못했어요. 바탕화면 업데이트 폴더의 ZIP을 풀어서 직접 실행해 주세요.'));
+    });
+  });
 }
 
-module.exports = { init, check, checkLocal, download, launchInstaller, newer, folder };
+// 이미 설치된 버전 이하의 업데이트 파일은 업데이트 폴더에서 정리 (폴더에 계속 쌓이지 않게)
+function cleanupLocal() {
+  if (!localDir) return;
+  let names = []; try { names = fs.readdirSync(localDir); } catch { return; }
+  for (const n of names) {
+    const m = n.match(LOCAL_RE); if (!m) continue;
+    if (!newer(m[1], ctx.app.getVersion())) { try { fs.unlinkSync(path.join(localDir, n)); ctx.log.info('update', 'removed old update file', n); } catch {} }
+  }
+  try { fs.rmSync(path.join(os.tmpdir(), 'streamy-kit-update'), { recursive: true, force: true }); } catch {}
+}
+
+module.exports = { init, check, checkLocal, download, launchInstaller, newer, folder, cleanupLocal };

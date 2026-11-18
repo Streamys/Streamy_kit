@@ -8,7 +8,7 @@
 
 OBS의 검증된 방송 엔진 위에, 한국 스트리머에게 맞춘 화면과 기능을 새로 얹었습니다.
 
-![version](https://img.shields.io/badge/version-0.8.0-E11D2E)
+![version](https://img.shields.io/badge/version-0.8.1-E11D2E)
 ![platform](https://img.shields.io/badge/platform-Windows%2010%2B%20x64-0B0B0D)
 ![engine](https://img.shields.io/badge/engine-OBS%20(libobs)-2A2A31)
 ![license](https://img.shields.io/badge/license-GPL--2.0--or--later-3A3A42)
@@ -142,7 +142,9 @@ Streamy는 **방송 도구 + 커뮤니티 + 홍보 플랫폼**을 하나로 묶�
 ### 업데이트 — 버튼 한 번
 - **바탕화면 폴더 방식 (기본)**: 앱이 `바탕화면\Streamy Kit 업데이트` 폴더를 만들어 둠 → 새 `StreamyKit-Setup-x.y.z-x64.zip`(또는 .exe)을 넣으면 바로 감지해 상단에 **업데이트** 버튼 표시. ZIP은 앱이 알아서 풀어요. 바탕화면에 바로 둬도 인식
 - 켤 때와 6시간마다 GitHub Releases도 확인 (저장소가 공개일 때만 동작)
-- 누르면 설치 파일을 받아(진행률 표시) 조용히 설치하고 **자동으로 다시 켜짐** — 장면·설정 그대로
+- 누르면 설치 파일을 준비하고 **윈도우 허용(UAC) 창**을 띄움 → "예" = 조용히 설치 후 **자동으로 다시 켜짐** — 장면·설정 그대로
+  (v0.8.1: 관리자 권한 없이 실행 중일 때 설치 파일이 막히던 문제(EACCES) 수정, "아니요"를 누르면 앱은 그대로 유지)
+- 설치가 끝나면 업데이트 폴더의 지난 버전 파일은 자동으로 정리
 - 설정 → 업데이트에서 직접 확인 가능, 방송·녹화 중에는 업데이트 안 함
 
 ### 기타
