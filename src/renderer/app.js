@@ -985,6 +985,10 @@ function renderUpdate() {
   $('updCur').textContent = 'Streamy Kit v' + info.version + (info.patch ? ` (설치 v${info.baseVersion} + 빠른 업데이트)` : '');
   $('updStatus').textContent = { idle: '확인 전', checking: '확인하는 중…', latest: '최신 버전이에요', available: `새 버전 v${v}이(가) 있어요`, downloading: `v${v} 받는 중… ${upd.progress || 0}%`, ready: `v${v} 설치 준비 완료`, error: upd.error || '확인 실패' }[upd.status] || '';
   if (upd.error && upd.status === 'available') $('updStatus').textContent = upd.error;
+  if (upd.checkedAt && ['latest', 'idle'].includes(upd.status)) {
+    const t = new Date(upd.checkedAt);
+    $('updStatus').textContent += ` · GitHub 마지막 확인 ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}` + (upd.remoteLatest ? ` (최신 v${upd.remoteLatest})` : '');
+  }
   $('updCheck').textContent = upd.status === 'available' || upd.status === 'ready' ? `v${v}로 업데이트` : '업데이트 확인';
   $('updCheck').disabled = upd.status === 'checking' || upd.status === 'downloading';
   const notes = $('updNotes'); notes.hidden = !(v && upd.info.notes); notes.textContent = v ? upd.info.notes : '';

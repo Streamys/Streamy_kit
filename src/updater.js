@@ -86,10 +86,11 @@ async function check(manual) {
   if (await checkLocal(true)) return state;            // 바탕화면 파일이 있으면 그걸로
   try {
     const r = await ctx.net.fetch(API, { headers: { 'User-Agent': 'StreamyKit-Updater', Accept: 'application/vnd.github+json' } });
-    if (r.status === 404) { emit({ status: 'latest' }); return state; }          // 아직 릴리스가 없음
+    if (r.status === 404) { emit({ status: 'latest', checkedAt: Date.now() }); return state; }          // 아직 릴리스가 없음
     if (!r.ok) throw new Error('업데이트 서버 응답 ' + r.status);
     const j = await r.json();
     const version = String(j.tag_name || '').replace(/^v/i, '');
+    state.checkedAt = Date.now(); state.remoteLatest = version;
     if (!version || !newer(version, ctx.app.getVersion())) { info = null; emit({ status: 'latest' }); return state; }
     const ok = (a) => a && String(a.browser_download_url).startsWith(ALLOWED);
     // 빠른 업데이트(src만)가 있고 지금 설치 버전에서 쓸 수 있으면 그걸로 (몇 초, 허용 창 없음). 아니면 설치 파일

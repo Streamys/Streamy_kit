@@ -8,7 +8,7 @@
 
 OBS의 검증된 방송 엔진 위에, 한국 스트리머에게 맞춘 화면과 기능을 새로 얹었습니다.
 
-![version](https://img.shields.io/badge/version-0.9.0-E11D2E)
+![version](https://img.shields.io/badge/version-0.9.1-E11D2E)
 ![platform](https://img.shields.io/badge/platform-Windows%2010%2B%20x64-0B0B0D)
 ![engine](https://img.shields.io/badge/engine-OBS%20(libobs)-2A2A31)
 ![license](https://img.shields.io/badge/license-GPL--2.0--or--later-3A3A42)
@@ -355,7 +355,8 @@ npm start
 | v0.8.7 (빠른 업데이트) | 화면 맞춤 · 가운데 · 원래 크기 · 방향키 · 버추얼 설정 뒤 편집 가이드가 바로 따라옴 | ✅ 완료 |
 | v0.8.8 (빠른 업데이트) | ON AIR에 스마트폰으로 볼 때 화면 (세로/가로) | ✅ 완료 |
 | v0.8.9 (빠른 업데이트) | 방송 화면 ↔ 폰 화면 비율 조절 막대 | ✅ 완료 |
-| **v0.9.0** (빠른 업데이트) | GitHub 릴리즈 자동 업데이트: 버전 올려 푸시하면 Actions가 빠른 업데이트 게시 → 앱이 5분 안에 알아서 적용 | ✅ 완료 · **윈도우 실기 테스트 중** |
+| v0.9.0 (빠른 업데이트) | GitHub 릴리즈 자동 업데이트: 버전 올려 푸시하면 Actions가 빠른 업데이트 게시 → 앱이 5분 안에 알아서 적용 | ✅ 완료 |
+| **v0.9.1** (GitHub 릴리즈로만 배포) | 설정 → 업데이트에 GitHub 마지막 확인 시간 · 최신 버전 표시 (릴리즈 자동 업데이트 첫 실전 테스트) | ✅ 완료 |
 | v0.8.x | 채팅 오버레이(방송 화면에 띄우기), 통합 채팅에서 바로 입력, 통합 시청자 유튜브·SOOP | 예정 |
 | v0.9 | 실기 테스트 버그 수정, 소스 자르기(크롭)·회전, 필터(크로마키·노이즈 제거), 단축키 설정, 송출 설정 화면, 리플레이 버퍼 | 예정 |
 | v1.0 | Streamy 계정 로그인, 플랫폼 로그인으로 스트림 키 자동 가져오기, 무료/유료 구분, 코드 서명, 전용 매니저 봇(모찌), AI 자동 배치 | 예정 |
