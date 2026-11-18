@@ -376,7 +376,7 @@ prev.addEventListener('mousedown', (e) => {
       }
     }
     const hit = engine.hitTest(p.x, p.y);
-    if (!hit) { engine.clearSelection(); renderSources(); return; }
+    if (!hit) { engine.clearSelection(); engine.emit('items'); return; }
     if (e.ctrlKey) { engine.select(hit.id, 'toggle'); return; }
     if (!engine.sel.has(hit.id) || engine.sel.size > 1) engine.select(hit.id, 'single');
     drag = { mode: 'move', id: hit.id, start: engine.normalize(hit.id), p0: p };
@@ -424,6 +424,12 @@ window.addEventListener('mousemove', (e) => {
   if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (pending) { try { engine.setItemRect(pending.id, pending.x, pending.y, pending.w); } catch {} pending = null; guideDraw(); } });
 });
 window.addEventListener('mouseup', () => { if (drag) { drag = null; snapLines = []; updateSizeLabel(); saveScenes(); guideDraw(); } });
+// 미리보기 · 소스 목록 · 소스 설정 말고 아무 데나 누르면 선택 풀기 (빨간 테두리 없어짐)
+document.addEventListener('mousedown', (e) => {
+  if (!engineOk || e.button !== 0 || !engine.sel.size || drag) return;
+  if (e.target.closest('#preview, #sourceList, #propsBody, #editBar, .src-tools, #addBox, .vt-card')) return;
+  engine.clearSelection(); engine.emit('items');
+}, true);
 prev.addEventListener('mouseleave', () => { if (!drag && hoverId != null) { hoverId = null; guideDraw(); } });
 window.addEventListener('keydown', (e) => {
   if (!engineOk || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
@@ -431,7 +437,7 @@ window.addEventListener('keydown', (e) => {
   if (n >= 0 && engine.scenes[n]) { e.preventDefault(); engine.switchScene(engine.scenes[n].id); saveScenes(); return; }
   if (mode === 'air') return;     // ON AIR 화면에서는 소스 이동/삭제 단축키 막기
   if (e.key === 'Delete' && engine.sel.size) { removeSelected(); return; }
-  if (e.key === 'Escape') { engine.clearSelection(); renderSources(); return; }
+  if (e.key === 'Escape') { engine.clearSelection(); engine.emit('items'); return; }
   const id = engine.sel.size === 1 ? engine.primary : null; if (id == null) return;
   const step = e.shiftKey ? 10 : 1, mv = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
   if (mv) { e.preventDefault(); const r = engine.normalize(id); engine.setItemRect(id, r.x + mv[0], r.y + mv[1], null); saveScenes(); }
