@@ -8,10 +8,16 @@ const { Engine, SOURCE_TYPES, PLATFORMS, ENCODERS, VIRTUAL_APPS, VIRTUAL_SPOTS, 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const info = ipcRenderer.sendSync('app:info');
+const crumb = (a) => { try { ipcRenderer.send('crumb', a); } catch {} };     // 죽기 직전 동작 기록용
 const rlog = (level, ...a) => { try { ipcRenderer.send('log', level, ...a.map((x) => (x instanceof Error ? x.stack || x.message : x))); } catch {} };
 window.addEventListener('error', (e) => rlog('error', 'window.onerror', e.message, e.filename + ':' + e.lineno));
 window.addEventListener('unhandledrejection', (e) => rlog('error', 'unhandledrejection', e.reason));
 const engine = new Engine();
+// 엔진 주요 동작은 자동으로 기록 (화면이 죽으면 로그에 마지막 동작이 남음)
+for (const fn of ['switchScene', 'addScene', 'removeScene', 'addSource', 'removeItems', 'updateSource', 'addAppAudio', 'removeAudio', 'setAudioDevice', 'setVirtual', 'rehookVirtual', 'startStream', 'stopStream', 'startRecording', 'stopRecording', 'setDrawUI', 'clearSelection', 'select', 'fitItem']) {
+  const orig = engine[fn]; if (typeof orig !== 'function') continue;
+  engine[fn] = function (...a) { crumb(fn + (typeof a[0] === 'string' || typeof a[0] === 'number' ? ' ' + String(a[0]).slice(0, 30) : '')); return orig.apply(this, a); };
+}
 let engineOk = false;
 const DEMO = !!process.env.STREAMY_DEMO;
 
@@ -61,6 +67,7 @@ function guard(fn) {
 }
 let mode = 'setup', tabBeforeAir = 'stream';
 function openTab(name) {
+  crumb('tab ' + name);
   document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x.dataset.tab === name));
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + name));
   if (name === 'sound') soundTabOpened(); else soundTabClosed();
@@ -323,6 +330,27 @@ function snap(v, size, total, tol, out, axis) {
 
 // ================================================================== 편집 가이드 (미리보기 위 투명 창에 테두리 · 손잡이 · 크기 · 안내)
 let ovOk = false, hoverId = null, snapLines = [], guideRaf = 0;
+// 소스 위치 캐시: 마우스를 움직일 때마다 엔진에 묻지 않도록 (엔진 호출을 크게 줄임)
+let rects = [], rectsT = 0;      // [{ id, name, icon, sel, x, y, w, h }] (캔버스 좌표, 위에 있는 것부터)
+function refreshRects() {
+  rectsT = Date.now();
+  if (!engineOk) { rects = []; return; }
+  const out = [];
+  try {
+    for (const x of engine.items()) {
+      if (!x.visible) continue;
+      const it = engine.itemObj(x.id); if (!it) continue;
+      const r = engine.itemRect(it); if (!(r.w > 0 && r.h > 0)) continue;
+      out.push({ id: x.id, name: x.name, icon: x.icon, x: r.x, y: r.y, w: r.w, h: r.h });
+    }
+  } catch (e) { rlog('warn', 'refreshRects', e); }
+  rects = out;
+}
+function cachedHit(cx, cy) { return rects.find((r) => cx >= r.x && cx <= r.x + r.w && cy >= r.y && cy <= r.y + r.h) || null; }
+function updateRect(id) {        // 끄는 중에는 그 소스만 다시 읽음
+  const c = rects.find((r) => r.id === id); if (!c) return;
+  try { const it = engine.itemObj(id); if (it) { const r = engine.itemRect(it); Object.assign(c, { x: r.x, y: r.y, w: r.w, h: r.h }); } } catch {}
+}
 function viewMap() {
   const r = prev.getBoundingClientRect(), z = window.devicePixelRatio || 1;
   const pr = engine.previewRect(r.width * z, r.height * z);
@@ -332,15 +360,13 @@ function guideData() {
   if (!engineOk || mode === 'air') return { items: [] };
   const m = viewMap(), items = [];
   const selId = engine.sel.size === 1 ? engine.primary : null;
-  for (const x of engine.items().slice().reverse()) {           // 아래(뒤)부터 그림
-    if (!x.visible) continue;
-    const it = engine.itemObj(x.id); if (!it) continue;
-    const r = engine.itemRect(it); if (!(r.w > 0 && r.h > 0)) continue;
-    const state = engine.sel.has(x.id) ? 'sel' : x.id === hoverId ? 'hover' : 'norm';
-    items.push({ x: m.ox + r.x * m.s, y: m.oy + r.y * m.s, w: r.w * m.s, h: r.h * m.s, name: `${x.icon} ${x.name}`, state });
+  for (const r of rects.slice().reverse()) {                     // 아래(뒤)부터 그림
+    const state = engine.sel.has(r.id) ? 'sel' : r.id === hoverId ? 'hover' : 'norm';
+    items.push({ x: m.ox + r.x * m.s, y: m.oy + r.y * m.s, w: r.w * m.s, h: r.h * m.s, name: `${r.icon} ${r.name}`, state });
   }
   let size = '', hint = '';
-  if (selId != null) { const it = engine.itemObj(selId); if (it) { const r = engine.itemRect(it); size = `${Math.round(r.w)} × ${Math.round(r.h)} · ${Math.round((r.w / engine.width) * 100)}%`; } }
+  const sr = selId != null ? rects.find((r) => r.id === selId) : null;
+  if (sr) size = `${Math.round(sr.w)} × ${Math.round(sr.h)} · ${Math.round((sr.w / engine.width) * 100)}%`;
   if (drag) hint = drag.mode === 'move' ? '놓으면 그 자리에 저장돼요 · Alt = 자석 끄기' : '비율을 유지하면서 크기 조절 중 · Alt = 자석 끄기';
   else if (selId != null) hint = '안쪽을 끌면 이동 · 모서리 □를 끌면 크기 조절 · 방향키로 1px씩 (Shift = 10px)';
   else if (items.length) hint = '소스를 클릭하면 옮기고 크기를 바꿀 수 있어요';
@@ -363,7 +389,9 @@ ipcRenderer.on('ov:ready', () => { ovOk = true; guideShow(); });
 $('guideOn').checked = cfg.guide !== false;
 $('guideOn').addEventListener('change', () => { cfg.guide = $('guideOn').checked; save(); guideShow(); });
 ipcRenderer.on('ov:lost', () => { ovOk = false; guideShow(); });
-engine.on('items', () => guideDraw());
+engine.on('items', () => { refreshRects(); guideDraw(); });
+// 게임 캡처처럼 크기가 나중에 바뀌는 소스가 있어서 2초마다 한 번 새로 읽음 (세팅 화면에서만)
+setInterval(() => { if (engineOk && mode !== 'air' && !drag && Date.now() - rectsT > 1800) { refreshRects(); guideDraw(); } }, 2000);
 prev.addEventListener('mousedown', (e) => {
   if (!engineOk || e.button !== 0 || mode === 'air') return;
   try {
@@ -372,14 +400,14 @@ prev.addEventListener('mousedown', (e) => {
       const it = engine.itemObj(selId);
       if (it) {
         const c = cornerAt(engine.itemRect(it), p);
-        if (c) { const r = engine.normalize(selId); if (!r || r.w <= 0) return; drag = { mode: 'resize', id: selId, corner: c, start: r, p0: p }; e.preventDefault(); return; }
+        if (c) { const r = engine.normalize(selId); if (!r || r.w <= 0) return; crumb('drag resize start'); drag = { mode: 'resize', id: selId, corner: c, start: r, p0: p }; e.preventDefault(); return; }
       }
     }
     const hit = engine.hitTest(p.x, p.y);
     if (!hit) { engine.clearSelection(); engine.emit('items'); return; }
     if (e.ctrlKey) { engine.select(hit.id, 'toggle'); return; }
     if (!engine.sel.has(hit.id) || engine.sel.size > 1) engine.select(hit.id, 'single');
-    drag = { mode: 'move', id: hit.id, start: engine.normalize(hit.id), p0: p };
+    crumb('drag move start'); drag = { mode: 'move', id: hit.id, start: engine.normalize(hit.id), p0: p };
     e.preventDefault();
   } catch (err) { rlog('error', 'mousedown', err); }
 });
@@ -393,10 +421,10 @@ window.addEventListener('mousemove', (e) => {
     if (e.target === prev && mode !== 'air') {
       try {
         const p = toCanvas(e);
-        const it = selId != null ? engine.itemObj(selId) : null;
-        const c = it ? cornerAt(engine.itemRect(it), p) : null;
+        const sr = selId != null ? rects.find((r) => r.id === selId) : null;
+        const c = sr ? cornerAt(sr, p) : null;
         if (c) cls = c === 'tl' || c === 'br' ? 'c-nwse' : 'c-nesw';
-        else { const h = engine.hitTest(p.x, p.y); if (h) { cls = 'c-move'; hov = h.id; } }
+        else { const h = cachedHit(p.x, p.y); if (h) { cls = 'c-move'; hov = h.id; } }
       } catch {}
     }
     prev.className = 'preview has-engine ' + cls;
@@ -421,14 +449,14 @@ window.addEventListener('mousemove', (e) => {
     pending = { id: drag.id, x: left ? ax - w : ax, y: top ? ay - h : ay, w };
     $('selSize').textContent = `${Math.round(w)} × ${Math.round(h)} · ${Math.round((w / engine.width) * 100)}%`;
   }
-  if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (pending) { try { engine.setItemRect(pending.id, pending.x, pending.y, pending.w); } catch {} pending = null; guideDraw(); } });
+  if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (pending) { const id = pending.id; try { engine.setItemRect(id, pending.x, pending.y, pending.w); } catch {} pending = null; updateRect(id); guideDraw(); } });
 });
-window.addEventListener('mouseup', () => { if (drag) { drag = null; snapLines = []; updateSizeLabel(); saveScenes(); guideDraw(); } });
+window.addEventListener('mouseup', () => { if (drag) { crumb(`drag end ${drag.mode}`); drag = null; snapLines = []; updateSizeLabel(); saveScenes(); refreshRects(); guideDraw(); } });
 // 미리보기 · 소스 목록 · 소스 설정 말고 아무 데나 누르면 선택 풀기 (빨간 테두리 없어짐)
 document.addEventListener('mousedown', (e) => {
   if (!engineOk || e.button !== 0 || !engine.sel.size || drag) return;
   if (e.target.closest('#preview, #sourceList, #propsBody, #editBar, .src-tools, #addBox, .vt-card')) return;
-  engine.clearSelection(); engine.emit('items');
+  crumb('click outside → deselect'); engine.clearSelection(); engine.emit('items');
 }, true);
 prev.addEventListener('mouseleave', () => { if (!drag && hoverId != null) { hoverId = null; guideDraw(); } });
 window.addEventListener('keydown', (e) => {

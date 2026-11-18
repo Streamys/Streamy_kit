@@ -1,6 +1,6 @@
 // Streamy Kit — 메인 프로세스
 // 화면(렌더러)이 방송 엔진을 불러오고, 여기서는 창 관리 · 경로 · 로그 · 충돌 복구 · 종료 처리를 맡습니다.
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, dialog, net, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, dialog, net, screen, crashReporter } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
@@ -10,6 +10,10 @@ const server = require('./server');
 app.setName('Streamy Kit');
 app.setAppUserModelId('com.streamy.kit');
 log.init(path.join(app.getPath('userData'), 'logs'));
+// 화면이 죽으면 덤프를 남김 (서버로 안 보냄, %APPDATA%\Streamy Kit\Crashpad 에만 저장) → 원인 분석용
+try { crashReporter.start({ uploadToServer: false, compress: true, globalExtra: { ver: app.getVersion() } }); } catch {}
+// 화면이 죽기 직전에 무엇을 했는지 (최근 30개 동작)
+const crumbs = [];
 log.info('main', `start v${app.getVersion()}${global.STREAMY?.patch ? ` (빠른 업데이트, 설치 ${global.STREAMY.baseVersion})` : ''} electron ${process.versions.electron} pid ${process.pid}`);
 
 // 그래픽 가속 끄기 옵션 (화면이 검게 나오는 PC 대비). 설정에서 켜거나, GPU가 반복해서 죽으면 자동으로 켜짐
@@ -100,6 +104,7 @@ function main() {
     // 화면 프로세스가 죽으면: 엔진 정리 후 자동으로 다시 띄움
     win.webContents.on('render-process-gone', async (_e, d) => {
       log.error('main', 'renderer gone', d);
+      if (d.reason !== 'killed' && crumbs.length) log.error('main', 'last actions: ' + crumbs.map((c) => `${new Date(c.t).toISOString().slice(11, 23)} ${c.a}`).join(' | '));
       if (quitting) return;
       crashCount++;
       await killOwnEngine('renderer crash');
@@ -360,6 +365,7 @@ function main() {
     app.exit(0);
   });
   ipcMain.on('app:relaunch', async () => { log.warn('main', 'relaunch requested'); quitting = true; await killOwnEngine('relaunch'); app.relaunch(); app.exit(0); });
+  ipcMain.on('crumb', (_e, a) => { crumbs.push({ t: Date.now(), a: String(a).slice(0, 80) }); if (crumbs.length > 30) crumbs.shift(); });
   ipcMain.on('log', (_e, level, ...args) => (log[level] || log.info)('renderer', ...args));
   ipcMain.handle('app:set-gpu', (_e, off) => { try { if (off) fs.writeFileSync(GPU_OFF_FLAG, '1'); else fs.rmSync(GPU_OFF_FLAG, { force: true }); } catch {} return fs.existsSync(GPU_OFF_FLAG); });
   ipcMain.handle('app:confirm', async (_e, { title, message, detail, buttons }) => {
