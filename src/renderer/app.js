@@ -997,7 +997,7 @@ function renderUpdate() {
 ipcRenderer.on('update:state', (_e, st) => {
   const was = upd.status; upd = st; renderUpdate();
   if (st.status === 'available' && was !== 'available' && !st.error) {
-    if (cfg.autoUpdate !== false && !DEMO && st.info && st.info.local) doUpdate(true);     // 바탕화면 폴더 파일 → 바로 적용
+    if (cfg.autoUpdate !== false && !DEMO && st.info && (st.info.local || st.info.remote)) doUpdate(true);     // 바탕화면 폴더 · GitHub 릴리즈 → 바로 적용
     else toast(`새 버전 v${st.info.version}이(가) 나왔어요. 위쪽 업데이트 버튼을 누르세요.`);
   }
   if (st.status === 'latest' && st.manual) toast('지금 최신 버전이에요.');

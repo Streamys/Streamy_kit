@@ -410,7 +410,7 @@ function main() {
     createTray();
     setTimeout(() => { try { updater.cleanupLocal(); } catch {} updater.check(false); }, 5000);
     setTimeout(startWinWatch, 1500);                   // 켜져 있는 프로그램 창 목록 도우미
-    setInterval(() => updater.check(false), 6 * 3600 * 1000); // 이후 6시간마다 (폴더는 파일이 들어오면 바로 감지)
+    setInterval(() => updater.check(false), 5 * 60 * 1000);   // 이후 5분마다 GitHub 릴리즈 확인 (폴더는 파일이 들어오면 바로 감지)
   });
   app.on('window-all-closed', () => { if (!quitting) forceQuit('all windows closed'); });
 }

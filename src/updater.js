@@ -90,11 +90,18 @@ async function check(manual) {
     if (!r.ok) throw new Error('업데이트 서버 응답 ' + r.status);
     const j = await r.json();
     const version = String(j.tag_name || '').replace(/^v/i, '');
-    const asset = (j.assets || []).find((a) => /^StreamyKit-Setup-.*-x64\.exe$/i.test(a.name));
     if (!version || !newer(version, ctx.app.getVersion())) { info = null; emit({ status: 'latest' }); return state; }
-    if (!asset || !String(asset.browser_download_url).startsWith(ALLOWED)) { info = null; emit({ status: 'latest' }); return state; }  // 설치 파일이 아직 안 붙음
-    info = { version, notes: String(j.body || '').slice(0, 2000), url: asset.browser_download_url, size: asset.size, page: j.html_url };
-    ctx.log.info('update', `available ${version} (current ${ctx.app.getVersion()})`);
+    const ok = (a) => a && String(a.browser_download_url).startsWith(ALLOWED);
+    // 빠른 업데이트(src만)가 있고 지금 설치 버전에서 쓸 수 있으면 그걸로 (몇 초, 허용 창 없음). 아니면 설치 파일
+    const patchAsset = (j.assets || []).find((a) => a.name === `StreamyKit-Patch-${version}.zip`);
+    const minBase = (String(j.body || '').match(/minBase[:=\s]+(\d+\.\d+\.\d+)/i) || [])[1];
+    const setupAsset = (j.assets || []).find((a) => /^StreamyKit-Setup-.*-x64\.exe$/i.test(a.name));
+    let asset = null, kind = null;
+    if (ok(patchAsset) && !(minBase && newer(minBase, baseVersion()))) { asset = patchAsset; kind = 'patch'; }
+    else if (ok(setupAsset)) { asset = setupAsset; kind = 'exe'; }
+    if (!asset) { info = null; emit({ status: 'latest' }); return state; }     // 파일이 아직 안 붙음
+    info = { version, notes: String(j.body || '').slice(0, 2000), url: asset.browser_download_url, size: asset.size, page: j.html_url, kind, patch: kind === 'patch', remote: true };
+    ctx.log.info('update', `github ${kind} ${version} available (current ${ctx.app.getVersion()})`);
     emit({ status: 'available' });
   } catch (e) {
     ctx.log.warn('update', 'check failed', e.message);
@@ -108,7 +115,7 @@ async function download() {
   if (state.status === 'ready' && file && fs.existsSync(file)) return state;
   const dir = path.join(os.tmpdir(), 'streamy-kit-update');
   fs.mkdirSync(dir, { recursive: true });
-  const dest = path.join(dir, `StreamyKit-Setup-${info.version}-x64.exe`);
+  const dest = path.join(dir, info.kind === 'patch' ? `StreamyKit-Patch-${info.version}.zip` : `StreamyKit-Setup-${info.version}-x64.exe`);
   const part = dest + '.part';
   if (info.local) {
     emit({ status: 'downloading', progress: 30, error: '' });
@@ -144,6 +151,7 @@ async function download() {
     await new Promise((res, rej) => out.end((err) => (err ? rej(err) : res())));
     if (info.size && got !== info.size) throw new Error(`파일 크기가 맞지 않아요 (${got}/${info.size})`);
     fs.renameSync(part, dest);
+    if (info.kind === 'patch') await applyPatch(dest, info.version);     // 받은 빠른 업데이트를 바로 풀어 둠
     file = dest;
     ctx.log.info('update', 'downloaded', dest, got);
     emit({ status: 'ready', progress: 100 });
@@ -173,6 +181,7 @@ async function applyPatch(zip, version) {
     await unzip.extractAll(zip, tmp);
     const meta = JSON.parse(fs.readFileSync(path.join(tmp, 'patch.json'), 'utf8'));
     if (meta.version !== version) throw new Error('버전 정보가 맞지 않아요');
+    if (meta.minBase && newer(meta.minBase, baseVersion())) throw new Error(`이 빠른 업데이트는 설치 버전 ${meta.minBase} 이상이 필요해요`);
     for (const f of ['src/main.js', 'src/renderer/index.html', 'src/renderer/app.js']) if (!fs.existsSync(path.join(tmp, f))) throw new Error('빠진 파일이 있어요: ' + f);
     fs.rmSync(dir, { recursive: true, force: true });
     fs.renameSync(tmp, dir);

@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 V=$(node -p "require('./package.json').version")
-MIN=${1:-0.8.2}
+MIN=${1:-$(cat build/patch-min-base 2>/dev/null || echo 0.8.2)}
 OUT="dist/StreamyKit-Patch-$V.zip"
 tmp=$(mktemp -d)
 cp -r src "$tmp/src"
