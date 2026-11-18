@@ -10,11 +10,55 @@ const API = `https://api.github.com/repos/${REPO}/releases/latest`;
 const ALLOWED = `https://github.com/${REPO}/releases/download/`;
 
 let ctx = null;
+let localDir = null;              // 바탕화면\Streamy Kit 업데이트
+const LOCAL_RE = /^StreamyKit-Setup-(\d+\.\d+\.\d+)-x64\.(exe|zip)$/i;
 let state = { status: 'idle' };   // idle | checking | latest | available | downloading | ready | error
 let info = null;                  // { version, notes, url, size, page }
 let file = null;
 
-function init(c) { ctx = c; }
+function init(c) {
+  ctx = c;
+  try {
+    const desktop = ctx.app.getPath('desktop');
+    localDir = path.join(desktop, 'Streamy Kit 업데이트');
+    fs.mkdirSync(localDir, { recursive: true });
+    // 폴더에 파일이 들어오면 바로 확인 (바탕화면 자체도 확인)
+    let t = null;
+    const kick = () => { clearTimeout(t); t = setTimeout(() => checkLocal(false), 1500); };
+    for (const d of [localDir, desktop]) { try { fs.watch(d, { persistent: false }, (_ev, name) => { if (!name || LOCAL_RE.test(String(name))) kick(); }); } catch {} }
+  } catch (e) { ctx.log.warn('update', 'local folder', e.message); localDir = null; }
+}
+function folder() { return localDir; }
+
+// 바탕화면 / 업데이트 폴더에서 지금보다 새 설치 파일 찾기
+function findLocal() {
+  if (!localDir) return null;
+  let best = null;
+  for (const d of [localDir, path.dirname(localDir)]) {
+    let names = []; try { names = fs.readdirSync(d); } catch { continue; }
+    for (const n of names) {
+      const m = n.match(LOCAL_RE); if (!m) continue;
+      const full = path.join(d, n);
+      let st; try { st = fs.statSync(full); } catch { continue; }
+      if (!st.isFile() || st.size < 1024 * 1024) continue;           // 아직 복사 중이거나 깨진 파일 제외
+      if (!newer(m[1], ctx.app.getVersion())) continue;
+      if (!best || newer(m[1], best.version) || (m[1] === best.version && m[2].toLowerCase() === 'exe')) best = { version: m[1], file: full, kind: m[2].toLowerCase(), size: st.size, mtime: st.mtimeMs };
+    }
+  }
+  return best;
+}
+async function checkLocal(manual) {
+  if (['downloading', 'ready'].includes(state.status)) return state;
+  const l = findLocal();
+  if (!l) { if (manual) return null; if (info && info.local) { info = null; emit({ status: 'latest' }); } return null; }
+  // 파일이 아직 복사 중일 수 있으니 크기가 1초 동안 그대로인지 확인
+  await new Promise((r) => setTimeout(r, 1000));
+  try { if (fs.statSync(l.file).size !== l.size) return checkLocal(manual); } catch { return null; }
+  info = { version: l.version, notes: `바탕화면 업데이트 파일: ${path.basename(l.file)}`, local: l.file, kind: l.kind, size: l.size };
+  ctx.log.info('update', `local update ${l.version} at ${l.file}`);
+  emit({ status: 'available', error: '' });
+  return state;
+}
 function emit(patch) { state = { ...state, ...patch }; ctx.send('update:state', { ...state, current: ctx.app.getVersion(), info }); }
 
 // 1.10.0 > 1.9.3 처럼 숫자로 비교
@@ -27,6 +71,7 @@ function newer(a, b) {
 async function check(manual) {
   if (['downloading', 'ready'].includes(state.status)) return state;
   emit({ status: 'checking', error: '', manual: !!manual });
+  if (await checkLocal(true)) return state;            // 바탕화면 파일이 있으면 그걸로
   try {
     const r = await ctx.net.fetch(API, { headers: { 'User-Agent': 'StreamyKit-Updater', Accept: 'application/vnd.github+json' } });
     if (r.status === 404) { emit({ status: 'latest' }); return state; }          // 아직 릴리스가 없음
@@ -53,6 +98,20 @@ async function download() {
   fs.mkdirSync(dir, { recursive: true });
   const dest = path.join(dir, `StreamyKit-Setup-${info.version}-x64.exe`);
   const part = dest + '.part';
+  if (info.local) {
+    emit({ status: 'downloading', progress: 30, error: '' });
+    try {
+      if (info.kind === 'zip') await unzipExe(info.local, dir, dest);
+      else fs.copyFileSync(info.local, dest);
+      file = dest;
+      emit({ status: 'ready', progress: 100 });
+      return state;
+    } catch (e) {
+      ctx.log.error('update', 'local prepare failed', e);
+      emit({ status: 'available', error: '업데이트 파일을 준비하지 못했어요: ' + e.message });
+      throw e;
+    }
+  }
   emit({ status: 'downloading', progress: 0, error: '' });
   try {
     const r = await ctx.net.fetch(info.url, { headers: { 'User-Agent': 'StreamyKit-Updater' } });
@@ -84,6 +143,24 @@ async function download() {
   return state;
 }
 
+// ZIP 안의 설치 파일 꺼내기 (윈도우 기본 PowerShell 사용)
+function unzipExe(zip, dir, dest) {
+  const out = path.join(dir, 'unzip-' + Date.now());
+  return new Promise((resolve, reject) => {
+    const ps = `Expand-Archive -LiteralPath '${zip.replace(/'/g, "''")}' -DestinationPath '${out.replace(/'/g, "''")}' -Force`;
+    const p = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', ps], { windowsHide: true });
+    p.on('error', reject);
+    p.on('exit', (code) => {
+      if (code !== 0) return reject(new Error('압축을 풀지 못했어요 (코드 ' + code + ')'));
+      const exe = fs.readdirSync(out).find((n) => /^StreamyKit-Setup-.*\.exe$/i.test(n));
+      if (!exe) return reject(new Error('ZIP 안에 설치 파일이 없어요'));
+      fs.renameSync(path.join(out, exe), dest);
+      try { fs.rmSync(out, { recursive: true, force: true }); } catch {}
+      resolve();
+    });
+  });
+}
+
 // 설치 파일을 조용히(/S) 실행. 설치가 끝나면 설치 파일이 Streamy Kit을 다시 켬(/relaunch)
 function launchInstaller() {
   if (!file || !fs.existsSync(file)) throw new Error('설치 파일이 없어요.');
@@ -92,4 +169,4 @@ function launchInstaller() {
   p.unref();
 }
 
-module.exports = { init, check, download, launchInstaller, newer };
+module.exports = { init, check, checkLocal, download, launchInstaller, newer, folder };

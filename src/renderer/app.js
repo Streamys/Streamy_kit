@@ -726,15 +726,16 @@ async function doUpdate() {
   if (engine.streaming) return toast('방송 중에는 업데이트할 수 없어요. 방송을 끝낸 뒤 눌러 주세요.', true);
   if (engine.recording) return toast('녹화 중에는 업데이트할 수 없어요.', true);
   const v = upd.info && upd.info.version; if (!v) return;
-  const r = await ipcRenderer.invoke('app:confirm', { title: '업데이트', message: `Streamy Kit v${v}로 업데이트할까요?`, detail: '설치하는 동안 잠깐 꺼졌다가 자동으로 다시 켜져요. 장면과 설정은 그대로 유지돼요.', buttons: ['업데이트', '나중에'] });
+  const r = await ipcRenderer.invoke('app:confirm', { title: '업데이트', message: `Streamy Kit v${v}로 업데이트할까요?` + (upd.info.local ? ' (바탕화면 파일)' : ''), detail: '설치하는 동안 잠깐 꺼졌다가 자동으로 다시 켜져요. 장면과 설정은 그대로 유지돼요.', buttons: ['업데이트', '나중에'] });
   if (r !== 0) return;
   try {
     await ipcRenderer.invoke('update:download');
-    toast('설치를 시작해요. 윈도우가 허용을 물어보면 "예"를 눌러 주세요.');
+    toast('설치를 시작해요. 윈도우가 허용을 물어보면 "예"를 눌러 주세요. 끝나면 자동으로 다시 켜져요.');
     await ipcRenderer.invoke('update:install');
   } catch (e) { toast('업데이트 실패: ' + (e.message || e), true); }
 }
 $('updBtn').addEventListener('click', doUpdate);
+$('updFolder').addEventListener('click', () => ipcRenderer.invoke('update:folder'));
 $('updCheck').addEventListener('click', async () => {
   if (upd.status === 'available' || upd.status === 'ready') return doUpdate();
   try { await ipcRenderer.invoke('update:check'); } catch {}

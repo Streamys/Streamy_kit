@@ -182,6 +182,7 @@ function main() {
   updater.init({ app, log, net, send: (ch, d) => { try { if (win && !win.isDestroyed()) win.webContents.send(ch, d); } catch {} } });
   ipcMain.handle('update:check', () => updater.check(true));
   ipcMain.handle('update:download', () => updater.download());
+  ipcMain.handle('update:folder', () => { const d = updater.folder(); if (d) shell.openPath(d); return d; });
   ipcMain.handle('update:install', async () => {
     // 설치 파일을 조용히 실행(끝나면 Streamy Kit 다시 켜짐) → 화면이 엔진 정리 후 종료
     updater.launchInstaller();
@@ -270,8 +271,8 @@ function main() {
     try { server.start(); } catch (e) { log.error('main', 'server', e); }
     createWindow();
     createTray();
-    setTimeout(() => updater.check(false), 8000);            // 켜고 8초 뒤 한 번
-    setInterval(() => updater.check(false), 6 * 3600 * 1000); // 이후 6시간마다
+    setTimeout(() => updater.check(false), 5000);            // 켜고 5초 뒤 한 번 (바탕화면 폴더 → GitHub 순)
+    setInterval(() => updater.check(false), 6 * 3600 * 1000); // 이후 6시간마다 (폴더는 파일이 들어오면 바로 감지)
   });
   app.on('window-all-closed', () => { if (!quitting) forceQuit('all windows closed'); });
 }
