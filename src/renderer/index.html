@@ -28,7 +28,12 @@
   <main class="stage">
     <div class="preview-wrap">
       <div class="preview" id="preview">
-        <div class="preview-empty" id="previewEmpty"><img src="logo.png" alt=""><p id="engineMsg">방송 엔진을 불러오는 중…</p></div>
+        <div class="preview-empty" id="previewEmpty">
+          <div class="spinner" id="spinner"></div>
+          <p id="engineMsg">방송 엔진을 시작하는 중…</p>
+          <small id="engineSub">처음 실행할 때는 30초 정도 걸릴 수 있어요</small>
+          <div class="err-actions" id="errActions"><button id="btnRetry">다시 시작</button><button id="btnLogs">로그 폴더 열기</button></div>
+        </div>
       </div>
     </div>
     <div class="edit-bar" id="editBar">
@@ -130,6 +135,10 @@
         <h4>화질</h4>
         <label class="field"><select id="quality"><option value="1080p60">1080p 60fps (권장)</option><option value="1080p30">1080p 30fps</option><option value="720p60">720p 60fps (저사양 PC)</option></select></label>
         <p class="hint">화질 변경은 다시 시작한 뒤 적용돼요.</p>
+        <h4>문제 해결</h4>
+        <label class="check"><input type="checkbox" id="gpuOff"> 화면 그래픽 가속 끄기 (창이 검게 나올 때)</label>
+        <p class="hint" style="margin-top:0">바꾸면 다시 시작한 뒤 적용돼요. 방송 화면(송출) 품질에는 영향 없어요.</p>
+        <div class="row"><button id="btnLogs2">로그 폴더 열기</button><button id="btnRestart">다시 시작</button></div>
         <h4>단축키</h4>
         <p class="hint">F1~F9 장면 전환 · 방향키 소스 이동 (Shift = 10배) · Delete 소스 삭제 · Esc 선택 해제</p>
         <h4>정보</h4>

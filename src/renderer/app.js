@@ -8,6 +8,9 @@ const { Engine, SOURCE_TYPES, AUDIO_APPS, PLATFORMS } = require('./engine.js');
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const info = ipcRenderer.sendSync('app:info');
+const rlog = (level, ...a) => { try { ipcRenderer.send('log', level, ...a.map((x) => (x instanceof Error ? x.stack || x.message : x))); } catch {} };
+window.addEventListener('error', (e) => rlog('error', 'window.onerror', e.message, e.filename + ':' + e.lineno));
+window.addEventListener('unhandledrejection', (e) => rlog('error', 'unhandledrejection', e.reason));
 const engine = new Engine();
 let engineOk = false;
 const DEMO = !!process.env.STREAMY_DEMO;
@@ -531,35 +534,62 @@ function layoutDisplay() {
 new ResizeObserver(layoutDisplay).observe(prev);
 window.addEventListener('resize', layoutDisplay);
 
-// ================================================================== 시작
-function boot() {
+// ================================================================== 시작 (화면 먼저 → 엔진은 그 다음)
+const nextFrame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+function engineError(e) {
+  console.error(e); rlog('error', 'engine start failed', e);
+  engineOk = false;
+  $('previewEmpty').classList.add('err');
+  $('engineMsg').textContent = e.message || String(e);
+  $('engineSub').textContent = '다시 시작해도 안 되면 로그 폴더의 streamy-kit.log 파일을 보내 주세요.';
+  $('encInfo').textContent = '인코더: 엔진 없음';
+}
+async function boot() {
   $('ver').textContent = 'v' + info.version;
+  $('gpuOff').checked = !!info.gpuOff;
   renderPlatforms(); renderTypes(); setLive('off'); timerListen(); renderViewers(); pollViewers();
   $('tMode').value = cfg.timer.mode; $('tMin').value = cfg.timer.minutes; $('tLabel').value = cfg.timer.label; $('tTheme').value = cfg.timer.theme;
   timer({ type: 'config', ...cfg.timer });
+  renderScenes(); renderSources(); renderMixer();
+  if (DEMO) { engineError(new Error('미리보기 모드')); demoMode(); return; }
+
+  // 1) 화면을 먼저 그림 → 2) 지난번에 남은 엔진 정리 → 3) 엔진 시작 (이 동안 화면은 로딩 표시)
+  await nextFrame();
+  try { await ipcRenderer.invoke('engine:prepare'); } catch (e) { rlog('warn', 'prepare', e); }
+  await nextFrame();
   const q = { '1080p60': [1920, 1080, 60], '1080p30': [1920, 1080, 30], '720p60': [1280, 720, 60] }[cfg.quality] || [1920, 1080, 60];
+  const t0 = performance.now();
   try {
     engine.start({ osnDir: info.osnDir, dataDir: info.dataDir, width: q[0], height: q[1], fps: q[2] });
+    rlog('info', `engine started in ${Math.round(performance.now() - t0)}ms`, 'encoders:', engine.encoderTypes().join(','));
     engineOk = true;
+  } catch (e) { engineError(e); return; }
+
+  // 장면/오디오 복원은 하나씩 실패해도 전체가 멈추지 않게
+  try {
     let saved = null; try { saved = JSON.parse(fs.readFileSync(scenesFile, 'utf8')); } catch {}
-    if (saved && saved.scenes && saved.scenes.length) engine.load(saved); else engine.addScene('장면 1');
-    engine.setupAudio(cfg);
-    for (const [kind, name] of [['desktop', '데스크톱 소리'], ['mic', '마이크']]) if (cfg.devices[kind]) engine.setAudioDevice(name, cfg.devices[kind]);
+    if (saved && saved.scenes && saved.scenes.length) engine.load(saved);
+  } catch (e) { rlog('error', 'scene load', e); toast('저장된 장면을 불러오지 못했어요. 새 장면으로 시작해요.', true); }
+  if (!engine.scenes.length) engine.addScene('장면 1');
+  try { engine.setupAudio(cfg); } catch (e) { rlog('error', 'audio setup', e); }
+  for (const [kind, name] of [['desktop', '데스크톱 소리'], ['mic', '마이크']]) if (cfg.devices[kind]) { try { engine.setAudioDevice(name, cfg.devices[kind]); } catch {} }
+  try {
     engine.createDisplay(ipcRenderer.sendSync('app:window-handle'));
     prev.classList.add('has-engine');
     layoutDisplay();
-    const enc = engine.pickEncoder();
-    $('encInfo').textContent = '인코더: ' + enc.label + (enc.id === 'obs_x264' ? ' (그래픽카드 인코더를 찾지 못해 CPU를 써요)' : ' (그래픽카드)');
-    renderScenes(); renderSources(); renderMixer(); renderTypes(); renderSoundSettings(true);
-    if (!engine.items().length) { openTab('add'); toast('＋ 추가에서 모니터 화면이나 게임부터 넣어 보세요.'); }
-  } catch (e) {
-    console.error(e);
-    engineOk = false;
-    $('previewEmpty').classList.add('err'); $('engineMsg').textContent = e.message || String(e);
-    $('encInfo').textContent = '인코더: 엔진 없음';
-    if (DEMO) demoMode(); else { renderScenes(); renderSources(); renderMixer(); }
-  }
+  } catch (e) { rlog('error', 'display', e); toast('미리보기 화면을 만들지 못했어요. 설정 → 문제 해결에서 그래픽 가속을 꺼 보세요.', true); }
+  const enc = engine.pickEncoder();
+  $('encInfo').textContent = '인코더: ' + enc.label + (enc.id === 'obs_x264' ? ' (그래픽카드 인코더를 찾지 못해 CPU를 써요)' : ' (그래픽카드)');
+  renderScenes(); renderSources(); renderMixer(); renderTypes();
+  try { renderSoundSettings(true); } catch (e) { rlog('warn', 'sound settings', e); }
+  rlog('info', `ready in ${Math.round(performance.now() - t0)}ms`);
+  if (!engine.items().length) { openTab('add'); toast('＋ 추가에서 모니터 화면이나 게임부터 넣어 보세요.'); }
 }
+$('btnRetry').addEventListener('click', () => ipcRenderer.send('app:relaunch'));
+$('btnRestart').addEventListener('click', () => ipcRenderer.send('app:relaunch'));
+$('btnLogs').addEventListener('click', () => ipcRenderer.invoke('app:open-path', info.logDir));
+$('btnLogs2').addEventListener('click', () => ipcRenderer.invoke('app:open-path', info.logDir));
+$('gpuOff').addEventListener('change', async () => { const v = await ipcRenderer.invoke('app:set-gpu', $('gpuOff').checked); $('gpuOff').checked = v; toast('저장했어요. 다시 시작하면 적용돼요.'); });
 
 // 개발용 화면 미리보기 (윈도우가 아닌 환경에서 STREAMY_DEMO=1)
 const demo = {
@@ -569,6 +599,7 @@ const demo = {
   level(name, now) { const base = { d: 0.62, m: 0.5, dc: 0.32, ch: 0, sp: 0.5 }[name] || 0; const v = base ? base + Math.sin(now / 170 + name.length) * 0.12 + Math.sin(now / 53) * 0.05 : 0; return { level: Math.max(0, v), peak: Math.max(0, base + 0.15), t: now }; },
 };
 function demoMode() {
+  $('previewEmpty').classList.remove('err');
   const img = document.createElement('img'); img.src = 'demo-preview.png'; img.className = 'demo-shot'; prev.appendChild(img);
   const sel = document.createElement('div'); sel.className = 'demo-sel'; sel.innerHTML = '<i></i><i></i><i></i><i></i>';
   Object.assign(sel.style, { left: '2.5%', top: '62%', width: '27%', height: '34%' }); prev.appendChild(sel);
@@ -581,10 +612,12 @@ function demoMode() {
 ipcRenderer.on('app:request-quit', async () => {
   if (engine.stream) {
     const r = await ipcRenderer.invoke('app:confirm', { title: 'Streamy Kit 종료', message: '방송 중이에요. 방송을 끝내고 종료할까요?', buttons: ['종료', '취소'] });
-    if (r !== 0) return;
+    if (r !== 0) { ipcRenderer.send('app:quit-cancelled'); return; }
   }
-  try { if (engineOk) { writeJson(scenesFile, engine.serialize()); saveAudioState(); writeJson(info.settingsFile, cfg); } } catch (e) { console.error(e); }
-  try { engine.shutdown(); } catch (e) { console.error(e); }
+  ipcRenderer.send('app:quitting');          // 창은 바로 숨겨짐
+  rlog('info', 'shutting down');
+  try { if (engineOk) { writeJson(scenesFile, engine.serialize()); saveAudioState(); writeJson(info.settingsFile, cfg); } } catch (e) { rlog('error', 'save on quit', e); }
+  try { engine.shutdown(); } catch (e) { rlog('error', 'shutdown', e); }
   ipcRenderer.send('app:ready-to-quit');
 });
 

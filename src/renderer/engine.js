@@ -81,10 +81,17 @@ class Engine {
     fs.mkdirSync(dataDir, { recursive: true });
 
     const code = N.IPC.host('streamy-kit-' + process.pid + '-' + Date.now());
-    if (code !== E.IPCOk) throw new Error('방송 엔진 프로세스를 시작하지 못했어요 (코드 ' + code + '). Visual C++ 런타임이 설치돼 있는지 확인해 주세요.');
+    if (code !== E.IPCOk) {
+      const why = { 259: '이전에 실행한 엔진이 아직 종료되지 않았어요. 잠시 후 다시 시작해 주세요.', 252: '엔진 파일 버전이 맞지 않아요. Streamy Kit을 다시 설치해 주세요.', 254: '필요한 구성 요소가 없어요. Visual C++ 런타임(x64)을 설치해 주세요.', 253: '엔진 실행 파일을 시작하지 못했어요. 백신 프로그램이 obs64.exe를 막았는지 확인해 주세요.' }[code];
+      throw new Error((why || '방송 엔진을 시작하지 못했어요.') + ' (코드 ' + code + ')');
+    }
     N.SetWorkingDirectory(osnDir);
     const init = N.OBS_API_initAPI({ language: 'ko-KR', appDataPath: dataDir, version: '0.3.0', crashServerUrl: '' });
-    if (init !== 0) throw new Error('방송 엔진 초기화 실패 (코드 ' + init + '). 그래픽 드라이버를 최신으로 업데이트해 보세요.');
+    if (init !== 0) {
+      try { N.IPC.disconnect(); } catch {}
+      const why = { '-1': '지원하지 않는 그래픽 카드예요. 그래픽 드라이버를 최신으로 업데이트해 주세요.', '-2': '이 PC의 그래픽 설정으로는 엔진을 시작할 수 없어요. 그래픽 드라이버를 업데이트해 주세요.' }[String(init)];
+      throw new Error((why || '방송 엔진 초기화에 실패했어요. 그래픽 드라이버를 최신으로 업데이트해 보세요.') + ' (코드 ' + init + ')');
+    }
 
     this.width = width; this.height = height; this.fps = fps;
     this.video = osn.VideoFactory.create();

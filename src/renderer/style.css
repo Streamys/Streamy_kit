@@ -171,3 +171,13 @@ button.link.inline{margin:0}
 .v-eye{background:var(--card2);border:1px solid var(--line2);border-radius:99px;width:26px;height:22px;font-size:12px;padding:0}
 .v-eye.on{border-color:var(--red);background:rgba(225,29,46,.2)}
 .stats{-webkit-app-region:no-drag}
+
+/* 엔진 로딩 / 오류 */
+.spinner{width:34px;height:34px;border-radius:50%;border:3px solid #2a2a31;border-top-color:var(--red);animation:spin .8s linear infinite;will-change:transform}
+@keyframes spin{to{transform:rotate(360deg)}}
+.preview-empty small{color:#6d6d75;font-size:11px}
+.preview-empty.err .spinner{display:none}
+.err-actions{display:none;gap:8px;pointer-events:auto}
+.preview-empty.err .err-actions{display:flex}
+.err-actions button{background:var(--card2);border:1px solid var(--line2);border-radius:8px;padding:8px 14px;font-weight:700}
+.err-actions button:first-child{background:var(--red);border-color:var(--red);color:#fff}

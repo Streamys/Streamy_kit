@@ -39,6 +39,10 @@ APP="$OUT/resources/app/node_modules"
 mkdir -p "$APP"
 cp -a "$CACHE/osn-${OSN}/obs-studio-node" "$APP/"
 find "$APP/obs-studio-node" \( -name '*.pdb' -o -name '*.lib' \) -delete
+# 쓰지 않는 무거운 플러그인 제거 → 시작 속도 개선 (DeckLink, NDI, VR, VLC, VST, 협업캠, WebRTC, CoreAudio)
+for p in decklink obs-ndi win-openvr vlc-video obs-vst win-streamlabs-vst mediasoup-connector obs-webrtc coreaudio-encoder; do
+  rm -rf "$APP/obs-studio-node/obs-plugins/64bit/$p.dll" "$APP/obs-studio-node/obs-plugins/64bit/$p.exe" "$APP/obs-studio-node/data/obs-plugins/$p"
+done
 
 echo "▶ 5/5 설치 파일 만들기 (NSIS, 10분 정도 걸려요)"
 [ -f "$ROOT/build/vc_redist.x64.exe" ] || curl -fL -o "$ROOT/build/vc_redist.x64.exe" "$VC_URL"
