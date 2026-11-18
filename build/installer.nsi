@@ -33,6 +33,9 @@ VIAddVersionKey /LANG=1042 "LegalCopyright" "GPL-2.0-or-later (OBS Studio 엔진
 !include "MUI2.nsh"
 !include "x64.nsh"
 !include "LogicLib.nsh"
+!include "FileFunc.nsh"
+
+Var Relaunch
 
 !define MUI_ICON "icon.ico"
 !define MUI_UNICON "icon.ico"
@@ -65,17 +68,60 @@ LangString Running 1033 "Streamy Kit is running. Please close it and try again."
 
 Function .onInit
   ${IfNot} ${RunningX64}
-    MessageBox MB_ICONSTOP "$(NeedX64)"
+    MessageBox MB_ICONSTOP "$(NeedX64)" /SD IDOK
     Abort
   ${EndIf}
   SetRegView 64
+  ; 앱 안 업데이트: /S /relaunch 로 실행됨 → 설치 끝나면 다시 켬
+  StrCpy $Relaunch 0
+  ${GetParameters} $R0
+  ClearErrors
+  ${GetOptions} $R0 "/relaunch" $R1
+  ${IfNot} ${Errors}
+    StrCpy $Relaunch 1
+  ${EndIf}
+  ; 이미 설치된 위치가 있으면 그대로 사용
+  ReadRegStr $R2 HKLM "Software\${COMPANY}\${APPNAME}" "InstallDir"
+  ${If} $R2 != ""
+    StrCpy $INSTDIR $R2
+  ${EndIf}
   !insertmacro MUI_LANGDLL_DISPLAY
 FunctionEnd
 
-Function CheckRunning
-  ; 실행 중이면 파일을 덮어쓸 수 없으므로 안내
+Function .onInstSuccess
+  ${If} $Relaunch == 1
+    ; 설치 파일은 관리자 권한이라, 탐색기를 통해 일반 사용자 권한으로 다시 켬
+    Exec '"$WINDIR\explorer.exe" "$INSTDIR\${EXE}"'
+  ${EndIf}
+FunctionEnd
+
+Function IsRunning
   nsExec::ExecToStack 'cmd /c tasklist /FI "IMAGENAME eq ${EXE}" /NH | find /I "${EXE}"'
   Pop $0
+  Pop $1
+FunctionEnd
+
+Function CheckRunning
+  ; 업데이트(조용한 설치)면: 앱이 스스로 꺼질 때까지 최대 20초 기다린 뒤, 그래도 남아 있으면 강제 종료
+  ${If} ${Silent}
+    StrCpy $2 0
+    ${Do}
+      Call IsRunning
+      ${If} $0 != 0
+        ${Break}
+      ${EndIf}
+      IntOp $2 $2 + 1
+      ${If} $2 > 40
+        nsExec::Exec 'taskkill /F /IM "${EXE}"'
+        Sleep 1500
+        ${Break}
+      ${EndIf}
+      Sleep 500
+    ${Loop}
+    Return
+  ${EndIf}
+  ; 일반 설치: 실행 중이면 안내
+  Call IsRunning
   ${If} $0 == 0
     MessageBox MB_ICONEXCLAMATION|MB_RETRYCANCEL "$(Running)" IDRETRY retry
     Abort

@@ -698,6 +698,56 @@ const timer = (a) => ipcRenderer.invoke('timer:action', a);
 document.querySelectorAll('[data-t]').forEach((b) => b.addEventListener('click', () => timer({ type: b.dataset.t, minutes: $('tMin').value })));
 $('tApply').addEventListener('click', () => { cfg.timer = { mode: $('tMode').value, minutes: Number($('tMin').value), label: $('tLabel').value, theme: $('tTheme').value }; save(); timer({ type: 'config', ...cfg.timer }); toast('타이머 설정을 적용했어요.'); });
 
+// ================================================================== 업데이트
+let upd = { status: 'idle' };
+function renderUpdate() {
+  const btn = $('updBtn'), txt = $('updText'), bar = $('updBar');
+  const v = upd.info && upd.info.version;
+  $('updCur').textContent = 'Streamy Kit v' + info.version;
+  $('updStatus').textContent = { idle: '확인 전', checking: '확인하는 중…', latest: '최신 버전이에요', available: `새 버전 v${v}이(가) 있어요`, downloading: `v${v} 받는 중… ${upd.progress || 0}%`, ready: `v${v} 설치 준비 완료`, error: upd.error || '확인 실패' }[upd.status] || '';
+  if (upd.error && upd.status === 'available') $('updStatus').textContent = upd.error;
+  $('updCheck').textContent = upd.status === 'available' || upd.status === 'ready' ? `v${v}로 업데이트` : '업데이트 확인';
+  $('updCheck').disabled = upd.status === 'checking' || upd.status === 'downloading';
+  const notes = $('updNotes'); notes.hidden = !(v && upd.info.notes); notes.textContent = v ? upd.info.notes : '';
+  const show = ['available', 'downloading', 'ready'].includes(upd.status);
+  btn.hidden = !show;
+  btn.classList.toggle('busy', upd.status === 'downloading');
+  txt.textContent = upd.status === 'downloading' ? `받는 중 ${upd.progress || 0}%` : upd.status === 'ready' ? `v${v} 설치하기` : `업데이트 v${v}`;
+  bar.style.width = upd.status === 'downloading' ? (upd.progress || 0) + '%' : '0';
+}
+ipcRenderer.on('update:state', (_e, st) => {
+  const was = upd.status; upd = st; renderUpdate();
+  if (st.status === 'available' && was !== 'available' && !st.error) toast(`새 버전 v${st.info.version}이(가) 나왔어요. 위쪽 업데이트 버튼을 누르세요.`);
+  if (st.status === 'latest' && st.manual) toast('지금 최신 버전이에요.');
+  if (st.status === 'error' && st.manual) toast(st.error, true);
+});
+async function doUpdate() {
+  if (upd.status === 'downloading') return;
+  if (engine.streaming) return toast('방송 중에는 업데이트할 수 없어요. 방송을 끝낸 뒤 눌러 주세요.', true);
+  if (engine.recording) return toast('녹화 중에는 업데이트할 수 없어요.', true);
+  const v = upd.info && upd.info.version; if (!v) return;
+  const r = await ipcRenderer.invoke('app:confirm', { title: '업데이트', message: `Streamy Kit v${v}로 업데이트할까요?`, detail: '설치하는 동안 잠깐 꺼졌다가 자동으로 다시 켜져요. 장면과 설정은 그대로 유지돼요.', buttons: ['업데이트', '나중에'] });
+  if (r !== 0) return;
+  try {
+    await ipcRenderer.invoke('update:download');
+    toast('설치를 시작해요. 윈도우가 허용을 물어보면 "예"를 눌러 주세요.');
+    await ipcRenderer.invoke('update:install');
+  } catch (e) { toast('업데이트 실패: ' + (e.message || e), true); }
+}
+$('updBtn').addEventListener('click', doUpdate);
+$('updCheck').addEventListener('click', async () => {
+  if (upd.status === 'available' || upd.status === 'ready') return doUpdate();
+  try { await ipcRenderer.invoke('update:check'); } catch {}
+});
+// 업데이트 설치가 시작되면: 저장하고 엔진 정리 후 종료 (설치가 끝나면 자동으로 다시 켜짐)
+ipcRenderer.on('app:quit-for-update', () => {
+  ipcRenderer.send('app:quitting');
+  rlog('info', 'quit for update');
+  try { if (engineOk) { writeJson(scenesFile, engine.serialize()); saveAudioState(); writeJson(info.settingsFile, cfg); } } catch (e) { rlog('error', 'save on update', e); }
+  try { engine.shutdown(); } catch (e) { rlog('error', 'shutdown', e); }
+  ipcRenderer.send('app:ready-to-quit');
+});
+
 // ================================================================== 설정
 $('quality').value = cfg.quality;
 $('quality').addEventListener('change', () => { cfg.quality = $('quality').value; save(); toast('저장했어요. Streamy Kit을 다시 시작하면 적용돼요.'); });
@@ -735,7 +785,7 @@ async function boot() {
   $('ver').textContent = 'v' + info.version;
   $('gpuOff').checked = !!info.gpuOff;
   engine.encoderPref = cfg.encoder || 'auto';
-  renderPlatforms(); renderEncoders(); setTopState(); timerListen(); renderViewers(); pollViewers();
+  renderPlatforms(); renderEncoders(); setTopState(); timerListen(); renderViewers(); pollViewers(); renderUpdate();
   $('tMode').value = cfg.timer.mode; $('tMin').value = cfg.timer.minutes; $('tLabel').value = cfg.timer.label; $('tTheme').value = cfg.timer.theme;
   timer({ type: 'config', ...cfg.timer });
   renderScenes(); renderSources(); renderMixer();
@@ -787,6 +837,7 @@ function demoMode() {
   cfg.keys = { chzzk: 'sk_live_8d2f91c7a4', youtube: 'abcd-efgh-ijkl-mnop-qrst', soop: '' }; streamStates = { chzzk: { state: 'live', startedAt: Date.now() - 5047000 }, youtube: { state: 'live', startedAt: Date.now() - 5047000 } };
   renderPlatforms(); setTopState(); $('keyInput').value = 'rtmp://stream.sooplive.co.kr/app/streamy1234-5678'; showGuess();
   renderScenes(); renderSources(); renderMixer(); renderViewers(); renderEncoders();
+  upd = { status: 'available', info: { version: '0.6.1', notes: '- 사운드 탭 개선\n- 버그 수정' } }; renderUpdate();
   setInterval(() => { const now = Date.now(); for (const a of demo.live) liveLevels[a.exe.toLowerCase()] = { v: a.peak ? a.peak + Math.sin(now / 120 + a.exe.length) * 0.15 : 0, t: now }; for (const a of demo.sep) liveLevels[a.exe.toLowerCase()] = { v: 0.35 + Math.sin(now / 90) * 0.1, t: now }; }, 100);
 }
 

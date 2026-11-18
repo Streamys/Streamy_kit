@@ -267,3 +267,18 @@ h4 small{font-weight:500;color:#6d6d75;margin-left:4px;font-size:11px}
 .enc-row{display:flex;gap:6px}
 .enc-row select{flex:1}
 .kg-btns button small{display:block;font-size:10px;font-weight:500;opacity:.75;margin-top:2px}
+
+/* 업데이트 */
+.upd-btn{position:relative;overflow:hidden;display:flex;align-items:center;gap:6px;height:26px;padding:0 12px;border-radius:99px;border:1px solid var(--red);background:var(--red);color:#fff;font-weight:800;font-size:12px;-webkit-app-region:no-drag;animation:updGlow 2s ease-in-out infinite}
+.upd-btn[hidden]{display:none}
+.upd-btn .upd-ic{font-size:12px}
+.upd-btn span{position:relative;z-index:1}
+.upd-btn .upd-bar{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(255,255,255,.22);transition:width .2s}
+.upd-btn.busy{background:#3a1218;animation:none;cursor:default}
+.upd-btn:hover:not(.busy){background:var(--red2)}
+@keyframes updGlow{50%{box-shadow:0 0 0 4px rgba(225,29,46,.25)}}
+.upd-box{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.upd-box>div{flex:1;min-width:0}
+.upd-box b{display:block;font-size:13px}
+.upd-box small{display:block;font-size:11px;color:var(--sub);margin-top:2px}
+.upd-notes{font-size:11px;color:var(--sub);background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;white-space:pre-wrap;max-height:140px;overflow:auto;margin-bottom:12px;line-height:1.6}

@@ -16,6 +16,7 @@
     <span class="v-detail" id="viewerDetail"></span>
     <button class="v-eye" id="viewerEye" title="시청자 수 보이기/숨기기">👁</button>
   </div>
+  <button class="upd-btn" id="updBtn" hidden><span class="upd-ic">⬆</span><span id="updText">업데이트</span><i class="upd-bar" id="updBar"></i></button>
   <div class="stats">
     <span>CPU <b id="sCpu">-</b></span>
     <span>FPS <b id="sFps">-</b></span>
@@ -151,6 +152,12 @@
         <h4>화질</h4>
         <label class="field"><select id="quality"><option value="1080p60">1080p 60fps (권장)</option><option value="1080p30">1080p 30fps</option><option value="720p60">720p 60fps (저사양 PC)</option></select></label>
         <p class="hint">화질 변경은 다시 시작한 뒤 적용돼요.</p>
+        <h4>업데이트</h4>
+        <div class="upd-box">
+          <div><b id="updCur"></b><small id="updStatus">확인 전</small></div>
+          <button id="updCheck">업데이트 확인</button>
+        </div>
+        <div class="upd-notes" id="updNotes" hidden></div>
         <h4>문제 해결</h4>
         <label class="check"><input type="checkbox" id="gpuOff"> 화면 그래픽 가속 끄기 (창이 검게 나올 때)</label>
         <p class="hint" style="margin-top:0">바꾸면 다시 시작한 뒤 적용돼요. 방송 화면(송출) 품질에는 영향 없어요.</p>

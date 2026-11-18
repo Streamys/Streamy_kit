@@ -177,6 +177,19 @@ function main() {
     tray.on('double-click', showWindow);
   }
 
+  // ---------------------------------------------------------------- 업데이트 (GitHub Releases)
+  const updater = require('./updater');
+  updater.init({ app, log, net, send: (ch, d) => { try { if (win && !win.isDestroyed()) win.webContents.send(ch, d); } catch {} } });
+  ipcMain.handle('update:check', () => updater.check(true));
+  ipcMain.handle('update:download', () => updater.download());
+  ipcMain.handle('update:install', async () => {
+    // 설치 파일을 조용히 실행(끝나면 Streamy Kit 다시 켜짐) → 화면이 엔진 정리 후 종료
+    updater.launchInstaller();
+    try { win.webContents.send('app:quit-for-update'); } catch {}
+    setTimeout(() => forceQuit('update install'), 8000);
+    return true;
+  });
+
   // ---------------------------------------------------------------- IPC
   ipcMain.on('app:info', (e) => {
     e.returnValue = {
@@ -217,8 +230,8 @@ function main() {
   ipcMain.on('app:relaunch', async () => { log.warn('main', 'relaunch requested'); quitting = true; await killOwnEngine('relaunch'); app.relaunch(); app.exit(0); });
   ipcMain.on('log', (_e, level, ...args) => (log[level] || log.info)('renderer', ...args));
   ipcMain.handle('app:set-gpu', (_e, off) => { try { if (off) fs.writeFileSync(GPU_OFF_FLAG, '1'); else fs.rmSync(GPU_OFF_FLAG, { force: true }); } catch {} return fs.existsSync(GPU_OFF_FLAG); });
-  ipcMain.handle('app:confirm', async (_e, { title, message, buttons }) => {
-    const r = await dialog.showMessageBox(win, { type: 'question', title, message, buttons, defaultId: 0, cancelId: buttons.length - 1 });
+  ipcMain.handle('app:confirm', async (_e, { title, message, detail, buttons }) => {
+    const r = await dialog.showMessageBox(win, { type: 'question', title, message, detail, buttons, defaultId: 0, cancelId: buttons.length - 1 });
     return r.response;
   });
   ipcMain.handle('app:pick-image', async () => {
@@ -257,6 +270,8 @@ function main() {
     try { server.start(); } catch (e) { log.error('main', 'server', e); }
     createWindow();
     createTray();
+    setTimeout(() => updater.check(false), 8000);            // 켜고 8초 뒤 한 번
+    setInterval(() => updater.check(false), 6 * 3600 * 1000); // 이후 6시간마다
   });
   app.on('window-all-closed', () => { if (!quitting) forceQuit('all windows closed'); });
 }

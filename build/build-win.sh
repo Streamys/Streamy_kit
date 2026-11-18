@@ -30,7 +30,7 @@ echo "▶ 3/5 Electron 윈도우 패키징"
 rm -rf "$OUT"
 npx --yes @electron/packager . "Streamy Kit" --platform=win32 --arch=x64 \
   --electron-version="$ELECTRON" --out=dist --overwrite --no-asar \
-  --ignore='^/dist' --ignore='^/build' --ignore='^/docs' --ignore='^/\.cache' --ignore='demo-preview' \
+  --ignore='^/dist' --ignore='^/build' --ignore='^/docs' --ignore='^/\.cache' --ignore='^/\.github' --ignore='demo-preview' \
   --app-copyright="Streamy (GPL-2.0-or-later)" \
   --win32metadata.CompanyName=Streamy --win32metadata.ProductName="Streamy Kit" --win32metadata.FileDescription="Streamy Kit"
 
