@@ -1,4 +1,4 @@
-node_modules/
+node_modules
 dist/
 .cache/
 build/vc_redist.x64.exe
