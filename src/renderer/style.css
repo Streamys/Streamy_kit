@@ -248,3 +248,22 @@ h4 small{font-weight:500;color:#6d6d75;margin-left:4px;font-size:11px}
 .acard .x{position:relative;background:none;border:none;color:var(--sub);font-size:12px;padding:0 2px}
 .acard .x:hover{color:#fff}
 .acard.in{border-color:var(--red-dark)}
+
+/* 스트림 키 하나 입력 */
+.key-guess{margin-top:8px;background:var(--card);border:1px solid var(--red-dark);border-radius:10px;padding:10px 12px}
+.kg-msg{font-size:12px;margin-bottom:8px;line-height:1.5}
+.kg-msg b{color:#fff}
+.kg-btns{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.tab .kg-btns button{padding:9px 0}
+.tab .kg-btns button.guess{background:var(--red)!important;border-color:var(--red)!important;color:#fff!important}
+.key-list{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.key-item{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 10px 9px 12px}
+.key-item b{font-size:13px;min-width:44px}
+.key-item code{flex:1;font-size:11px;color:var(--sub);font-family:Consolas,monospace;letter-spacing:1px}
+.key-item .x{background:none;border:none;color:var(--sub);font-size:13px;padding:2px 4px}
+.key-item .x:hover{color:#fff}
+.key-err{font-size:11px;color:#ff8a94;margin:-2px 2px 2px}
+.key-empty{color:var(--sub);font-size:12px;padding:10px;border:1px dashed var(--line2);border-radius:10px;text-align:center}
+.enc-row{display:flex;gap:6px}
+.enc-row select{flex:1}
+.kg-btns button small{display:block;font-size:10px;font-weight:500;opacity:.75;margin-top:2px}

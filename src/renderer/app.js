@@ -528,7 +528,7 @@ $('chzzkId').addEventListener('change', () => {
 });
 setInterval(pollViewers, 60000);
 
-// ================================================================== 방송 탭: 플랫폼별 키 + 상태
+// ================================================================== 방송 탭: 키 하나 입력 → 플랫폼 추측
 let streamStates = {};
 const STATE_TEXT = { off: '오프라인', ready: '대기 중', starting: '연결 중…', live: 'LIVE', reconnecting: '재연결 중…', stopping: '종료 중…', err: '오류' };
 function platformState(k) {
@@ -537,50 +537,93 @@ function platformState(k) {
   if (s && s.error) return 'err';
   return cfg.keys[k] ? 'ready' : 'off';
 }
-function renderPlatforms() {
-  const box = $('platformRows');
-  if (!box.children.length) {
-    for (const [k, p] of Object.entries(PLATFORMS)) {
-      const row = document.createElement('div'); row.className = 'plat-row'; row.dataset.k = k;
-      row.innerHTML = `<div class="plat-top"><b>${esc(p.name)}</b><span class="pstate"><i></i><span></span></span><button class="link">키 확인 →</button></div>
-        <div class="key-row"><input type="password" autocomplete="off" spellcheck="false" placeholder="${esc(p.name)} 스트림 키"><button class="ghost show">보기</button></div><div class="plat-err" hidden></div>`;
-      const inp = row.querySelector('input');
-      inp.value = cfg.keys[k] || '';
-      inp.addEventListener('input', () => { cfg.keys[k] = inp.value.trim(); save(); renderPlatformStates(); });
-      row.querySelector('.show').addEventListener('click', (e) => { const show = inp.type === 'password'; inp.type = show ? 'text' : 'password'; e.target.textContent = show ? '숨기기' : '보기'; });
-      row.querySelector('.link').addEventListener('click', () => ipcRenderer.invoke('app:open-url', p.keyHelp));
-      box.appendChild(row);
-    }
+// 붙여 넣은 값에서 키와 플랫폼을 추측. 서버 주소째로 붙여 넣어도 키만 뽑아냄
+function guessKey(raw) {
+  let v = String(raw || '').trim().replace(/^["']|["']$/g, '');
+  let platform = null;
+  const url = v.match(/^(rtmps?:\/\/\S+)\/([^/\s]+)$/i);
+  if (url) {
+    const host = url[1].toLowerCase();
+    if (host.includes('navercorp') || host.includes('chzzk')) platform = 'chzzk';
+    else if (host.includes('youtube')) platform = 'youtube';
+    else if (host.includes('sooplive') || host.includes('afreeca')) platform = 'soop';
+    v = url[2];
   }
-  renderPlatformStates();
+  if (!platform && /^[a-z0-9]{4}(-[a-z0-9]{4}){4}$/i.test(v)) platform = 'youtube';   // 유튜브: xxxx-xxxx-xxxx-xxxx-xxxx
+  return { key: v, platform };
 }
-function renderPlatformStates() {
-  for (const row of document.querySelectorAll('.plat-row')) {
-    const k = row.dataset.k, st = platformState(k);
-    const el = row.querySelector('.pstate');
-    el.className = 'pstate ' + ({ live: 'live', ready: 'ready', err: 'err', starting: 'wait', reconnecting: 'wait', stopping: 'wait' }[st] || '');
-    el.querySelector('span').textContent = STATE_TEXT[st] || st;
-    const err = row.querySelector('.plat-err'), msg = streamStates[k] && streamStates[k].error;
-    err.hidden = !msg; err.textContent = msg || '';
-    row.querySelector('input').disabled = !!(streamStates[k] && streamStates[k].state !== 'off');
+function maskKey(k) { return k.length <= 4 ? '••••' : '••••••' + k.slice(-4); }
+function showGuess() {
+  const raw = $('keyInput').value; const box = $('keyGuess');
+  if (!raw.trim()) { box.hidden = true; return; }
+  const g = guessKey(raw);
+  box.hidden = false;
+  $('kgMsg').innerHTML = g.platform
+    ? `<b>${esc(PLATFORMS[g.platform].name)}</b> 키로 보여요. 맞으면 눌러서 저장하세요.`
+    : '어느 플랫폼 키인가요? 눌러서 저장하세요.';
+  const btns = $('kgBtns'); btns.innerHTML = '';
+  for (const [k, p] of Object.entries(PLATFORMS)) {
+    const b = document.createElement('button');
+    b.className = g.platform === k ? 'guess' : '';
+    b.innerHTML = esc(p.name) + (cfg.keys[k] ? '<small>기존 키 바꾸기</small>' : '<small>새로 저장</small>');
+    b.addEventListener('click', () => saveKey(k, g.key));
+    btns.appendChild(b);
   }
 }
-function renderEncoders() {
-  const g = $('encGrid'); g.innerHTML = '';
-  const avail = DEMO ? ENCODERS.filter((e) => ['obs_nvenc_h264_tex', 'obs_x264'].includes(e.id)) : engineOk ? engine.availableEncoders() : [];
-  const opts = [{ id: 'auto', label: '자동', sub: avail[0] ? avail[0].label : '-' }, ...avail.map((e) => ({ id: e.id, label: e.label, sub: e.hw ? '그래픽카드' : 'CPU 사용' }))];
-  for (const o of opts) {
-    const b = document.createElement('button'); b.className = 'enc' + (cfg.encoder === o.id ? ' on' : '');
-    b.innerHTML = `${esc(o.label)}<small>${esc(o.sub)}</small>`;
-    b.addEventListener('click', () => {
-      if (engine.streaming) return toast('방송 중에는 인코더를 바꿀 수 없어요.', true);
-      cfg.encoder = o.id; engine.encoderPref = o.id; save(); renderEncoders();
+function saveKey(k, key) {
+  if (streamStates[k] && streamStates[k].state !== 'off') return toast('방송 중인 플랫폼의 키는 바꿀 수 없어요.', true);
+  if (!key) return;
+  cfg.keys[k] = key; save();
+  $('keyInput').value = ''; $('keyGuess').hidden = true;
+  if (streamStates[k]) delete streamStates[k].error;
+  renderKeyList(); toast(`${PLATFORMS[k].name} 스트림 키를 저장했어요.`);
+}
+$('keyInput').addEventListener('input', showGuess);
+$('keyInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { const g = guessKey($('keyInput').value); if (g.platform) saveKey(g.platform, g.key); } });
+$('keyShow').addEventListener('click', () => { const k = $('keyInput'), show = k.type === 'password'; k.type = show ? 'text' : 'password'; $('keyShow').textContent = show ? '숨기기' : '보기'; });
+document.querySelectorAll('[data-help]').forEach((b) => b.addEventListener('click', () => ipcRenderer.invoke('app:open-url', PLATFORMS[b.dataset.help].keyHelp)));
+function renderKeyList() {
+  const box = $('keyList'); box.innerHTML = '';
+  const saved = Object.keys(PLATFORMS).filter((k) => cfg.keys[k]);
+  if (!saved.length) { box.innerHTML = '<div class="key-empty">아직 저장된 키가 없어요</div>'; return; }
+  for (const k of saved) {
+    const st = platformState(k);
+    const item = document.createElement('div'); item.className = 'key-item';
+    const cls = { live: 'live', ready: 'ready', err: 'err', starting: 'wait', reconnecting: 'wait', stopping: 'wait' }[st] || '';
+    item.innerHTML = `<b>${esc(PLATFORMS[k].name)}</b><span class="pstate ${cls}"><i></i><span>${esc(STATE_TEXT[st] || st)}</span></span><code>${esc(maskKey(cfg.keys[k]))}</code><button class="x" title="키 지우기">✕</button>`;
+    item.querySelector('.x').addEventListener('click', () => {
+      if (streamStates[k] && streamStates[k].state !== 'off') return toast('방송 중에는 지울 수 없어요.', true);
+      cfg.keys[k] = ''; save(); delete streamStates[k]; renderKeyList();
     });
-    g.appendChild(b);
+    box.appendChild(item);
+    const err = streamStates[k] && streamStates[k].error;
+    if (err) { const e = document.createElement('div'); e.className = 'key-err'; e.textContent = err; box.appendChild(e); }
   }
-  const cur = DEMO ? avail[0] : engineOk ? engine.pickEncoder() : null;
-  $('encHint').textContent = cur ? `지금 쓰는 인코더: ${cur.label}. 방송이 끊기거나 인코더 오류가 나면 다른 걸 골라 보세요.` : '';
 }
+function renderPlatforms() { renderKeyList(); }
+function renderPlatformStates() { renderKeyList(); }
+
+// 인코더: 콤보박스 + 자동 버튼(이 PC에서 가장 좋은 걸 골라 줌)
+function encList() { return DEMO ? ENCODERS.filter((e) => ['obs_nvenc_h264_tex', 'obs_x264'].includes(e.id)) : engineOk ? engine.availableEncoders() : []; }
+function renderEncoders() {
+  const sel = $('encSel'), list = encList();
+  if (!list.length) { sel.innerHTML = '<option>엔진 준비 중</option>'; $('encHint').textContent = ''; return; }
+  sel.innerHTML = list.map((e) => `<option value="${e.id}">${esc(e.label)} — ${e.hw ? '그래픽카드' : 'CPU 사용'}</option>`).join('');
+  let cur = cfg.encoder && list.some((e) => e.id === cfg.encoder) ? cfg.encoder : list[0].id;
+  if (cfg.encoder !== cur) { cfg.encoder = cur; save(); }
+  sel.value = cur; engine.encoderPref = cur;
+  const e = list.find((x) => x.id === cur);
+  $('encHint').textContent = e.id === list[0].id ? `${e.label} — 이 PC에서 가장 좋은 인코더예요.` : `${e.label}을(를) 쓰고 있어요. 자동을 누르면 ${list[0].label}(으)로 돌아가요.`;
+}
+$('encSel').addEventListener('change', () => {
+  if (engine.streaming) { renderEncoders(); return toast('방송 중에는 인코더를 바꿀 수 없어요.', true); }
+  cfg.encoder = $('encSel').value; save(); renderEncoders();
+});
+$('encAuto').addEventListener('click', () => {
+  if (engine.streaming) return toast('방송 중에는 인코더를 바꿀 수 없어요.', true);
+  const list = encList(); if (!list.length) return;
+  cfg.encoder = list[0].id; save(); renderEncoders(); toast(`자동으로 ${list[0].label}을(를) 골랐어요.`);
+});
 
 let liveSince = 0;
 function setTopState() {
@@ -741,8 +784,8 @@ function demoMode() {
   Object.assign(sel.style, { left: '2.5%', top: '62%', width: '27%', height: '34%' }); prev.appendChild(sel);
   prev.classList.add('has-engine');
   $('sCpu').textContent = '6%'; $('sFps').textContent = '60';
-  cfg.keys = { chzzk: 'demo', youtube: 'demo', soop: '' }; streamStates = { chzzk: { state: 'live', startedAt: Date.now() - 5047000 }, youtube: { state: 'live', startedAt: Date.now() - 5047000 } };
-  $('platformRows').innerHTML = ''; renderPlatforms(); setTopState();
+  cfg.keys = { chzzk: 'sk_live_8d2f91c7a4', youtube: 'abcd-efgh-ijkl-mnop-qrst', soop: '' }; streamStates = { chzzk: { state: 'live', startedAt: Date.now() - 5047000 }, youtube: { state: 'live', startedAt: Date.now() - 5047000 } };
+  renderPlatforms(); setTopState(); $('keyInput').value = 'rtmp://stream.sooplive.co.kr/app/streamy1234-5678'; showGuess();
   renderScenes(); renderSources(); renderMixer(); renderViewers(); renderEncoders();
   setInterval(() => { const now = Date.now(); for (const a of demo.live) liveLevels[a.exe.toLowerCase()] = { v: a.peak ? a.peak + Math.sin(now / 120 + a.exe.length) * 0.15 : 0, t: now }; for (const a of demo.sep) liveLevels[a.exe.toLowerCase()] = { v: 0.35 + Math.sin(now / 90) * 0.1, t: now }; }, 100);
 }

@@ -71,12 +71,19 @@
       <button data-tab="settings">설정</button>
     </nav>
     <div class="tab-body">
-      <!-- 방송: 플랫폼별 스트림 키 + 상태 -->
+      <!-- 방송: 스트림 키 하나 입력 → 플랫폼 자동 추측 -->
       <section class="tab on" id="tab-stream">
-        <h4>스트림 키 <small>키를 넣은 플랫폼으로 동시에 송출돼요</small></h4>
-        <div id="platformRows"></div>
+        <h4>스트림 키 <small>붙여 넣으면 어느 플랫폼인지 알아서 골라 줘요</small></h4>
+        <div class="key-row"><input id="keyInput" type="password" autocomplete="off" spellcheck="false" placeholder="스트림 키 붙여넣기"><button class="ghost" id="keyShow">보기</button></div>
+        <div class="key-guess" id="keyGuess" hidden>
+          <div class="kg-msg" id="kgMsg"></div>
+          <div class="kg-btns" id="kgBtns"></div>
+        </div>
+        <div class="key-list" id="keyList"></div>
+        <p class="hint">저장된 키가 있는 플랫폼으로 <b>동시에</b> 송출돼요. 키 확인: <button class="link inline" data-help="chzzk">치지직</button> · <button class="link inline" data-help="youtube">유튜브</button> · <button class="link inline" data-help="soop">SOOP</button></p>
+
         <h4>인코더</h4>
-        <div class="enc-grid" id="encGrid"></div>
+        <div class="enc-row"><select id="encSel"></select><button class="ghost" id="encAuto" title="이 PC에서 가장 좋은 인코더 고르기">자동</button></div>
         <p class="hint" id="encHint"></p>
       </section>
 
