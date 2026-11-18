@@ -18,6 +18,13 @@ for (const fn of ['switchScene', 'addScene', 'removeScene', 'addSource', 'remove
   const orig = engine[fn]; if (typeof orig !== 'function') continue;
   engine[fn] = function (...a) { crumb(fn + (typeof a[0] === 'string' || typeof a[0] === 'number' ? ' ' + String(a[0]).slice(0, 30) : '')); return orig.apply(this, a); };
 }
+// 위치/크기가 바뀌는 동작 뒤에는 편집 가이드를 바로 다시 그림 (끄는 중은 따로 처리)
+let geomRaf = 0;
+function geomChanged() { if (geomRaf) return; geomRaf = requestAnimationFrame(() => { geomRaf = 0; if (typeof refreshRects === 'function') { refreshRects(); guideDraw(); } }); }
+for (const fn of ['fitItem', 'setItemRect', 'setVirtual', 'rehookVirtual', 'updateSource', 'moveItem', 'setVisible', 'renameSource']) {
+  const orig = engine[fn]; if (typeof orig !== 'function') continue;
+  engine[fn] = function (...a) { const r = orig.apply(this, a); if (!drag) geomChanged(); return r; };
+}
 let engineOk = false;
 const DEMO = !!process.env.STREAMY_DEMO;
 
