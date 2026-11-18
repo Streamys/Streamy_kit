@@ -1,14 +1,21 @@
 name: 빠른 업데이트 릴리즈
 
-# 버전 태그(vX.Y.Z)를 올리면 → 빠른 업데이트 ZIP(src만, 약 100KB)을 만들어 릴리즈로 게시합니다.
+# main에 올라온 package.json 버전에 맞는 릴리즈가 아직 없으면 → 빠른 업데이트 ZIP(src만, 약 100KB)을 만들어
+# 릴리즈 v<버전>을 게시합니다 (태그도 이때 자동으로 생김). 버전만 올려서 푸시하면 끝.
 # 켜져 있는 Streamy Kit은 5분마다 최신 릴리즈를 확인해서, 허용 창 없이 몇 초 만에 알아서 적용해요.
-# 설치 파일(엔진 · Electron이 바뀔 때)은 "릴리스 설치 파일 만들기" 워크플로를 수동 실행해서 같은 릴리즈에 붙입니다.
+# 설치 파일(엔진 · Electron이 바뀔 때)은 "릴리스 설치 파일 만들기 (수동)"을 실행해서 같은 릴리즈에 붙입니다.
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+    paths: ['package.json', 'src/**', 'build/patch-min-base', '.github/workflows/quick-release.yml']
+  workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: quick-release
+  cancel-in-progress: false
 
 jobs:
   patch:
@@ -16,23 +23,29 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: 버전 확인 (태그 = package.json)
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          PKG="v$(node -p "require('./package.json').version")"
-          echo "tag=$TAG package=$PKG"
-          if [ "$TAG" != "$PKG" ]; then echo "::error::태그($TAG)와 package.json 버전($PKG)이 달라요"; exit 1; fi
-
-      - name: 빠른 업데이트 ZIP 만들기
-        run: bash build/make-patch.sh
-
-      - name: 릴리즈 게시
+      - name: 이 버전 릴리즈가 이미 있는지
+        id: v
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          V="${GITHUB_REF_NAME#v}"
+          V="$(node -p "require('./package.json').version")"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          if gh release view "v$V" >/dev/null 2>&1; then echo "v$V 릴리즈가 이미 있어요 → 건너뜀"; echo "skip=1" >> "$GITHUB_OUTPUT"; fi
+
+      - name: 빠른 업데이트 ZIP 만들기
+        if: steps.v.outputs.skip != '1'
+        run: bash build/make-patch.sh
+
+      - name: 릴리즈 게시
+        if: steps.v.outputs.skip != '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${{ steps.v.outputs.version }}"
           MIN="$(cat build/patch-min-base)"
           SUBJECT="$(git log -1 --format=%s)"
           printf '%s\n\nminBase: %s\n\n빠른 업데이트: 켜져 있는 Streamy Kit이 5분 안에 알아서 적용해요 (설치 %s 이상).\n' "$SUBJECT" "$MIN" "$MIN" > notes.md
-          gh release create "$GITHUB_REF_NAME" "dist/StreamyKit-Patch-$V.zip" --title "Streamy Kit $GITHUB_REF_NAME" --notes-file notes.md --latest
+          gh release create "v$V" "dist/StreamyKit-Patch-$V.zip" --target "$GITHUB_SHA" --title "Streamy Kit v$V" --notes-file notes.md --latest
