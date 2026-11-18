@@ -20,7 +20,7 @@ const DEFAULTS = {
   keys: { chzzk: '', youtube: '', soop: '' }, encoder: 'auto',
   appAudio: [], audioState: {}, devices: {}, showViewers: false, channels: { chzzk: '', youtube: '', soop: '' },
   timer: { mode: 'stopwatch', minutes: 10, label: '', theme: 'red' }, quality: '1080p60',
-  mode: 'setup', airOnLive: true, chatLog: false,
+  mode: 'setup', airOnLive: true, chatLog: false, autoUpdate: true,
   mini: { on: true, platforms: ['chzzk', 'youtube', 'soop'], opacity: 30, count: 5 },
   virtualAuto: true, virtualAutoDone: [],
 };
@@ -848,7 +848,7 @@ let upd = { status: 'idle' };
 function renderUpdate() {
   const btn = $('updBtn'), txt = $('updText'), bar = $('updBar');
   const v = upd.info && upd.info.version;
-  $('updCur').textContent = 'Streamy Kit v' + info.version;
+  $('updCur').textContent = 'Streamy Kit v' + info.version + (info.patch ? ` (설치 v${info.baseVersion} + 빠른 업데이트)` : '');
   $('updStatus').textContent = { idle: '확인 전', checking: '확인하는 중…', latest: '최신 버전이에요', available: `새 버전 v${v}이(가) 있어요`, downloading: `v${v} 받는 중… ${upd.progress || 0}%`, ready: `v${v} 설치 준비 완료`, error: upd.error || '확인 실패' }[upd.status] || '';
   if (upd.error && upd.status === 'available') $('updStatus').textContent = upd.error;
   $('updCheck').textContent = upd.status === 'available' || upd.status === 'ready' ? `v${v}로 업데이트` : '업데이트 확인';
@@ -862,27 +862,43 @@ function renderUpdate() {
 }
 ipcRenderer.on('update:state', (_e, st) => {
   const was = upd.status; upd = st; renderUpdate();
-  if (st.status === 'available' && was !== 'available' && !st.error) toast(`새 버전 v${st.info.version}이(가) 나왔어요. 위쪽 업데이트 버튼을 누르세요.`);
+  if (st.status === 'available' && was !== 'available' && !st.error) {
+    if (cfg.autoUpdate !== false && !DEMO && st.info && st.info.local) doUpdate(true);     // 바탕화면 폴더 파일 → 바로 적용
+    else toast(`새 버전 v${st.info.version}이(가) 나왔어요. 위쪽 업데이트 버튼을 누르세요.`);
+  }
   if (st.status === 'latest' && st.manual) toast('지금 최신 버전이에요.');
   if (st.status === 'error' && st.manual) toast(st.error, true);
 });
-async function doUpdate() {
-  if (upd.status === 'downloading') return;
-  if (engine.streaming) return toast('방송 중에는 업데이트할 수 없어요. 방송을 끝낸 뒤 눌러 주세요.', true);
-  if (engine.recording) return toast('녹화 중에는 업데이트할 수 없어요.', true);
+let updBusy = false, updPending = false;
+async function doUpdate(auto = false) {
+  if (upd.status === 'downloading' || updBusy) return;
+  if (engine.streaming || engine.recording) {
+    if (auto) { if (!updPending) toast(`v${upd.info.version} 업데이트는 방송·녹화가 끝나면 바로 적용할게요.`); updPending = true; return; }
+    return toast(engine.streaming ? '방송 중에는 업데이트할 수 없어요. 방송을 끝낸 뒤 눌러 주세요.' : '녹화 중에는 업데이트할 수 없어요.', true);
+  }
   const v = upd.info && upd.info.version; if (!v) return;
-  const r = await ipcRenderer.invoke('app:confirm', { title: '업데이트', message: `Streamy Kit v${v}로 업데이트할까요?` + (upd.info.local ? ' (바탕화면 파일)' : ''), detail: '설치하는 동안 잠깐 꺼졌다가 자동으로 다시 켜져요. 장면과 설정은 그대로 유지돼요.', buttons: ['업데이트', '나중에'] });
-  if (r !== 0) return;
+  const quick = upd.info.kind === 'patch';
+  if (!auto) {
+    const r = await ipcRenderer.invoke('app:confirm', { title: '업데이트', message: `Streamy Kit v${v}로 업데이트할까요?` + (quick ? ' (빠른 업데이트)' : ''), detail: quick ? '몇 초 동안 껐다 켜져요. 장면과 설정은 그대로예요.' : '설치하는 동안 잠깐 꺼졌다가 자동으로 다시 켜져요. 장면과 설정은 그대로 유지돼요.', buttons: ['업데이트', '나중에'] });
+    if (r !== 0) return;
+  }
+  updBusy = true; updPending = false;
   try {
+    toast(quick ? `v${v} 적용 중… 몇 초 뒤 다시 켜져요.` : `v${v} 설치 파일을 준비하는 중…`);
     await ipcRenderer.invoke('update:download');
-    toast('설치를 시작해요. 윈도우가 허용을 물어보면 "예"를 눌러 주세요. 끝나면 자동으로 다시 켜져요.');
+    if (!quick) toast('윈도우가 허용을 물어보면 "예"를 눌러 주세요. 끝나면 자동으로 다시 켜져요.');
     await ipcRenderer.invoke('update:install');
-  } catch (e) { toast('업데이트 실패: ' + (e.message || e), true); }
+  } catch (e) { toast('업데이트 실패: ' + String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), true); }
+  finally { updBusy = false; }
 }
-$('updBtn').addEventListener('click', doUpdate);
+$('updAuto').checked = cfg.autoUpdate !== false;
+$('updAuto').addEventListener('change', () => { cfg.autoUpdate = $('updAuto').checked; save(); if (cfg.autoUpdate && upd.status === 'available') doUpdate(true); });
+// 방송·녹화가 끝나면 미뤄 둔 업데이트 적용
+setInterval(() => { if (updPending && !DEMO && !engine.streaming && !engine.recording && ['available', 'ready'].includes(upd.status)) doUpdate(true); }, 3000);
+$('updBtn').addEventListener('click', () => doUpdate(false));
 $('updFolder').addEventListener('click', () => ipcRenderer.invoke('update:folder'));
 $('updCheck').addEventListener('click', async () => {
-  if (upd.status === 'available' || upd.status === 'ready') return doUpdate();
+  if (upd.status === 'available' || upd.status === 'ready') return doUpdate(false);
   try { await ipcRenderer.invoke('update:check'); } catch {}
 });
 // 업데이트 설치가 시작되면: 저장하고 엔진 정리 후 종료 (설치가 끝나면 자동으로 다시 켜짐)

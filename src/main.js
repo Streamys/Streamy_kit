@@ -10,7 +10,7 @@ const server = require('./server');
 app.setName('Streamy Kit');
 app.setAppUserModelId('com.streamy.kit');
 log.init(path.join(app.getPath('userData'), 'logs'));
-log.info('main', `start v${app.getVersion()} electron ${process.versions.electron} pid ${process.pid}`);
+log.info('main', `start v${app.getVersion()}${global.STREAMY?.patch ? ` (빠른 업데이트, 설치 ${global.STREAMY.baseVersion})` : ''} electron ${process.versions.electron} pid ${process.pid}`);
 
 // 그래픽 가속 끄기 옵션 (화면이 검게 나오는 PC 대비). 설정에서 켜거나, GPU가 반복해서 죽으면 자동으로 켜짐
 const GPU_OFF_FLAG = path.join(app.getPath('userData'), 'disable-gpu');
@@ -80,6 +80,8 @@ function main() {
     let shown = false;
     const show = (why) => { if (shown || !win || win.isDestroyed()) return; shown = true; win.show(); log.info('main', `window shown (${why}) in ${Date.now() - t0}ms`); };
     win.once('ready-to-show', () => show('ready'));
+    // 빠른 업데이트로 켜졌으면, 15초 동안 문제없으면 "정상" 표시 (두 번 연속 실패하면 기본 버전으로 돌아감)
+    setTimeout(() => { try { if (win && !win.isDestroyed() && !win.webContents.isCrashed()) global.STREAMY?.markGood?.(); } catch {} }, 15000);
     setTimeout(() => show('timeout'), 2000);
 
     const sendMax = () => { try { win.webContents.send('win:maximized', win.isMaximized()); } catch {} };
@@ -249,7 +251,8 @@ function main() {
   ipcMain.handle('update:folder', () => { const d = updater.folder(); if (d) shell.openPath(d); return d; });
   ipcMain.handle('update:install', async () => {
     // 설치 파일을 조용히 실행(끝나면 Streamy Kit 다시 켜짐) → 화면이 엔진 정리 후 종료
-    await updater.launchInstaller();          // 윈도우 허용 창에서 "예"를 눌러야 넘어감. 실패하면 앱은 그대로
+    if (updater.isPatch()) { log.info('main', 'quick update → relaunch'); app.relaunch(); }   // 빠른 업데이트: 다시 켜기만 하면 적용
+    else await updater.launchInstaller();     // 설치 파일: 윈도우 허용 창에서 "예"를 눌러야 넘어감. 실패하면 앱은 그대로
     try { win.webContents.send('app:quit-for-update'); } catch {}
     setTimeout(() => forceQuit('update install'), 8000);
     return true;
@@ -264,6 +267,8 @@ function main() {
       recordDir: path.join(app.getPath('videos'), 'Streamy Kit'),
       logDir: log.dir(),
       version: app.getVersion(),
+      baseVersion: (global.STREAMY && global.STREAMY.baseVersion) || app.getVersion(),
+      patch: (global.STREAMY && global.STREAMY.patch) || null,
       timerUrl: server.url('/overlay/timer'),
       platform: process.platform,
       gpuOff: fs.existsSync(GPU_OFF_FLAG),

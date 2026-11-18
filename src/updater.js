@@ -4,6 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
+const unzip = require('./unzip');
 
 const REPO = 'Streamys/Streamy_kit';
 const API = `https://api.github.com/repos/${REPO}/releases/latest`;
@@ -11,7 +12,9 @@ const ALLOWED = `https://github.com/${REPO}/releases/download/`;
 
 let ctx = null;
 let localDir = null;              // 바탕화면\Streamy Kit 업데이트
-const LOCAL_RE = /^StreamyKit-Setup-(\d+\.\d+\.\d+)-x64\.(exe|zip)$/i;
+const LOCAL_RE = /^StreamyKit-(?:Setup-(\d+\.\d+\.\d+)-x64\.(exe|zip)|Patch-(\d+\.\d+\.\d+)\.zip)$/i;   // 설치 파일 또는 빠른 업데이트
+const baseVersion = () => (global.STREAMY && global.STREAMY.baseVersion) || ctx.app.getVersion();
+const patchRoot = () => (global.STREAMY && global.STREAMY.patchRoot) || path.join(ctx.app.getPath('appData'), 'Streamy Kit', 'patch');
 let state = { status: 'idle' };   // idle | checking | latest | available | downloading | ready | error
 let info = null;                  // { version, notes, url, size, page }
 let file = null;
@@ -24,8 +27,10 @@ function init(c) {
     fs.mkdirSync(localDir, { recursive: true });
     // 폴더에 파일이 들어오면 바로 확인 (바탕화면 자체도 확인)
     let t = null;
-    const kick = () => { clearTimeout(t); t = setTimeout(() => checkLocal(false), 1500); };
+    const kick = () => { clearTimeout(t); t = setTimeout(() => checkLocal(false), 400); };
     for (const d of [localDir, desktop]) { try { fs.watch(d, { persistent: false }, (_ev, name) => { if (!name || LOCAL_RE.test(String(name))) kick(); }); } catch {} }
+    // OneDrive 바탕화면은 알림이 늦거나 빠질 때가 있어서 3초마다 한 번 더 확인 (폴더 목록만 봐서 가벼움)
+    setInterval(() => { if (!['downloading', 'ready', 'available'].includes(state.status)) checkLocal(false); }, 3000);
   } catch (e) { ctx.log.warn('update', 'local folder', e.message); localDir = null; }
 }
 function folder() { return localDir; }
@@ -38,11 +43,17 @@ function findLocal() {
     let names = []; try { names = fs.readdirSync(d); } catch { continue; }
     for (const n of names) {
       const m = n.match(LOCAL_RE); if (!m) continue;
+      const patch = !!m[3], version = m[1] || m[3], kind = patch ? 'patch' : m[2].toLowerCase();
       const full = path.join(d, n);
       let st; try { st = fs.statSync(full); } catch { continue; }
-      if (!st.isFile() || st.size < 1024 * 1024) continue;           // 아직 복사 중이거나 깨진 파일 제외
-      if (!newer(m[1], ctx.app.getVersion())) continue;
-      if (!best || newer(m[1], best.version) || (m[1] === best.version && m[2].toLowerCase() === 'exe')) best = { version: m[1], file: full, kind: m[2].toLowerCase(), size: st.size, mtime: st.mtimeMs };
+      if (!st.isFile() || st.size < (patch ? 1024 : 1024 * 1024)) continue;     // 아직 복사 중이거나 깨진 파일 제외
+      if (!newer(version, ctx.app.getVersion())) continue;
+      if (patch) {   // 빠른 업데이트가 이 설치 버전에서 쓸 수 있는지 (patch.json의 minBase)
+        let meta = null; try { meta = JSON.parse(unzip.readText(full, 'patch.json') || 'null'); } catch {}
+        if (!meta || meta.version !== version || (meta.minBase && newer(meta.minBase, baseVersion()))) continue;
+      }
+      const rank = { patch: 3, exe: 2, zip: 1 }[kind];
+      if (!best || newer(version, best.version) || (version === best.version && rank > best.rank)) best = { version, file: full, kind, size: st.size, mtime: st.mtimeMs, rank };
     }
   }
   return best;
@@ -51,10 +62,11 @@ async function checkLocal(manual) {
   if (['downloading', 'ready'].includes(state.status)) return state;
   const l = findLocal();
   if (!l) { if (manual) return null; if (info && info.local) { info = null; emit({ status: 'latest' }); } return null; }
-  // 파일이 아직 복사 중일 수 있으니 크기가 1초 동안 그대로인지 확인
-  await new Promise((r) => setTimeout(r, 1000));
+  if (info && info.local === l.file && state.status === 'available') return state;    // 이미 알림
+  // 파일이 아직 복사 중일 수 있으니 크기가 잠깐 그대로인지 확인
+  await new Promise((r) => setTimeout(r, 500));
   try { if (fs.statSync(l.file).size !== l.size) return checkLocal(manual); } catch { return null; }
-  info = { version: l.version, notes: `바탕화면 업데이트 파일: ${path.basename(l.file)}`, local: l.file, kind: l.kind, size: l.size };
+  info = { version: l.version, notes: `${l.kind === 'patch' ? '빠른 업데이트' : '설치 파일'}: ${path.basename(l.file)}`, local: l.file, kind: l.kind, size: l.size, patch: l.kind === 'patch' };
   ctx.log.info('update', `local update ${l.version} at ${l.file}`);
   emit({ status: 'available', error: '' });
   return state;
@@ -101,6 +113,7 @@ async function download() {
   if (info.local) {
     emit({ status: 'downloading', progress: 30, error: '' });
     try {
+      if (info.kind === 'patch') { await applyPatch(info.local, info.version); file = info.local; emit({ status: 'ready', progress: 100 }); return state; }
       if (info.kind === 'zip') await unzipExe(info.local, dir, dest);
       else fs.copyFileSync(info.local, dest);
       file = dest;
@@ -143,23 +156,32 @@ async function download() {
   return state;
 }
 
-// ZIP 안의 설치 파일 꺼내기 (윈도우 기본 PowerShell 사용)
-function unzipExe(zip, dir, dest) {
-  const out = path.join(dir, 'unzip-' + Date.now());
-  return new Promise((resolve, reject) => {
-    const ps = `Expand-Archive -LiteralPath '${zip.replace(/'/g, "''")}' -DestinationPath '${out.replace(/'/g, "''")}' -Force`;
-    const p = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', ps], { windowsHide: true });
-    p.on('error', reject);
-    p.on('exit', (code) => {
-      if (code !== 0) return reject(new Error('압축을 풀지 못했어요 (코드 ' + code + ')'));
-      const exe = fs.readdirSync(out).find((n) => /^StreamyKit-Setup-.*\.exe$/i.test(n));
-      if (!exe) return reject(new Error('ZIP 안에 설치 파일이 없어요'));
-      fs.renameSync(path.join(out, exe), dest);
-      try { fs.rmSync(out, { recursive: true, force: true }); } catch {}
-      resolve();
-    });
-  });
+// ZIP 안의 설치 파일 꺼내기 (자체 ZIP 풀기 — PowerShell보다 훨씬 빠름)
+async function unzipExe(zip, dir, dest) {
+  const e = unzip.list(zip).entries.find((x) => /^StreamyKit-Setup-.*\.exe$/i.test(path.basename(x.name)));
+  if (!e) throw new Error('ZIP 안에 설치 파일이 없어요');
+  await unzip.extractEntry(zip, e, dest + '.part');
+  fs.renameSync(dest + '.part', dest);
 }
+
+// 빠른 업데이트: %APPDATA%\Streamy Kit\patch\<버전> 에 풀고 다음 실행부터 그 코드로 켜짐 (관리자 권한 불필요)
+async function applyPatch(zip, version) {
+  const root = patchRoot();
+  const tmp = path.join(root, `${version}.tmp-${Date.now()}`), dir = path.join(root, version);
+  fs.mkdirSync(root, { recursive: true });
+  try {
+    await unzip.extractAll(zip, tmp);
+    const meta = JSON.parse(fs.readFileSync(path.join(tmp, 'patch.json'), 'utf8'));
+    if (meta.version !== version) throw new Error('버전 정보가 맞지 않아요');
+    for (const f of ['src/main.js', 'src/renderer/index.html', 'src/renderer/app.js']) if (!fs.existsSync(path.join(tmp, f))) throw new Error('빠진 파일이 있어요: ' + f);
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.renameSync(tmp, dir);
+    fs.rmSync(path.join(root, `bad-${version}`), { force: true });
+    fs.writeFileSync(path.join(root, 'current.json'), JSON.stringify({ version, at: Date.now(), from: path.basename(zip) }));
+    ctx.log.info('update', `patch ${version} ready at ${dir}`);
+  } catch (e) { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {} throw e; }
+}
+function isPatch() { return !!(info && info.kind === 'patch' && state.status === 'ready'); }
 
 // 설치 파일을 조용히(/S) 실행. 설치가 끝나면 설치 파일이 Streamy Kit을 다시 켬(/relaunch)
 // 설치 파일 실행. 설치 파일은 관리자 권한이 필요해서, 일반 실행(spawn)으로는 윈도우 허용 창이 안 뜨고 막혀요(EACCES).
@@ -193,6 +215,15 @@ function cleanupLocal() {
     if (!newer(m[1], ctx.app.getVersion())) { try { fs.unlinkSync(path.join(localDir, n)); ctx.log.info('update', 'removed old update file', n); } catch {} }
   }
   try { fs.rmSync(path.join(os.tmpdir(), 'streamy-kit-update'), { recursive: true, force: true }); } catch {}
+  // 지금 쓰는 것보다 오래된 빠른 업데이트 폴더 정리
+  try {
+    const root = patchRoot(), cur = ctx.app.getVersion();
+    for (const n of fs.readdirSync(root)) {
+      const full = path.join(root, n);
+      if (/\.tmp-\d+$/.test(n)) { fs.rmSync(full, { recursive: true, force: true }); continue; }
+      if (/^\d+\.\d+\.\d+$/.test(n) && n !== cur && !newer(n, cur)) fs.rmSync(full, { recursive: true, force: true });
+    }
+  } catch {}
 }
 
-module.exports = { init, check, checkLocal, download, launchInstaller, newer, folder, cleanupLocal };
+module.exports = { init, check, checkLocal, download, launchInstaller, newer, folder, cleanupLocal, isPatch, applyPatch };

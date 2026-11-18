@@ -1,9 +1,9 @@
 {
   "name": "streamy-kit",
   "productName": "Streamy Kit",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Streamy Kit - 치지직·유튜브·SOOP 방송 프로그램 (OBS 엔진 기반)",
-  "main": "src/main.js",
+  "main": "src/boot.js",
   "author": "Streamy",
   "license": "GPL-2.0-or-later",
   "scripts": {
