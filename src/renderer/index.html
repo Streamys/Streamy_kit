@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>Streamy Kit</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="titlebar">
+  <div class="brand"><img src="logo.png" alt=""><b>Streamy</b><span>Kit</span><em id="ver"></em></div>
+  <div class="live-pill" id="livePill"><i></i><span id="liveText">오프라인</span><small id="liveTime"></small></div>
+  <div class="stats" id="stats"><span>CPU <b id="sCpu">-</b></span><span>FPS <b id="sFps">-</b></span><span>송출 <b id="sKbps">-</b></span><span>드롭 <b id="sDrop">-</b></span></div>
+</header>
+
+<div class="layout">
+  <!-- 왼쪽: 미리보기 + 장면 + 믹서 -->
+  <main class="stage">
+    <div class="preview-wrap">
+      <div class="preview" id="preview">
+        <div class="preview-empty" id="previewEmpty">
+          <img src="logo.png" alt="">
+          <p id="engineMsg">방송 엔진을 불러오는 중…</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="scenes" id="scenes"></div>
+
+    <section class="mixer">
+      <div class="sec-head"><h3>오디오 믹서</h3><small>앱별로 따로 조절돼요</small></div>
+      <div class="mixer-list" id="mixer"></div>
+    </section>
+  </main>
+
+  <!-- 오른쪽: 기능 패널 -->
+  <aside class="panel">
+    <nav class="tabs">
+      <button data-tab="stream" class="on">방송</button>
+      <button data-tab="sources">화면·캠</button>
+      <button data-tab="audio">사운드 분리</button>
+      <button data-tab="timer">타이머</button>
+      <button data-tab="design">문구·디자인</button>
+    </nav>
+
+    <div class="tab-body">
+      <!-- 방송 -->
+      <section class="tab on" id="tab-stream">
+        <h4>플랫폼</h4>
+        <div class="platforms" id="platforms"></div>
+        <label class="field">스트림 키
+          <div class="key-row"><input id="streamKey" type="password" autocomplete="off" spellcheck="false" placeholder="스트림 키 붙여넣기"><button class="ghost" id="keyShow">보기</button></div>
+        </label>
+        <button class="link" id="keyHelp">스트림 키 확인하러 가기 →</button>
+        <div class="info-box" id="encInfo">인코더: 확인 중</div>
+        <p class="hint">치지직·SOOP는 1080p 60fps 8000kbps, 유튜브는 9000kbps로 자동 설정돼요. 그래픽카드 인코더(NVENC 등)가 있으면 자동으로 사용해요.</p>
+      </section>
+
+      <!-- 화면·캠 -->
+      <section class="tab" id="tab-sources">
+        <h4>게임 / 화면</h4>
+        <p class="hint">메인 장면에는 <b>전체 화면 게임이 자동으로 잡혀요.</b> 게임이 안 잡히면 모니터 화면을 추가하세요.</p>
+        <div class="row"><select id="monitorSel"></select><button id="btnScreen">모니터 화면 추가</button></div>
+
+        <h4>웹캠 <small>직접 고르고 배치해요</small></h4>
+        <div class="row"><select id="camSel"></select><button id="btnCam">웹캠 추가</button></div>
+        <div class="cam-layout" id="camLayout">
+          <div class="corners">
+            <button data-corner="topLeft">↖</button><button data-corner="topRight">↗</button>
+            <button data-corner="bottomLeft" class="on">↙</button><button data-corner="bottomRight">↘</button>
+          </div>
+          <label class="field">크기 <input id="camSize" type="range" min="15" max="60" value="30"></label>
+          <button class="ghost danger" id="btnCamRemove">웹캠 빼기</button>
+        </div>
+
+        <h4>버추얼</h4>
+        <div class="chips" id="virtualApps"></div>
+        <button id="btnVirtual">버추얼 넣기</button>
+        <p class="hint">VTube Studio·VSeeFace는 설정에서 <b>Spout2 출력</b>을 켜 주세요. 배경이 투명하게 들어와요.</p>
+      </section>
+
+      <!-- 사운드 분리 -->
+      <section class="tab" id="tab-audio">
+        <p class="hint">디스코드, 유튜브(브라우저), 음악 소리를 <b>각각 따로</b> 잡아요. 왼쪽 믹서에서 따로 조절할 수 있어요.</p>
+        <div class="chips" id="audioApps"></div>
+        <label class="check"><input type="checkbox" id="muteDesktop"> 데스크톱 소리 끄기 (같은 소리가 두 번 들어가는 것 방지)</label>
+        <p class="hint">게임 소리는 데스크톱 소리로 들어가요. 데스크톱 소리를 끄면 게임 소리도 같이 꺼지니 주의하세요.</p>
+        <button class="primary-sm" id="btnAudio">적용</button>
+      </section>
+
+      <!-- 타이머 -->
+      <section class="tab" id="tab-timer">
+        <div class="timer-big" id="timerBig">00:00</div>
+        <div class="row">
+          <button class="primary-sm" data-t="start">▶ 시작</button><button data-t="pause">⏸ 멈춤</button><button data-t="reset">↺ 리셋</button>
+        </div>
+        <label class="field">모드
+          <select id="tMode"><option value="stopwatch">경과 시간 (방송 몇 시간째)</option><option value="countdown">카운트다운 (방송 시작까지)</option></select>
+        </label>
+        <div class="grid2">
+          <label class="field">분 (카운트다운)<input id="tMin" type="number" min="1" max="600" value="10"></label>
+          <label class="field">스타일<select id="tTheme"><option value="red">블랙·레드</option><option value="white">화이트</option><option value="solid">레드</option></select></label>
+        </div>
+        <label class="field">문구<input id="tLabel" placeholder="예: 방송 시작까지"></label>
+        <div class="row"><button id="tApply">설정 적용</button><label class="check"><input type="checkbox" id="tVisible" checked> 화면에 보이기</label></div>
+      </section>
+
+      <!-- 문구·디자인 -->
+      <section class="tab" id="tab-design">
+        <label class="field">시작 전 문구<input id="waitingText"></label>
+        <label class="field">자리 비움 문구<input id="awayText"></label>
+        <label class="field">종료 문구<input id="endingText"></label>
+        <label class="field">배경 색<input id="bgColor" type="color"></label>
+        <button class="primary-sm" id="btnTexts">적용</button>
+        <h4>화질</h4>
+        <label class="field"><select id="quality"><option value="1080p60">1080p 60fps (권장)</option><option value="1080p30">1080p 30fps</option><option value="720p60">720p 60fps (저사양 PC)</option></select></label>
+        <p class="hint">화질 변경은 다시 시작한 뒤 적용돼요.</p>
+        <h4>정보</h4>
+        <p class="hint">Streamy Kit은 OBS Studio 엔진(GPL-2.0)과 obs-studio-node(GPL-2.0)를 사용합니다. 소스 코드: <button class="link inline" id="srcLink">GitHub</button></p>
+      </section>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <div class="actions">
+      <button class="go-live" id="btnLive"><i></i><span>방송 시작</span></button>
+      <button class="rec" id="btnRec" title="녹화"><i></i>녹화</button>
+    </div>
+  </aside>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

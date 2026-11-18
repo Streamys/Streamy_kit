@@ -1,0 +1,21 @@
+﻿Streamy Kit v0.2.0
+=================
+
+치지직 · 유튜브 · SOOP 스트리머를 위한 방송 프로그램입니다.
+
+오픈소스 고지
+------------
+Streamy Kit은 다음 오픈소스 소프트웨어를 사용하며, GPL-2.0-or-later 라이선스로 배포됩니다.
+
+- OBS Studio (libobs 및 플러그인) — GPL-2.0-or-later
+  https://github.com/obsproject/obs-studio
+- obs-studio-node (Streamlabs) — GPL-2.0
+  https://github.com/stream-labs/obs-studio-node
+- Electron — MIT
+  https://github.com/electron/electron
+
+Streamy Kit 소스 코드: https://github.com/Onin0782/streamy-kit-studio
+라이선스 전문: LICENSE.txt
+
+설정 파일 위치: %APPDATA%\Streamy Kit
+녹화 파일 위치: 내 동영상\Streamy Kit

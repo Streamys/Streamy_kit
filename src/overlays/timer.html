@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>Streamy Timer</title>
+<style>
+  html,body{margin:0;background:transparent;overflow:hidden;font-family:'Pretendard','Malgun Gothic',sans-serif}
+  .wrap{display:flex;justify-content:flex-end;padding:12px}
+  .box{display:inline-flex;flex-direction:column;align-items:center;padding:14px 34px 16px;border-radius:14px;
+       background:var(--bg);color:#fff;border-left:8px solid var(--accent);box-shadow:0 8px 24px rgba(0,0,0,.45)}
+  .label{font-size:24px;font-weight:800;letter-spacing:1px;color:var(--accent);text-transform:uppercase}
+  .time{font-size:76px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums}
+  .done .time{animation:blink 1s steps(2) infinite}
+  @keyframes blink{50%{opacity:.25}}
+  body.red{--bg:rgba(10,10,12,.88);--accent:#E11D2E}
+  body.white{--bg:rgba(255,255,255,.92);--accent:#E11D2E} body.white .box{color:#111}
+  body.solid{--bg:#E11D2E;--accent:#fff}
+</style></head>
+<body class="red">
+<div class="wrap"><div class="box" id="box"><div class="label" id="label"></div><div class="time" id="time">00:00</div></div></div>
+<script>
+  let st = null, skew = 0;
+  const fmt = (ms) => { const s = Math.floor(ms/1000), h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60, p = (n)=>String(n).padStart(2,'0'); return h?`${h}:${p(m)}:${p(x)}`:`${p(m)}:${p(x)}`; };
+  function cur() { if (!st) return 0; if (!st.running) return st.baseMs; const el = Date.now() + skew - st.startedAt; return st.mode === 'stopwatch' ? st.baseMs + el : Math.max(0, st.baseMs - el); }
+  function render() {
+    if (st) {
+      const ms = cur();
+      document.getElementById('time').textContent = fmt(st.mode === 'countdown' ? ms + 999 : ms);
+      const l = document.getElementById('label'); l.textContent = st.label || ''; l.style.display = st.label ? '' : 'none';
+      document.body.className = st.theme || 'red';
+      document.getElementById('box').classList.toggle('done', st.mode === 'countdown' && ms === 0 && st.running);
+    }
+    requestAnimationFrame(render);
+  }
+  function listen() { const es = new EventSource('/api/timer/events'); es.onmessage = (e) => { st = JSON.parse(e.data); skew = st.now - Date.now(); }; es.onerror = () => { es.close(); setTimeout(listen, 2000); }; }
+  listen(); render();
+</script>
+</body></html>
