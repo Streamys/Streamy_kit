@@ -247,7 +247,7 @@ function main() {
     if (!ov.isVisible()) ov.showInactive();
   }
   ipcMain.on('ov:rect', (_e, r) => { ovRect = r; ovCreate(); ovPlace(); });
-  ipcMain.on('ov:show', (_e, on) => { ovWant = !!on; ovCreate(); ovPlace(); });
+  ipcMain.on('ov:show', (_e, on) => { ovWant = !!on; if (ovWant) ovCreate(); ovPlace(); });
   ipcMain.on('ov:draw', (_e, d) => { try { if (ov && !ov.isDestroyed() && ovReady) ov.webContents.send('ov:draw', d); } catch {} });
 
   // ---------------------------------------------------------------- 미니 오버레이 (최소화했을 때)

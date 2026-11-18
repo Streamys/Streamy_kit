@@ -33,7 +33,7 @@ const DEFAULTS = {
   keys: { chzzk: '', youtube: '', soop: '' }, encoder: 'auto',
   appAudio: [], audioState: {}, devices: {}, showViewers: false, channels: { chzzk: '', youtube: '', soop: '' },
   timer: { mode: 'stopwatch', minutes: 10, label: '', theme: 'red' }, quality: '1080p60',
-  mode: 'setup', airOnLive: true, chatLog: false, autoUpdate: true, guide: true,
+  mode: 'setup', airOnLive: true, chatLog: false, autoUpdate: true, guide: true, phone: true, phoneOrient: 'v',
   mini: { on: true, platforms: ['chzzk', 'youtube', 'soop'], opacity: 30, count: 5 },
   virtualAuto: true, virtualAutoDone: [],
 };
@@ -726,6 +726,7 @@ function chatHtml(m) {
     + `${m.amount ? `<span class="amt">${esc(m.amount)}</span>` : ''}<span class="nk">${esc(m.nick)}</span><span class="tx">${body}</span>`;
 }
 function addChat(list) {
+  try { phoneChat(list); } catch {}
   const feed = $('chatFeed');
   feed.querySelector('.chat-empty')?.remove();
   const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 40;
@@ -1062,7 +1063,7 @@ function layoutDisplay() {
     const r = prev.getBoundingClientRect(), z = window.devicePixelRatio || 1;
     try { engine.moveDisplay(r.left * z, r.top * z, r.width * z, r.height * z); } catch (e) { rlog('warn', 'moveDisplay', e); }
     ipcRenderer.send('ov:rect', { x: r.left, y: r.top, width: r.width, height: r.height });
-    guideDraw();
+    guideDraw(); phoneLayout();
   });
 }
 new ResizeObserver(layoutDisplay).observe(prev);
@@ -1110,7 +1111,7 @@ async function boot() {
   try {
     engine.createDisplay(ipcRenderer.sendSync('app:window-handle'));
     prev.classList.add('has-engine');
-    layoutDisplay(); guideShow();
+    layoutDisplay(); guideShow(); phoneSync();
   } catch (e) { rlog('error', 'display', e); toast('미리보기 화면을 만들지 못했어요. 설정 → 문제 해결에서 그래픽 가속을 꺼 보세요.', true); }
   renderScenes(); renderSources(); renderMixer(); renderTypes(); renderEncoders();
   if (soundOpen) renderDevices();
@@ -1175,6 +1176,7 @@ function setMode(m, quiet) {
     openTab(tabBeforeAir === 'chat' ? 'stream' : tabBeforeAir);
   }
   guideShow();
+  phoneSync();
   layoutDisplay();
   if (!quiet) { cfg.mode = m; save(); }
 }
@@ -1342,6 +1344,58 @@ function renderVirtualProps(name, v, curWindow, method) {
   $('vAll').addEventListener('click', guard(() => { if (DEMO) return; const n = engine.virtualToAllScenes(name); saveScenes(); toast(n ? `${n}개 장면에 더 넣었어요.` : '이미 모든 장면에 있어요.'); }));
   $('vRehook').addEventListener('click', guard(() => { if (DEMO) return; engine.rehookVirtual(name); toast('창을 다시 잡았어요.'); }));
   $('vSaveDef').addEventListener('click', () => { const cur = DEMO ? v : engine.getVirtual(name); cfg.virtualLast = { spot: cur.spot, size: cur.size, flip: cur.flip, bg: cur.bg, color: cur.color }; save(); toast('다음 버추얼부터 이 설정으로 띄울게요.'); });
+}
+
+
+// ================================================================== ON AIR: 스마트폰으로 볼 때
+function phoneVisible() { return mode === 'air' && cfg.phone !== false; }
+let phoneRaf = 0;
+function phoneLayout() {
+  if (phoneRaf) return;
+  phoneRaf = requestAnimationFrame(() => {
+    phoneRaf = 0;
+    if (!engineOk || !engine.phoneDisplay) return;
+    const r = $('phVideo').getBoundingClientRect(), z = window.devicePixelRatio || 1;
+    try { engine.movePhoneDisplay(r.left * z, r.top * z, r.width * z, r.height * z); } catch (e) { rlog('warn', 'phone move', e); }
+  });
+}
+function phoneSync() {
+  const on = phoneVisible();
+  $('phoneCol').hidden = !on;
+  $('phToggle').classList.toggle('on', cfg.phone !== false);
+  $('phone').className = 'phone ' + (cfg.phoneOrient === 'h' ? 'h' : 'v');
+  $('phOrient').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.o === (cfg.phoneOrient === 'h' ? 'h' : 'v')));
+  if (DEMO) { if (!$('phVideo').querySelector('img')) $('phVideo').innerHTML = '<img src="demo-preview.png" alt="">'; }
+  else if (engineOk) {
+    try {
+      if (on) { engine.createPhoneDisplay(ipcRenderer.sendSync('app:window-handle'), [0, 0, 0]); crumb('phone display on'); }
+      else if (engine.phoneDisplay) { engine.destroyPhoneDisplay(); crumb('phone display off'); }
+    } catch (e) { rlog('error', 'phone display', e); }
+  }
+  layoutDisplay(); phoneLayout();
+}
+$('phToggle').addEventListener('click', () => { cfg.phone = cfg.phone === false; save(); phoneSync(); });
+$('phOrient').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; cfg.phoneOrient = b.dataset.o; save(); phoneSync(); });
+new ResizeObserver(phoneLayout).observe($('phVideo'));
+new ResizeObserver(phoneLayout).observe($('phoneCol'));
+window.addEventListener('resize', phoneLayout);
+// 폰 화면 정보줄 (1초마다)
+setInterval(() => {
+  if (!phoneVisible()) return;
+  const st = miniState();
+  $('phLive').style.display = st.state === 'live' ? '' : 'none';
+  $('phTitle').textContent = st.scene ? `${st.scene}` : 'Streamy 방송';
+  $('phMeta').textContent = [st.state === 'live' ? st.time : '방송 전', st.viewers != null ? `시청자 ${Number(st.viewers).toLocaleString('ko-KR')}명` : ''].filter(Boolean).join(' · ');
+}, 1000);
+// 폰 화면 채팅 (최근 12개, 모바일 크기 글씨)
+const phMsgs = [];
+function phoneChat(list) {
+  for (const m of list) if (m.kind !== 'system') phMsgs.push(m);
+  if (phMsgs.length > 12) phMsgs.splice(0, phMsgs.length - 12);
+  $('phChat').innerHTML = phMsgs.map((m) => {
+    const body = (m.parts || []).map((x) => (x.t === 'img' ? `<img src="${esc(x.src)}" alt="" referrerpolicy="no-referrer">` : esc(x.v))).join('');
+    return `<div class="pc p-${m.p}">${m.amount ? `<span class="amt">${esc(m.amount)}</span>` : ''}<b>${esc(m.nick)}</b>${body}</div>`;
+  }).join('');
 }
 
 // ================================================================== 종료

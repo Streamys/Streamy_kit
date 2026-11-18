@@ -35,6 +35,7 @@
 
 <div class="layout">
   <main class="stage">
+    <div class="stage-top">
     <div class="preview-wrap" id="previewWrap">
       <div class="preview" id="preview">
         <div class="preview-empty" id="previewEmpty">
@@ -45,6 +46,23 @@
         </div>
       </div>
     </div>
+    <!-- ON AIR: 스마트폰으로 볼 때 -->
+    <aside class="phone-col" id="phoneCol" hidden>
+      <div class="ph-head"><b>📱 폰으로 볼 때</b>
+        <div class="seg ph-seg" id="phOrient"><button data-o="v" class="on">세로</button><button data-o="h">가로</button></div>
+      </div>
+      <div class="phone v" id="phone">
+        <div class="ph-screen" id="phScreen">
+          <div class="ph-status"><span>9:41</span><i></i><span>5G ▮▮▮</span></div>
+          <div class="ph-video" id="phVideo"></div>
+          <div class="ph-info"><span class="ph-live" id="phLive">LIVE</span><b id="phTitle">방송 제목</b><small id="phMeta"></small></div>
+          <div class="ph-chat" id="phChat"></div>
+          <div class="ph-input">채팅을 입력해 주세요</div>
+        </div>
+      </div>
+      <p class="ph-hint">실제 폰 크기와 비슷하게 줄여서 보여 줘요. 글씨 · 알림창이 읽히는지 확인하세요.</p>
+    </aside>
+    </div>
     <div class="edit-bar" id="editBar">
       <span class="sel-name" id="selName"></span>
       <span class="sel-size" id="selSize"></span>
@@ -54,7 +72,7 @@
     </div>
 
     <section class="scene-row">
-      <div class="row-head"><h3>장면</h3><small>클릭해서 전환 · 더블클릭으로 이름 바꾸기 · 우클릭으로 삭제</small></div>
+      <div class="row-head"><h3>장면</h3><small>클릭해서 전환 · 더블클릭으로 이름 바꾸기 · 우클릭으로 삭제</small><button class="ph-toggle" id="phToggle" title="스마트폰으로 볼 때 화면 보이기/숨기기">📱 폰 화면</button></div>
       <div class="scene-tiles" id="sceneTiles"></div>
     </section>
 

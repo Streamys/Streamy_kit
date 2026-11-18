@@ -149,6 +149,7 @@ class Engine {
     try { this.stopStream(true); } catch {}
     try { this.stopRecording(true); } catch {}
     try { this.destroyDisplay(); } catch {}
+    try { this.destroyPhoneDisplay(); } catch {}
     try { N.RemoveVolmeterCallback?.(); N.RemoveSourceCallback?.(); } catch {}
     for (const a of Object.values(this.audio)) { try { a.volmeter.detach(); a.volmeter.destroy(); a.fader.detach(); a.fader.destroy(); a.input.release(); } catch {} }
     for (const p of Object.values(this.probes)) { try { p.release(); } catch {} }
@@ -179,6 +180,23 @@ class Engine {
     N.OBS_content_moveDisplay(this.display, Math.round(x), Math.round(y));
     N.OBS_content_resizeDisplay(this.display, Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
   }
+  // 폰 화면 미리보기용 두 번째 화면 (방송 결과 그대로, 편집 표시 없음)
+  createPhoneDisplay(windowHandle, bg = [0, 0, 0]) {
+    if (this.phoneDisplay) return;
+    const N = this.osn.NodeObs;
+    this.phoneDisplay = 'streamy-phone';
+    N.OBS_content_createDisplay(windowHandle, this.phoneDisplay, E.Render.Main, false, this.video);
+    N.OBS_content_setPaddingColor(this.phoneDisplay, bg[0], bg[1], bg[2]);
+    N.OBS_content_setPaddingSize(this.phoneDisplay, 0);
+    N.OBS_content_setShouldDrawUI(this.phoneDisplay, false);
+  }
+  movePhoneDisplay(x, y, w, h) {
+    if (!this.phoneDisplay) return;
+    const N = this.osn.NodeObs;
+    N.OBS_content_moveDisplay(this.phoneDisplay, Math.round(x), Math.round(y));
+    N.OBS_content_resizeDisplay(this.phoneDisplay, Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
+  }
+  destroyPhoneDisplay() { if (this.phoneDisplay) { const d = this.phoneDisplay; this.phoneDisplay = null; this.osn.NodeObs.OBS_content_destroyDisplay(d); } }
   destroyDisplay() { if (this.display) { this.osn.NodeObs.OBS_content_destroyDisplay(this.display); this.display = null; } }
   previewRect(dispW, dispH) {
     try {

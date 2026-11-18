@@ -405,3 +405,36 @@ body.drag-ch .sound::after{content:'사운드 칸 밖에 놓으면 빠져요';po
 .ch .nm.grab{cursor:grab}.ch .nm.grab:active{cursor:grabbing}
 .ch .nm.grab::before{content:'⠿';color:var(--sub);margin-right:4px;font-size:11px}
 .ch.dragging{opacity:.35}
+
+/* ---------------------------------------------------------------- ON AIR: 스마트폰으로 볼 때 */
+.stage-top{flex:1;min-height:0;display:flex;gap:14px}
+.stage-top .preview-wrap{flex:1;min-width:0}
+.ph-toggle{display:none;margin-left:auto;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;color:var(--sub)}
+.ph-toggle.on{border-color:var(--red);color:#fff;background:rgba(225,29,46,.16)}
+body.mode-air .ph-toggle{display:block}
+.phone-col{flex:none;display:flex;flex-direction:column;align-items:center;gap:8px;min-height:0}
+.phone-col[hidden]{display:none}
+.ph-head{display:flex;align-items:center;gap:10px;width:100%;justify-content:space-between;font-size:12px}
+.ph-seg{margin:0}.ph-seg button{padding:3px 10px!important;font-size:11px!important}
+.phone{flex:1;min-height:0;background:#050506;border:3px solid #2c2c33;border-radius:34px;padding:9px;box-shadow:0 10px 30px rgba(0,0,0,.5),inset 0 0 0 1px #000}
+.phone.v{aspect-ratio:9/19.5;max-height:100%;height:100%;max-width:310px}
+.phone.h{aspect-ratio:19.5/9;width:min(560px,100%);height:auto;flex:none;margin-top:auto;margin-bottom:auto}
+.ph-screen{position:relative;width:100%;height:100%;border-radius:26px;overflow:hidden;background:#0f0f12;display:flex;flex-direction:column}
+.ph-status{display:flex;justify-content:space-between;align-items:center;padding:6px 16px 4px;font-size:10px;font-weight:700;color:#ddd;flex:none}
+.ph-status i{width:70px;height:16px;border-radius:10px;background:#000}
+.ph-video{flex:none;width:100%;aspect-ratio:16/9;background:#000;position:relative;overflow:hidden}
+.ph-video img{width:100%;height:100%;object-fit:cover}
+.ph-info{flex:none;padding:8px 10px 6px;display:flex;flex-wrap:wrap;align-items:center;gap:5px;border-bottom:1px solid #222}
+.ph-info b{font-size:12px;flex:1 1 100%;order:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ph-info small{font-size:10px;color:#999}
+.ph-live{font-size:9px;font-weight:900;background:var(--red);color:#fff;border-radius:3px;padding:1px 4px}
+.ph-chat{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;gap:3px;padding:6px 10px;font-size:11px;line-height:1.35}
+.ph-chat .pc b{margin-right:4px;font-weight:700}
+.ph-chat .pc.p-chzzk b{color:#7CF5C8}.ph-chat .pc.p-youtube b{color:#FF8A9A}.ph-chat .pc.p-soop b{color:#93B8FF}
+.ph-chat .pc .amt{background:var(--red);color:#fff;border-radius:3px;padding:0 4px;margin-right:4px;font-weight:800;font-size:10px}
+.ph-chat img{height:14px;vertical-align:middle}
+.ph-input{flex:none;margin:4px 8px 10px;padding:7px 10px;border-radius:99px;background:#1d1d22;color:#666;font-size:10px}
+/* 가로: 영상만 꽉 차게 */
+.phone.h .ph-status,.phone.h .ph-info,.phone.h .ph-chat,.phone.h .ph-input{display:none}
+.phone.h .ph-video{flex:1;aspect-ratio:auto;height:100%}
+.ph-hint{font-size:11px;color:var(--sub);text-align:center;max-width:310px;margin:0;line-height:1.5}
