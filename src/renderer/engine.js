@@ -32,7 +32,7 @@ const SOURCE_TYPES = {
 const PLATFORMS = {
   chzzk: { name: '치지직', server: 'rtmp://global-rtmp.lip2.navercorp.com:8080/relay', bitrate: 8000, keyint: 1, bframes: 0, keyHelp: 'https://studio.chzzk.naver.com/setting' },
   youtube: { name: '유튜브', server: 'rtmps://a.rtmps.youtube.com:443/live2', bitrate: 9000, keyint: 2, bframes: 2, keyHelp: 'https://studio.youtube.com/' },
-  soop: { name: 'SOOP', server: 'rtmp://stream.sooplive.co.kr/app/', bitrate: 8000, keyint: 2, bframes: 0, keyHelp: 'https://dashboard.sooplive.co.kr' },
+  soop: { name: 'SOOP', server: 'rtmp://stream.soop.live/app/', bitrate: 8000, keyint: 2, bframes: 0, keyHelp: 'https://dashboard.sooplive.co.kr' },
 };
 
 // H.264 인코더 (RTMP 송출용). 자동 선택 우선순위 순서

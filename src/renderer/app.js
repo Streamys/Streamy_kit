@@ -1,4 +1,4 @@
-// Streamy Kit — 화면 로직 (v0.5)
+// Streamy Kit — 화면 로직 (v0.7)
 'use strict';
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
@@ -18,7 +18,7 @@ const DEMO = !!process.env.STREAMY_DEMO;
 // ================================================================== 설정 저장
 const DEFAULTS = {
   keys: { chzzk: '', youtube: '', soop: '' }, encoder: 'auto',
-  appAudio: [], audioState: {}, devices: {}, showViewers: false, channels: { chzzk: '' },
+  appAudio: [], audioState: {}, devices: {}, showViewers: false, channels: { chzzk: '', youtube: '', soop: '' },
   timer: { mode: 'stopwatch', minutes: 10, label: '', theme: 'red' }, quality: '1080p60',
 };
 const scenesFile = path.join(path.dirname(info.settingsFile), 'scenes.json');
@@ -528,6 +528,136 @@ $('chzzkId').addEventListener('change', () => {
 });
 setInterval(pollViewers, 60000);
 
+// ================================================================== 채팅 탭 (통합 + 플랫폼별 공식 창)
+const CHAT_P = { chzzk: '치지직', youtube: '유튜브', soop: 'SOOP' };
+const chat = { view: 'all', status: {}, hidden: new Set(cfg.chatHidden || []), stick: true, unseen: 0, webs: {} };
+const CHAT_MAX = 300;
+function normYt(v) {
+  v = v.trim(); let m;
+  if ((m = v.match(/(UC[\w-]{22})/))) return m[1];
+  if ((m = v.match(/@([\w.\-]+)/))) return '@' + m[1];
+  if ((m = v.match(/(?:v=|youtu\.be\/|\/live\/)([\w-]{11})/))) return v;     // 방송 주소 그대로
+  return v.replace(/^https?:\/\/(www\.)?youtube\.com\//, '').replace(/[/?#].*$/, '');
+}
+function normSoop(v) { return v.trim().replace(/^https?:\/\/(ch\.|play\.|www\.)?sooplive\.(co\.kr|com)\/(station\/)?/, '').replace(/[/?#].*$/, ''); }
+$('ytId').value = cfg.channels.youtube || '';
+$('soopId').value = cfg.channels.soop || '';
+$('ytId').addEventListener('change', () => { const v = normYt($('ytId').value); $('ytId').value = v; cfg.channels.youtube = v; save(); chatConfigure(); });
+$('soopId').addEventListener('change', () => { const v = normSoop($('soopId').value); $('soopId').value = v; cfg.channels.soop = v; save(); chatConfigure(); });
+$('chzzkId').addEventListener('change', () => chatConfigure());
+async function chatConfigure() {
+  const ch = { ...cfg.channels }; if (ch.chzzk && !/^[0-9a-f]{32}$/i.test(ch.chzzk)) ch.chzzk = '';
+  try { const st = await ipcRenderer.invoke('chat:configure', ch); for (const [p, v] of Object.entries(st || {})) chat.status[p] = { p, ...v }; } catch (e) { rlog('error', 'chat configure', e); }
+  renderChatState(); renderChatWeb();
+}
+const STATE_KO = { off: '연결 안 함', wait: '방송 대기', live: '연결됨', error: '오류' };
+function renderChatState() {
+  const box = $('chatState');
+  const on = Object.keys(CHAT_P).filter((p) => cfg.channels[p]);
+  box.innerHTML = on.map((p) => { const st = chat.status[p] || { state: 'wait' };
+    return `<span class="cs ${st.state}${chat.hidden.has(p) ? ' hide' : ''}" data-p="${p}" title="${esc(st.detail || STATE_KO[st.state] || '')} · 클릭하면 숨기기/보이기"><i></i>${CHAT_P[p]} ${esc(st.state === 'live' ? '' : STATE_KO[st.state] || '')}</span>`; }).join('');
+  const anyLive = on.some((p) => chat.status[p]?.state === 'live');
+  $('chatDot').className = 'tab-dot' + (chat.unseen && chat.view !== 'open' ? ' new' : anyLive ? ' live' : '');
+  if (!on.length) {
+    $('chatFeed').innerHTML = `<div class="chat-empty"><b>채널을 연결하면 여기에 채팅이 모여요</b><br>설정 탭 → 채널 연결에 치지직 · 유튜브 · SOOP 채널을 한 번만 넣어 주세요.<br><button id="chatGoSettings">채널 연결하러 가기</button></div>`;
+    $('chatGoSettings').onclick = () => { openTab('settings'); $('chzzkId').focus(); };
+  } else if (!$('chatFeed').querySelector('.cm')) {
+    $('chatFeed').innerHTML = `<div class="chat-empty">${anyLive ? '채팅을 기다리는 중…' : '방송이 켜지면 채팅이 자동으로 붙어요.'}</div>`;
+  }
+}
+$('chatState').addEventListener('click', (e) => {
+  const el = e.target.closest('.cs'); if (!el) return;
+  const p = el.dataset.p; chat.hidden.has(p) ? chat.hidden.delete(p) : chat.hidden.add(p);
+  cfg.chatHidden = [...chat.hidden]; save();
+  document.querySelectorAll('#chatFeed .cm').forEach((x) => { x.hidden = chat.hidden.has(x.dataset.p); });
+  renderChatState();
+});
+function chatHtml(m) {
+  const body = (m.parts || []).map((x) => (x.t === 'img' ? `<img src="${esc(x.src)}" alt="${esc(x.alt)}" title="${esc(x.alt)}" loading="lazy" referrerpolicy="no-referrer">` : esc(x.v))).join('');
+  const t = new Date(m.ts || Date.now()); const hm = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+  return `<i class="pd ${m.p}" title="${CHAT_P[m.p]} · ${hm}"></i>${m.badge ? `<span class="bd${m.badge === '스트리머' ? ' st' : ''}">${esc(m.badge)}</span>` : ''}`
+    + `${m.amount ? `<span class="amt">${esc(m.amount)}</span>` : ''}<span class="nk">${esc(m.nick)}</span><span class="tx">${body}</span>`;
+}
+function addChat(list) {
+  const feed = $('chatFeed');
+  feed.querySelector('.chat-empty')?.remove();
+  const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 40;
+  const frag = document.createDocumentFragment();
+  for (const m of list) {
+    const d = document.createElement('div');
+    d.className = `cm p-${m.p} ${m.kind || 'chat'}${m.recent ? ' recent' : ''}`;
+    d.dataset.p = m.p; d.hidden = chat.hidden.has(m.p);
+    d.innerHTML = chatHtml(m);
+    frag.appendChild(d);
+  }
+  feed.appendChild(frag);
+  while (feed.children.length > CHAT_MAX) feed.firstElementChild.remove();
+  if (atBottom || chat.stick) { feed.scrollTop = feed.scrollHeight; chat.stick = true; }
+  else { chat.unseen += list.filter((m) => !m.recent).length; $('chatMore').hidden = !chat.unseen; $('chatMore').textContent = `새 채팅 ${chat.unseen}개 ↓`; }
+  if (!$('tab-chat').classList.contains('on') && list.some((m) => !m.recent)) $('chatDot').className = 'tab-dot new';
+}
+$('chatFeed').addEventListener('scroll', () => {
+  const f = $('chatFeed'); chat.stick = f.scrollHeight - f.scrollTop - f.clientHeight < 40;
+  if (chat.stick) { chat.unseen = 0; $('chatMore').hidden = true; }
+});
+$('chatMore').addEventListener('click', () => { const f = $('chatFeed'); f.scrollTop = f.scrollHeight; chat.stick = true; chat.unseen = 0; $('chatMore').hidden = true; });
+document.querySelector('.tabs button[data-tab="chat"]').addEventListener('click', () => { if (chat.view === 'all') { const f = $('chatFeed'); if (chat.stick) f.scrollTop = f.scrollHeight; } renderChatState(); });
+
+// 플랫폼별: 공식 채팅창을 그대로 (로그인하면 거기서 채팅 입력 가능)
+function webUrl(p) {
+  const id = cfg.channels[p]; if (!id) return '';
+  if (p === 'chzzk') return /^[0-9a-f]{32}$/i.test(id) ? `https://chzzk.naver.com/live/${id}/chat` : '';
+  if (p === 'youtube') return chat.status.youtube?.url || '';
+  if (p === 'soop') return `https://play.sooplive.com/${encodeURIComponent(id)}`;
+  return '';
+}
+function renderChatWeb() {
+  const p = chat.view, box = $('chatWeb');
+  $('chatAll').hidden = p !== 'all'; box.hidden = p === 'all';
+  for (const [k, w] of Object.entries(chat.webs)) w.el.hidden = k !== p;
+  if (p === 'all') return;
+  box.querySelector('.chat-empty')?.remove();
+  const url = webUrl(p);
+  let w = chat.webs[p];
+  if (w && w.url !== url) { w.el.remove(); delete chat.webs[p]; w = null; }
+  if (!url) {
+    const msg = !cfg.channels[p] ? `<b>${CHAT_P[p]} 채널이 연결되지 않았어요</b><br><button id="chatGoSettings2">채널 연결하러 가기</button>`
+      : p === 'youtube' ? '<b>유튜브 방송이 켜지면 채팅창이 떠요</b><br>방송 시작 후 몇 초 안에 자동으로 나타나요.' : '<b>채널 ID를 확인해 주세요</b>';
+    box.insertAdjacentHTML('beforeend', `<div class="chat-empty">${msg}</div>`);
+    const b = $('chatGoSettings2'); if (b) b.onclick = () => openTab('settings');
+    return;
+  }
+  if (!w) {
+    const el = document.createElement('div'); el.style.cssText = 'display:flex;flex-direction:column;flex:1;min-height:0';
+    el.innerHTML = `<div class="bar"><span>${CHAT_P[p]} 공식 채팅창 · 로그인하면 여기서 채팅 입력도 돼요</span><button data-a="reload">새로고침</button><button data-a="open">브라우저로</button></div>`;
+    const wv = document.createElement('webview');
+    wv.setAttribute('partition', 'persist:chat');
+    wv.setAttribute('allowpopups', '');
+    wv.setAttribute('src', url);
+    if (p === 'soop') wv.addEventListener('dom-ready', () => wv.insertCSS('#webplayer,#player_area,.player_area,#player,.htmlplayer_wrap{display:none!important}').catch(() => {}));
+    el.appendChild(wv);
+    el.querySelector('[data-a=reload]').onclick = () => { try { wv.reload(); } catch {} };
+    el.querySelector('[data-a=open]').onclick = () => ipcRenderer.invoke('app:open-url', url);
+    box.appendChild(el);
+    w = chat.webs[p] = { el, url };
+  }
+  w.el.hidden = false;
+}
+$('chatSwitch').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  chat.view = b.dataset.v;
+  $('chatSwitch').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+  renderChatWeb();
+  if (chat.view === 'all') { const f = $('chatFeed'); if (chat.stick) f.scrollTop = f.scrollHeight; }
+});
+ipcRenderer.on('chat:messages', (_e, list) => addChat(list));
+ipcRenderer.on('chat:status', (_e, st) => {
+  const prev = chat.status[st.p] || {};
+  chat.status[st.p] = st; renderChatState();
+  if (st.p === 'youtube' && prev.url !== st.url && chat.view === 'youtube') renderChatWeb();
+  if (st.state === 'live' && prev.state !== 'live') addChat([{ p: st.p, kind: 'system', nick: '', parts: [{ t: 'text', v: `${CHAT_P[st.p]} 채팅에 연결됐어요` }] }]);
+});
+
 // ================================================================== 방송 탭: 키 하나 입력 → 플랫폼 추측
 let streamStates = {};
 const STATE_TEXT = { off: '오프라인', ready: '대기 중', starting: '연결 중…', live: 'LIVE', reconnecting: '재연결 중…', stopping: '종료 중…', err: '오류' };
@@ -659,6 +789,7 @@ $('btnLive').addEventListener('click', guard(async () => {
   const targets = Object.entries(cfg.keys).filter(([, key]) => key).map(([platform, key]) => ({ platform, key }));
   if (!targets.length) { openTab('stream'); return toast('방송 탭에서 스트림 키를 하나 이상 넣어 주세요.', true); }
   streamStates = {}; engine.startStream(targets);
+  setTimeout(() => ipcRenderer.invoke('chat:kick').catch(() => {}), 8000);   // 방송이 플랫폼에 잡히면 채팅 바로 연결
 }));
 engine.on('record', (r) => {
   $('btnRec').classList.toggle('on', r.state === 'on');
@@ -786,7 +917,7 @@ async function boot() {
   $('ver').textContent = 'v' + info.version;
   $('gpuOff').checked = !!info.gpuOff;
   engine.encoderPref = cfg.encoder || 'auto';
-  renderPlatforms(); renderEncoders(); setTopState(); timerListen(); renderViewers(); pollViewers(); renderUpdate();
+  renderPlatforms(); renderEncoders(); setTopState(); timerListen(); renderViewers(); pollViewers(); renderUpdate(); if (!DEMO) chatConfigure(); else renderChatState();
   $('tMode').value = cfg.timer.mode; $('tMin').value = cfg.timer.minutes; $('tLabel').value = cfg.timer.label; $('tTheme').value = cfg.timer.theme;
   timer({ type: 'config', ...cfg.timer });
   renderScenes(); renderSources(); renderMixer();
@@ -838,6 +969,21 @@ function demoMode() {
   cfg.keys = { chzzk: 'sk_live_8d2f91c7a4', youtube: 'abcd-efgh-ijkl-mnop-qrst', soop: '' }; streamStates = { chzzk: { state: 'live', startedAt: Date.now() - 5047000 }, youtube: { state: 'live', startedAt: Date.now() - 5047000 } };
   renderPlatforms(); setTopState(); $('keyInput').value = 'rtmp://stream.sooplive.co.kr/app/streamy1234-5678'; showGuess();
   renderScenes(); renderSources(); renderMixer(); renderViewers(); renderEncoders();
+  cfg.channels = { chzzk: 'a'.repeat(32), youtube: '@streamy', soop: 'streamy' };
+  chat.status = { chzzk: { p: 'chzzk', state: 'live' }, youtube: { p: 'youtube', state: 'live' }, soop: { p: 'soop', state: 'wait' } };
+  addChat([
+    { p: 'chzzk', nick: '치즈냥', parts: [{ t: 'text', v: '오늘 방송 화질 미쳤다 ㄷㄷ' }], badge: '' },
+    { p: 'youtube', nick: 'MinJun Kim', parts: [{ t: 'text', v: '유튜브에서 보고 있어요!' }] },
+    { p: 'chzzk', nick: '매니저봇', parts: [{ t: 'text', v: '공지: 오늘은 10시까지 방송합니다' }], badge: '매니저' },
+    { p: 'chzzk', kind: 'donation', nick: '후원왕', amount: '10,000치즈', parts: [{ t: 'text', v: '방송 잘 보고 있어요 화이팅!!' }] },
+    { p: 'youtube', nick: 'streamy_fan', parts: [{ t: 'text', v: '사운드 분리 어떻게 한 거예요?' }], badge: '멤버' },
+    { p: 'soop', nick: '숲속주민', parts: [{ t: 'text', v: 'SOOP에서도 같이 봐요 ㅎㅎ' }], badge: '팬' },
+    { p: 'youtube', kind: 'donation', nick: 'Jiwoo', amount: '₩5,000', parts: [{ t: 'text', v: '슈퍼챗 첫 후원!' }] },
+    { p: 'soop', kind: 'donation', nick: '별풍요정', amount: '별풍선 100개', parts: [] },
+    { p: 'chzzk', kind: 'sub', nick: '정기구독러', amount: '6개월 구독', parts: [{ t: 'text', v: '반년 됐네요' }] },
+    { p: 'chzzk', nick: 'ㅇㅇ', parts: [{ t: 'text', v: 'ㅋㅋㅋㅋㅋㅋㅋ' }] },
+  ]);
+  renderChatState(); if (process.env.STREAMY_TAB) openTab(process.env.STREAMY_TAB);
   upd = { status: 'available', info: { version: '0.6.1', notes: '- 사운드 탭 개선\n- 버그 수정' } }; renderUpdate();
   setInterval(() => { const now = Date.now(); for (const a of demo.live) liveLevels[a.exe.toLowerCase()] = { v: a.peak ? a.peak + Math.sin(now / 120 + a.exe.length) * 0.15 : 0, t: now }; for (const a of demo.sep) liveLevels[a.exe.toLowerCase()] = { v: 0.35 + Math.sin(now / 90) * 0.1, t: now }; }, 100);
 }

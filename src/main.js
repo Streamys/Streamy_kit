@@ -72,6 +72,7 @@ function main() {
         contextIsolation: false,
         backgroundThrottling: false,
         spellcheck: false,
+        webviewTag: true,          // 채팅 탭: 플랫폼 공식 채팅창 (로그인 유지, Node 접근 없음)
       },
     });
     win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -129,6 +130,7 @@ function main() {
     if (quitting) return;
     quitting = true;
     stopAudioSessions();
+    try { chat.stopAll(); } catch {}
     log.warn('main', 'force quit:', why);
     try { if (win && !win.isDestroyed()) win.hide(); } catch {}
     await killOwnEngine('force quit');
@@ -178,6 +180,22 @@ function main() {
   }
 
   // ---------------------------------------------------------------- 업데이트 (GitHub Releases)
+  // ---------------------------------------------------------------- 통합 채팅
+  const chat = require('./chat');
+  chat.init({ net, log, send: (ch, d) => { try { if (win && !win.isDestroyed()) win.webContents.send(ch, d); } catch {} } });
+  ipcMain.handle('chat:configure', (_e, ch) => chat.configure(ch));
+  ipcMain.handle('chat:kick', () => { chat.kick(); return true; });
+  // 채팅창 webview 안전장치: Node 끄기, 새 창은 기본 브라우저로
+  app.on('web-contents-created', (_e, wc) => {
+    wc.on('will-attach-webview', (_ev, prefs, params) => {
+      delete prefs.preload; prefs.nodeIntegration = false; prefs.contextIsolation = true; prefs.sandbox = true;
+      if (!/^https:\/\//.test(params.src || '')) _ev.preventDefault();
+    });
+    if (wc.getType() === 'webview') {
+      wc.setWindowOpenHandler(({ url }) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return { action: 'deny' }; });
+    }
+  });
+
   const updater = require('./updater');
   updater.init({ app, log, net, send: (ch, d) => { try { if (win && !win.isDestroyed()) win.webContents.send(ch, d); } catch {} } });
   ipcMain.handle('update:check', () => updater.check(true));
@@ -224,6 +242,7 @@ function main() {
     if (quitting) return;
     quitting = true;
     stopAudioSessions();
+    try { chat.stopAll(); } catch {}
     await killOwnEngine('after shutdown');
     log.info('main', 'quit');
     app.exit(0);

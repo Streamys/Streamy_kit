@@ -282,3 +282,48 @@ h4 small{font-weight:500;color:#6d6d75;margin-left:4px;font-size:11px}
 .upd-box b{display:block;font-size:13px}
 .upd-box small{display:block;font-size:11px;color:var(--sub);margin-top:2px}
 .upd-notes{font-size:11px;color:var(--sub);background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;white-space:pre-wrap;max-height:140px;overflow:auto;margin-bottom:12px;line-height:1.6}
+
+/* ---------------------------------------------------------------- 채팅 탭 */
+.tabs button{position:relative}
+.tab-dot{position:absolute;top:7px;right:2px;width:6px;height:6px;border-radius:50%;background:transparent}
+.tab-dot.live{background:#22C55E}.tab-dot.new{background:var(--red)}
+.tab.chat-tab.on{display:flex;flex-direction:column;height:100%;min-height:0;padding-bottom:0}
+.chat-switch{display:flex;gap:4px;margin-bottom:8px;flex:none}
+.chat-switch button{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 4px;font-size:12px;font-weight:700;color:var(--sub)}
+.chat-switch button.on{background:var(--red);border-color:var(--red);color:#fff}
+.pd{width:8px;height:8px;border-radius:2px;flex:none;display:inline-block}
+.pd.chzzk{background:#00FFA3}.pd.youtube{background:#FF0033}.pd.soop{background:#3B82F6}
+.chat-all{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
+.chat-state{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;flex:none}
+.chat-state .cs{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--sub);background:var(--card);border:1px solid var(--line);border-radius:99px;padding:3px 9px 3px 7px;cursor:pointer}
+.chat-state .cs i{width:6px;height:6px;border-radius:50%;background:var(--line2)}
+.chat-state .cs.live i{background:#22C55E}.chat-state .cs.wait i{background:var(--yellow)}.chat-state .cs.error i{background:var(--red)}
+.chat-state .cs.hide{opacity:.4;text-decoration:line-through}
+.chat-feed{flex:1;min-height:0;overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 4px;user-select:text;font-size:13px;line-height:1.45}
+.chat-feed::-webkit-scrollbar{width:6px}.chat-feed::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
+.cm{padding:3px 8px;border-radius:6px;word-break:break-word}
+.cm:hover{background:var(--card2)}
+.cm .pd{margin-right:6px;vertical-align:1px}
+.cm .nk{font-weight:700;margin-right:6px;color:#D4D4D8}
+.cm.p-chzzk .nk{color:#7CF5C8}.cm.p-youtube .nk{color:#FF8A9A}.cm.p-soop .nk{color:#93B8FF}
+.cm .bd{font-size:10px;font-weight:700;border-radius:4px;padding:1px 4px;margin-right:5px;background:var(--line2);color:var(--text);vertical-align:1px}
+.cm .bd.st{background:var(--red);color:#fff}
+.cm img{height:22px;vertical-align:middle;margin:0 1px}
+.cm.recent{opacity:.55}
+.cm.donation,.cm.sub{background:rgba(225,29,46,.12);border-left:3px solid var(--red);margin:3px 0;padding:6px 8px}
+.cm.sub{border-left-color:var(--yellow);background:rgba(245,183,0,.08)}
+.cm .amt{display:inline-block;font-weight:800;color:#fff;background:var(--red);border-radius:5px;padding:0 6px;margin-right:6px;font-size:12px}
+.cm.sub .amt{background:var(--yellow);color:#000}
+.cm.system{color:var(--sub);font-size:12px;font-style:italic}
+.chat-empty{color:var(--sub);font-size:12px;line-height:1.7;padding:18px 12px;text-align:center}
+.chat-empty b{color:var(--text)}
+.chat-empty button{margin-top:10px}
+.chat-more{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);background:var(--red);color:#fff;border:none;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.5)}
+.chat-web{flex:1;min-height:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card)}
+.chat-web webview{flex:1;width:100%;height:100%;border:none}
+.chat-web .bar{display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid var(--line);font-size:11px;color:var(--sub);flex:none}
+.chat-web .bar span{flex:1}
+.chat-web .bar button{background:none;border:1px solid var(--line2);border-radius:6px;padding:2px 8px;font-size:11px;color:var(--sub)}
+.chat-web .bar button:hover{color:var(--text);border-color:var(--red)}
+.tab-body{min-height:0}.tab-body:has(.chat-tab.on){overflow:hidden;padding-bottom:10px}
+.chat-web[hidden],.chat-all[hidden],.chat-more[hidden],.cm[hidden]{display:none!important}
