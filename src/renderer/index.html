@@ -22,11 +22,16 @@
     <span>송출 <b id="sKbps">-</b></span>
     <span>드롭 <b id="sDrop">-</b></span>
   </div>
+  <div class="win-btns">
+    <button id="winMin" title="최소화" aria-label="최소화"><svg viewBox="0 0 12 12"><path d="M2 6.5h8" /></svg></button>
+    <button id="winMax" title="최대화" aria-label="최대화"><svg viewBox="0 0 12 12" id="winMaxIcon"><rect x="2.5" y="2.5" width="7" height="7" rx="1" /></svg></button>
+    <button id="winClose" class="close" title="닫기" aria-label="닫기"><svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" /></svg></button>
+  </div>
 </header>
 
 <div class="layout">
   <main class="stage">
-    <div class="preview-wrap">
+    <div class="preview-wrap" id="previewWrap">
       <div class="preview" id="preview">
         <div class="preview-empty" id="previewEmpty">
           <div class="spinner" id="spinner"></div>
@@ -38,21 +43,20 @@
     </div>
     <div class="edit-bar" id="editBar">
       <span class="sel-name" id="selName"></span>
+      <span class="sel-size" id="selSize"></span>
       <div class="edit-actions">
         <button data-fit="fit">화면 맞춤</button><button data-fit="center">가운데</button><button data-fit="reset">원래 크기</button>
       </div>
     </div>
 
-    <!-- 장면: 정사각형 버튼 -->
     <section class="scene-row">
       <div class="row-head"><h3>장면</h3><small>클릭해서 전환 · 더블클릭으로 이름 바꾸기 · 우클릭으로 삭제</small></div>
       <div class="scene-tiles" id="sceneTiles"></div>
     </section>
 
-    <!-- 사운드 -->
     <section class="sound">
       <div class="row-head"><h3>사운드</h3><small>막대 뒤 움직임 = 지금 들어오는 소리</small>
-        <button class="gear" id="soundGear" title="사운드 분리 설정">⚙</button>
+        <button class="gear" id="soundGear" title="사운드 설정">⚙</button>
       </div>
       <div class="sound-list" id="mixer"></div>
     </section>
@@ -62,53 +66,58 @@
     <nav class="tabs">
       <button data-tab="stream" class="on">방송</button>
       <button data-tab="sources">소스</button>
-      <button data-tab="add">소스 추가</button>
       <button data-tab="sound">사운드</button>
       <button data-tab="timer">타이머</button>
       <button data-tab="settings">설정</button>
     </nav>
     <div class="tab-body">
-      <!-- 방송 -->
+      <!-- 방송: 플랫폼별 스트림 키 + 상태 -->
       <section class="tab on" id="tab-stream">
-        <h4>플랫폼</h4>
-        <div class="platforms" id="platforms"></div>
-        <label class="field">스트림 키
-          <div class="key-row"><input id="streamKey" type="password" autocomplete="off" spellcheck="false" placeholder="스트림 키 붙여넣기"><button class="ghost" id="keyShow">보기</button></div>
-        </label>
-        <button class="link" id="keyHelp">스트림 키 확인하러 가기 →</button>
-        <div class="info-box" id="encInfo">인코더: 확인 중</div>
-        <p class="hint">치지직·SOOP는 8000kbps, 유튜브는 9000kbps로 자동 설정돼요. 그래픽카드 인코더(NVENC 등)가 있으면 자동으로 사용해요.</p>
+        <h4>스트림 키 <small>키를 넣은 플랫폼으로 동시에 송출돼요</small></h4>
+        <div id="platformRows"></div>
+        <h4>인코더</h4>
+        <div class="enc-grid" id="encGrid"></div>
+        <p class="hint" id="encHint"></p>
       </section>
 
-      <!-- 소스 목록 (현재 장면) -->
+      <!-- 소스 -->
       <section class="tab" id="tab-sources">
-        <div class="list-head"><b id="srcSceneName">장면</b>의 소스
-          <div class="tools"><button id="srcAdd" class="accent">＋ 추가</button><button id="srcUp" title="앞으로">↑</button><button id="srcDown" title="뒤로">↓</button><button id="srcDel" title="삭제">🗑</button></div>
+        <div class="src-head">
+          <div class="src-title"><b id="srcSceneName">장면</b><small>의 소스</small></div>
+          <div class="src-tools">
+            <button id="srcAdd" class="accent" title="소스 추가">＋ 추가</button>
+            <button id="srcUp" title="앞으로">▲</button>
+            <button id="srcDown" title="뒤로">▼</button>
+            <button id="srcDel" title="선택한 소스 삭제">🗑</button>
+          </div>
         </div>
-        <ul class="list" id="sourceList"></ul>
+        <div class="add-box" id="addBox" hidden>
+          <div class="type-grid" id="typeGrid"></div>
+          <div class="add-form" id="addForm"></div>
+        </div>
+        <ul class="list src-list" id="sourceList"></ul>
+        <p class="hint tiny">더블클릭: 이름·이모지 바꾸기 · Ctrl+클릭: 여러 개 고르기 · Shift+클릭: 범위 고르기</p>
         <div id="propsBody"></div>
       </section>
 
-      <!-- 소스 추가 -->
-      <section class="tab" id="tab-add">
-        <div class="type-grid" id="typeGrid"></div>
-        <div class="add-form" id="addForm"></div>
-      </section>
-
-      <!-- 사운드 설정 (⚙) -->
+      <!-- 사운드 -->
       <section class="tab" id="tab-sound">
-        <h4>소리 따로 잡기</h4>
-        <p class="hint">따로 잡고 싶은 프로그램을 고르세요. 고른 프로그램마다 아래 사운드에 막대가 생기고, 각각 볼륨을 조절할 수 있어요.</p>
-        <div class="row"><select id="appPick"></select><button class="ghost" id="appRefresh" title="다시 찾기">↻</button><button class="primary-sm" id="appAdd">추가</button></div>
-        <p class="hint" style="margin-top:-4px">지금 켜져 있는 프로그램이 목록에 나와요. 없으면 프로그램을 켠 뒤 ↻를 누르세요.</p>
-        <h4>자주 쓰는 프로그램</h4>
-        <div class="chips" id="appPresets"></div>
-        <h4>지금 따로 잡는 소리</h4>
-        <ul class="list sep-list" id="sepList"></ul>
-        <p class="hint">같은 소리가 두 번 들리면 <b>데스크톱 소리</b>를 음소거하세요. (게임 소리도 같이 꺼지니 주의)</p>
-        <h4>기본 장치</h4>
-        <label class="field">데스크톱 소리<select id="devDesktop"></select></label>
+        <h4>기본 사운드 장치</h4>
+        <label class="field">데스크톱 소리 (스피커/헤드셋)<select id="devDesktop"></select></label>
         <label class="field">마이크<select id="devMic"></select></label>
+
+        <h4>사운드 분리 <small>왼쪽에서 오른쪽으로 끌어다 놓으세요</small></h4>
+        <div class="sep-board">
+          <div class="sep-col">
+            <div class="sep-title">지금 나오는 소리</div>
+            <div class="sep-zone" id="liveApps"></div>
+          </div>
+          <div class="sep-col">
+            <div class="sep-title">따로 잡는 소리</div>
+            <div class="sep-zone drop" id="sepApps"></div>
+          </div>
+        </div>
+        <p class="hint">따로 잡은 프로그램은 메인 화면 사운드에 막대가 따로 생겨요. 빼려면 다시 왼쪽으로 끌거나 ✕를 누르세요.<br>같은 소리가 두 번 들리면 <b>데스크톱 소리</b>를 음소거하세요 (게임 소리도 같이 꺼지니 주의).</p>
       </section>
 
       <!-- 타이머 -->
@@ -122,7 +131,7 @@
         </div>
         <label class="field">문구<input id="tLabel" placeholder="방송 시작까지"></label>
         <button id="tApply">설정 적용</button>
-        <p class="hint">방송 화면에 띄우려면 <b>소스 추가 → 타이머</b>를 넣으세요.</p>
+        <p class="hint">방송 화면에 띄우려면 <b>소스 → ＋ 추가 → 타이머</b>를 넣으세요.</p>
       </section>
 
       <!-- 설정 -->
@@ -140,7 +149,7 @@
         <p class="hint" style="margin-top:0">바꾸면 다시 시작한 뒤 적용돼요. 방송 화면(송출) 품질에는 영향 없어요.</p>
         <div class="row"><button id="btnLogs2">로그 폴더 열기</button><button id="btnRestart">다시 시작</button></div>
         <h4>단축키</h4>
-        <p class="hint">F1~F9 장면 전환 · 방향키 소스 이동 (Shift = 10배) · Delete 소스 삭제 · Esc 선택 해제</p>
+        <p class="hint">F1~F9 장면 전환 · 방향키 소스 이동 (Shift = 10배) · Delete 선택한 소스 삭제 · Esc 선택 해제</p>
         <h4>정보</h4>
         <p class="hint">Streamy Kit은 OBS Studio 엔진(GPL-2.0)과 obs-studio-node(GPL-2.0)를 사용합니다. <button class="link inline" id="srcLink">소스 코드</button></p>
       </section>

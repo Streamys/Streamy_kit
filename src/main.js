@@ -64,8 +64,8 @@ function main() {
       title: 'Streamy Kit', backgroundColor: '#0B0B0D', show: false,
       icon: path.join(__dirname, 'tray.png'),
       autoHideMenuBar: true,
-      titleBarStyle: 'hidden',
-      titleBarOverlay: { color: '#0B0B0D', symbolColor: '#F4F4F5', height: 36 },
+      frame: false,                    // 창 버튼(최소화/최대화/닫기)은 화면에서 직접 그림
+      thickFrame: true,                // 가장자리 끌어서 크기 조절 + 윈도우 스냅 유지
       webPreferences: {
         // 방송 엔진(네이티브 모듈)을 화면에서 직접 쓰기 위해 Node 통합 사용. 로컬 파일만 불러옵니다.
         nodeIntegration: true,
@@ -81,6 +81,9 @@ function main() {
     win.once('ready-to-show', () => show('ready'));
     setTimeout(() => show('timeout'), 2000);
 
+    const sendMax = () => { try { win.webContents.send('win:maximized', win.isMaximized()); } catch {} };
+    win.on('maximize', sendMax); win.on('unmaximize', sendMax);
+    win.on('closed', () => { stopAudioSessions(); win = null; });
     win.webContents.setWindowOpenHandler(({ url }) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return { action: 'deny' }; });
     win.webContents.on('will-navigate', (e) => e.preventDefault());
 
@@ -125,6 +128,7 @@ function main() {
   async function forceQuit(why) {
     if (quitting) return;
     quitting = true;
+    stopAudioSessions();
     log.warn('main', 'force quit:', why);
     try { if (win && !win.isDestroyed()) win.hide(); } catch {}
     await killOwnEngine('force quit');
@@ -137,6 +141,29 @@ function main() {
     if (win.isMinimized()) win.restore();
     win.show(); win.focus();
   }
+
+  // ---------------------------------------------------------------- 지금 소리 나는 프로그램 (윈도우 오디오 세션)
+  let sessionProc = null, sessionBuf = '';
+  function startAudioSessions() {
+    if (process.platform !== 'win32' || sessionProc) return;
+    const script = path.join(__dirname, 'audio-sessions.ps1');
+    sessionProc = require('child_process').spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script], { windowsHide: true });
+    log.info('main', 'audio sessions start pid', sessionProc.pid);
+    sessionProc.stdout.setEncoding('utf8');
+    sessionProc.stdout.on('data', (chunk) => {
+      sessionBuf += chunk;
+      let i;
+      while ((i = sessionBuf.indexOf('\n')) >= 0) {
+        const line = sessionBuf.slice(0, i).trim(); sessionBuf = sessionBuf.slice(i + 1);
+        if (!line) continue;
+        try { const data = JSON.parse(line); if (win && !win.isDestroyed()) win.webContents.send('audio-sessions', data); }
+        catch { /* 무시 */ }
+      }
+    });
+    sessionProc.stderr.on('data', (d) => log.warn('audio-sessions', String(d).slice(0, 500)));
+    sessionProc.on('exit', (code) => { log.info('main', 'audio sessions exit', code); sessionProc = null; sessionBuf = ''; });
+  }
+  function stopAudioSessions() { if (sessionProc) { try { sessionProc.kill(); } catch {} sessionProc = null; } }
 
   function createTray() {
     tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'tray.png')));
@@ -164,6 +191,11 @@ function main() {
       gpuOff: fs.existsSync(GPU_OFF_FLAG),
     };
   });
+  ipcMain.on('win:minimize', () => win && win.minimize());
+  ipcMain.on('win:toggle-max', () => { if (!win) return; win.isMaximized() ? win.unmaximize() : win.maximize(); });
+  ipcMain.on('win:close', () => win && win.close());
+  ipcMain.on('audio-sessions:start', startAudioSessions);
+  ipcMain.on('audio-sessions:stop', stopAudioSessions);
   ipcMain.on('app:window-handle', (e) => { e.returnValue = win.getNativeWindowHandle(); });
   // 엔진 시작 전에 지난번에 남은 엔진 프로세스부터 정리
   ipcMain.handle('engine:prepare', async () => { if (!enginePrepared) enginePrepared = killOwnEngine('startup'); await enginePrepared; return true; });
@@ -177,6 +209,7 @@ function main() {
   ipcMain.on('app:ready-to-quit', async () => {
     if (quitting) return;
     quitting = true;
+    stopAudioSessions();
     await killOwnEngine('after shutdown');
     log.info('main', 'quit');
     app.exit(0);

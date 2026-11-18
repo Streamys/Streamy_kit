@@ -1,7 +1,8 @@
-// Streamy Kit 방송 엔진 래퍼 (v0.3)
+// Streamy Kit 방송 엔진 래퍼 (v0.5)
 // OBS 엔진(libobs)을 obs-studio-node 모듈로 불러와서 Streamy Kit에 필요한 기능만 감쌉니다.
 // - 장면/소스는 사용자가 직접 만들고, 미리보기에서 끌어서 옮기고 크기를 바꿉니다.
-// - 오디오(데스크톱/마이크/앱별)는 장면과 상관없이 항상 들리는 "오디오 버스"에 둡니다.
+// - 오디오(데스크톱/마이크/프로그램별)는 장면과 상관없이 항상 들리는 "오디오 버스"에 둡니다.
+// - 장치/창 목록은 한 번 만든 "조회용 소스"를 계속 재사용합니다 (매번 만들고 지우면 엔진이 불안정해짐).
 'use strict';
 const path = require('path');
 const fs = require('fs');
@@ -15,26 +16,16 @@ const E = {
 
 // 추가할 수 있는 소스 종류
 const SOURCE_TYPES = {
-  monitor: { label: '모니터 화면', icon: '🖥', type: 'monitor_capture', prop: 'monitor_id', fit: true },
+  monitor: { label: '모니터 화면', icon: '🖥️', type: 'monitor_capture', prop: 'monitor_id', fit: true },
   window: { label: '프로그램 창', icon: '🪟', type: 'window_capture', prop: 'window', fit: true },
   game: { label: '게임', icon: '🎮', type: 'game_capture', prop: 'window', fit: true },
   webcam: { label: '웹캠', icon: '📷', type: 'dshow_input', prop: 'video_device_id', fit: false },
-  image: { label: '이미지', icon: '🖼', type: 'image_source', file: true, fit: false },
-  text: { label: '텍스트', icon: '🅃', type: 'text_gdiplus', text: true, fit: false },
-  web: { label: '웹페이지 (알림창 등)', icon: '🌐', type: 'browser_source', url: true, fit: false },
-  timer: { label: '타이머', icon: '⏱', type: 'browser_source', timer: true, fit: false },
+  image: { label: '이미지', icon: '🖼️', type: 'image_source', file: true, fit: false },
+  text: { label: '텍스트', icon: '🔤', type: 'text_gdiplus', text: true, fit: false },
+  web: { label: '웹페이지 (알림창)', icon: '🌐', type: 'browser_source', url: true, fit: false },
+  timer: { label: '타이머', icon: '⏱️', type: 'browser_source', timer: true, fit: false },
   virtual: { label: '버추얼 (Spout2)', icon: '🧸', type: 'spout_capture', fit: false },
-  color: { label: '단색 배경', icon: '■', type: 'color_source', fit: true },
-};
-
-// 앱별 소리 분리 대상. priority 2 = 실행 파일 이름으로 매칭 (창 제목이 바뀌어도 잡힘)
-const AUDIO_APPS = {
-  discord: { name: '디스코드', window: 'Discord:Chrome_WidgetWin_1:Discord.exe' },
-  chrome: { name: '크롬 (유튜브 등)', window: 'Chrome:Chrome_WidgetWin_1:chrome.exe' },
-  edge: { name: '엣지', window: 'Edge:Chrome_WidgetWin_1:msedge.exe' },
-  whale: { name: '웨일', window: 'Whale:Chrome_WidgetWin_1:whale.exe' },
-  spotify: { name: '스포티파이', window: 'Spotify:Chrome_WidgetWin_1:Spotify.exe' },
-  melon: { name: '멜론', window: 'Melon:Chrome_WidgetWin_1:Melon.exe' },
+  color: { label: '단색 배경', icon: '🟥', type: 'color_source', fit: true },
 };
 
 // 플랫폼별 송출 프리셋 (OBS 엔진에 들어 있는 rtmp-services 값 기준)
@@ -44,8 +35,17 @@ const PLATFORMS = {
   soop: { name: 'SOOP', server: 'rtmp://stream.sooplive.co.kr/app/', bitrate: 8000, keyint: 2, bframes: 0, keyHelp: 'https://dashboard.sooplive.co.kr' },
 };
 
-const ENCODER_PRIORITY = ['obs_nvenc_h264_tex', 'jim_nvenc', 'ffmpeg_nvenc', 'h264_texture_amf', 'amd_amf_h264', 'obs_qsv11_v2', 'obs_qsv11', 'obs_x264'];
-const ENCODER_LABEL = { obs_nvenc_h264_tex: 'NVIDIA NVENC', jim_nvenc: 'NVIDIA NVENC', ffmpeg_nvenc: 'NVIDIA NVENC', h264_texture_amf: 'AMD', amd_amf_h264: 'AMD', obs_qsv11_v2: 'Intel QSV', obs_qsv11: 'Intel QSV', obs_x264: 'CPU (x264)' };
+// H.264 인코더 (RTMP 송출용). 자동 선택 우선순위 순서
+const ENCODERS = [
+  { id: 'obs_nvenc_h264_tex', label: 'NVIDIA NVENC', hw: true },
+  { id: 'jim_nvenc', label: 'NVIDIA NVENC (구버전)', hw: true },
+  { id: 'ffmpeg_nvenc', label: 'NVIDIA NVENC (FFmpeg)', hw: true },
+  { id: 'h264_texture_amf', label: 'AMD AMF', hw: true },
+  { id: 'amd_amf_h264', label: 'AMD AMF (구버전)', hw: true },
+  { id: 'obs_qsv11_v2', label: 'Intel QSV', hw: true },
+  { id: 'obs_qsv11', label: 'Intel QSV (구버전)', hw: true },
+  { id: 'obs_x264', label: 'CPU (x264)', hw: false },
+];
 
 const abgr = (hex) => {
   const n = parseInt(String(hex).replace('#', ''), 16);
@@ -60,12 +60,17 @@ class Engine {
     this.scenes = [];            // [{ id, name, scene: IScene }]
     this.currentId = null;
     this.transition = null;
-    this.sources = {};           // name -> { input, kind }
-    this.audio = {};             // name -> { input, fader, volmeter, label, kind }
+    this.sources = {};           // name -> { input, kind, icon }
+    this.audio = {};             // name -> { input, fader, volmeter, label, kind, window }
     this.audioBus = null;
-    this.levels = {};            // name -> { level(0..1), peak(0..1) }
-    this.selected = null;        // { sceneId, itemId }
-    this.stream = null; this.streamParts = []; this.recording = null;
+    this.levels = {};            // name -> { level(0..1), peak(0..1), t }
+    this.sel = new Set();        // 선택된 장면 항목 id들 (현재 장면 기준)
+    this.primary = null;         // 마지막으로 고른 항목 (끌기/크기 조절 대상)
+    this.anchor = null;          // Shift 범위 선택 기준
+    this.probes = {};            // type -> 조회용 private 소스 (재사용)
+    this.streams = {};           // platform -> { out, parts, state, error }
+    this.recording = null;
+    this.encoderPref = 'auto';
     this.listeners = {};
     this.seq = 1;
   }
@@ -86,7 +91,7 @@ class Engine {
       throw new Error((why || '방송 엔진을 시작하지 못했어요.') + ' (코드 ' + code + ')');
     }
     N.SetWorkingDirectory(osnDir);
-    const init = N.OBS_API_initAPI({ language: 'ko-KR', appDataPath: dataDir, version: '0.3.0', crashServerUrl: '' });
+    const init = N.OBS_API_initAPI({ language: 'ko-KR', appDataPath: dataDir, version: '0.5.0', crashServerUrl: '' });
     if (init !== 0) {
       try { N.IPC.disconnect(); } catch {}
       const why = { '-1': '지원하지 않는 그래픽 카드예요. 그래픽 드라이버를 최신으로 업데이트해 주세요.', '-2': '이 PC의 그래픽 설정으로는 엔진을 시작할 수 없어요. 그래픽 드라이버를 업데이트해 주세요.' }[String(init)];
@@ -102,18 +107,15 @@ class Engine {
     };
     try { N.OBS_service_connectOutputSignals?.(); } catch {}
 
-    // 장면 전환 + 오디오 버스(항상 켜져 있는 소리 전용 장면, 영상 없음)
     this.transition = osn.TransitionFactory.create('fade_transition', 'streamy-fade', {});
     osn.Global.setOutputSource(0, this.transition);
     this.audioBus = osn.SceneFactory.createPrivate('streamy-audio-bus');
     osn.Global.setOutputSource(9, this.audioBus);
 
-    // 소리 레벨: 볼륨미터 콜백 (소스 콜백 작업자가 볼륨미터도 함께 읽어 옴)
     try {
       N.RegisterSourceCallback(() => {});
       N.RegisterVolmeterCallback((arr) => this.onVolmeter(arr));
     } catch (e) { console.warn('volmeter callback', e); }
-
     this.ready = true;
   }
 
@@ -125,6 +127,7 @@ class Engine {
     try { this.destroyDisplay(); } catch {}
     try { N.RemoveVolmeterCallback?.(); N.RemoveSourceCallback?.(); } catch {}
     for (const a of Object.values(this.audio)) { try { a.volmeter.detach(); a.volmeter.destroy(); a.fader.detach(); a.fader.destroy(); a.input.release(); } catch {} }
+    for (const p of Object.values(this.probes)) { try { p.release(); } catch {} }
     try { this.transition.clear(); this.transition.release(); } catch {}
     for (const s of Object.values(this.sources)) { try { s.input.release(); } catch {} }
     for (const s of this.scenes) { try { s.scene.release(); } catch {} }
@@ -136,14 +139,15 @@ class Engine {
   }
 
   // ================================================================ 미리보기
-  createDisplay(windowHandle) {
+  createDisplay(windowHandle, bg = [11, 11, 13]) {
     const N = this.osn.NodeObs;
     this.display = 'streamy-preview';
     N.OBS_content_createDisplay(windowHandle, this.display, E.Render.Main, false, this.video);
-    N.OBS_content_setPaddingColor(this.display, 5, 5, 6);
+    N.OBS_content_setPaddingColor(this.display, bg[0], bg[1], bg[2]);   // 남는 공간을 앱 배경색으로 → 검은 띠 안 보임
     N.OBS_content_setPaddingSize(this.display, 0);
-    N.OBS_content_setShouldDrawUI(this.display, true);   // 선택한 소스의 테두리/손잡이 표시
+    N.OBS_content_setShouldDrawUI(this.display, true);
     try { N.OBS_content_setOutlineColor?.(this.display, 225, 29, 46); } catch {}
+    try { N.OBS_content_setDrawGuideLines?.(this.display, true); } catch {}
   }
   moveDisplay(x, y, w, h) {
     if (!this.display) return;
@@ -152,7 +156,6 @@ class Engine {
     N.OBS_content_resizeDisplay(this.display, Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
   }
   destroyDisplay() { if (this.display) { this.osn.NodeObs.OBS_content_destroyDisplay(this.display); this.display = null; } }
-  // 미리보기 안에서 실제 영상이 그려지는 영역 (디스플레이 기준 픽셀)
   previewRect(dispW, dispH) {
     try {
       const N = this.osn.NodeObs;
@@ -164,13 +167,28 @@ class Engine {
     return { x: (dispW - this.width * sc) / 2, y: (dispH - this.height * sc) / 2, w: this.width * sc, h: this.height * sc };
   }
 
+  // ================================================================ 조회용 소스 (재사용)
+  probe(type) {
+    if (this.probes[type]) return this.probes[type];
+    const p = this.osn.InputFactory.createPrivate(type, 'streamy-probe-' + type, {});
+    this.probes[type] = p;
+    return p;
+  }
+  listProp(type, prop) {
+    try {
+      const p = this.probe(type).properties.get(prop);
+      return p && p.details ? p.details.items.filter((x) => x.value !== '' && x.value != null).map((x) => ({ name: String(x.name), value: String(x.value) })) : [];
+    } catch (e) { console.error('listProp', type, prop, e); return []; }
+  }
+
   // ================================================================ 장면
   sceneById(id) { return this.scenes.find((s) => s.id === id) || null; }
   get currentScene() { return this.sceneById(this.currentId); }
   uniqueName(base, taken) { let n = base, i = 2; while (taken(n)) n = `${base} ${i++}`; return n; }
+  nameTaken(n) { return !!this.sources[n] || !!this.audio[n] || this.scenes.some((s) => s.name === n); }
 
   addScene(name) {
-    name = this.uniqueName(name || '장면 ' + (this.scenes.length + 1), (n) => this.scenes.some((s) => s.name === n) || !!this.sources[n]);
+    name = this.uniqueName(name || '장면 ' + (this.scenes.length + 1), (n) => this.nameTaken(n));
     const scene = this.osn.SceneFactory.create(name);
     const s = { id: 's' + this.seq++, name, scene };
     this.scenes.push(s);
@@ -179,8 +197,8 @@ class Engine {
     return s;
   }
   renameScene(id, name) {
-    const s = this.sceneById(id); if (!s || !name) return;
-    if (this.scenes.some((x) => x.name === name && x.id !== id)) throw new Error('같은 이름의 장면이 있어요.');
+    const s = this.sceneById(id); if (!s || !name || name === s.name) return;
+    if (this.nameTaken(name)) throw new Error('같은 이름이 이미 있어요.');
     s.scene.name = name; s.name = name; this.emit('scenes');
   }
   removeScene(id) {
@@ -210,23 +228,10 @@ class Engine {
   types() { return this.osn.InputFactory.types(); }
   resolveType(kind) {
     const all = this.types(), base = SOURCE_TYPES[kind].type;
-    const cands = all.filter((t) => t === base || t.startsWith(base + '_v')).sort();
-    return cands.pop() || null;
+    return all.filter((t) => t === base || t.startsWith(base + '_v')).sort().pop() || null;
   }
   available(kind) { try { return !!this.resolveType(kind); } catch { return false; } }
-
-  // 장치/창/모니터 목록 (OBS 속성에서 읽음)
-  choices(kind) {
-    const def = SOURCE_TYPES[kind]; if (!def.prop) return [];
-    const type = this.resolveType(kind); if (!type) return [];
-    try {
-      const tmp = this.osn.InputFactory.createPrivate(type, '__probe_' + Date.now(), {});
-      const p = tmp.properties.get(def.prop);
-      const items = p && p.details ? p.details.items.filter((x) => x.value !== '').map((x) => ({ name: x.name, value: x.value })) : [];
-      tmp.release();
-      return items;
-    } catch (e) { console.error(e); return []; }
-  }
+  choices(kind) { const def = SOURCE_TYPES[kind]; const t = def.prop && this.resolveType(kind); return t ? this.listProp(t, def.prop) : []; }
 
   settingsFor(kind, opt) {
     switch (kind) {
@@ -250,17 +255,16 @@ class Engine {
     const def = SOURCE_TYPES[kind];
     const type = this.resolveType(kind);
     if (!type) throw new Error(`이 PC에서는 '${def.label}'을(를) 쓸 수 없어요.` + (kind === 'virtual' ? ' (Spout2 플러그인 필요)' : ''));
-    const name = this.uniqueName(opt.name || def.label, (n) => !!this.sources[n] || !!this.audio[n] || this.scenes.some((s) => s.name === n));
+    const name = this.uniqueName(opt.name || def.label, (n) => this.nameTaken(n));
     const input = this.osn.InputFactory.create(type, name, this.settingsFor(kind, opt));
-    this.sources[name] = { input, kind };
+    this.sources[name] = { input, kind, icon: def.icon };
     const item = scene.scene.add(input);
-    // 화면류는 캔버스에 꽉 차게, 나머지는 원래 크기로 가운데
     item.alignment = E.Align.TopLeft;
     if (def.fit) {
       item.position = { x: 0, y: 0 };
       item.boundsType = E.Bounds.ScaleInner; item.boundsAlignment = E.Align.Center;
       item.bounds = { x: this.width, y: this.height };
-      if (kind !== 'color') item.moveTop(); else item.moveBottom();
+      if (kind === 'color') item.moveBottom();
     } else if (kind === 'webcam' || kind === 'virtual') {
       const w = kind === 'webcam' ? this.width * 0.3 : this.width * 0.4, h = kind === 'webcam' ? this.height * 0.3 : this.height * 0.8;
       item.position = { x: kind === 'webcam' ? 30 : this.width - w - 30, y: this.height - h - 30 };
@@ -270,55 +274,70 @@ class Engine {
     } else {
       item.position = { x: this.width / 4, y: this.height / 3 };
     }
-    // 소리가 있는 소스(게임/웹)는 믹서에 표시되도록 볼륨미터만 붙임 (재생은 장면에서)
-    this.select(scene.id, item.id);
+    this.select(item.id, 'single');
     this.emit('items');
     return { name, item };
   }
 
-  // 장면에서 쓰이지 않는 소스 정리
   gcSources() {
     const used = new Set();
     for (const s of this.scenes) for (const it of s.scene.getItems()) used.add(it.source.name);
     for (const [n, s] of Object.entries(this.sources)) if (!used.has(n)) { try { s.input.release(); } catch {} delete this.sources[n]; }
   }
 
+  // 목록은 위(앞)에 있는 것부터
   items(sceneId = this.currentId) {
     const s = this.sceneById(sceneId); if (!s) return [];
-    // getItems()는 아래(0)부터 위로. 목록은 위에 있는 것부터 보여줌
     return s.scene.getItems().map((it) => {
       const src = this.sources[it.source.name];
-      return { id: it.id, name: it.source.name, kind: src ? src.kind : '', visible: it.visible, selected: this.selected && this.selected.itemId === it.id && this.selected.sceneId === sceneId };
+      return { id: it.id, name: it.source.name, kind: src ? src.kind : '', icon: (src && src.icon) || '•', visible: it.visible, selected: this.sel.has(it.id) };
     }).reverse();
   }
   itemObj(itemId, sceneId = this.currentId) { const s = this.sceneById(sceneId); return s ? s.scene.findItem(itemId) : null; }
   setVisible(itemId, v) { const it = this.itemObj(itemId); if (it) { it.visible = v; this.emit('items'); } }
   moveItem(itemId, dir) { const it = this.itemObj(itemId); if (!it) return; dir > 0 ? it.moveUp() : it.moveDown(); this.emit('items'); }
-  removeItem(itemId) {
-    const it = this.itemObj(itemId); if (!it) return;
-    if (this.selected && this.selected.itemId === itemId) this.clearSelection();
-    it.remove(); this.gcSources(); this.emit('items');
+  removeItems(ids) {
+    for (const id of ids) { const it = this.itemObj(id); if (it) { try { it.selected = false; } catch {} it.remove(); } }
+    this.sel.clear(); this.primary = null; this.anchor = null;
+    this.gcSources(); this.emit('items');
   }
-  renameSource(oldName, name) {
-    const s = this.sources[oldName]; if (!s || !name || name === oldName) return;
-    if (this.sources[name] || this.audio[name]) throw new Error('같은 이름이 있어요.');
-    s.input.name = name; this.sources[name] = s; delete this.sources[oldName]; this.emit('items');
+  renameSource(oldName, name, icon) {
+    const s = this.sources[oldName]; if (!s) return;
+    if (icon !== undefined) s.icon = icon || SOURCE_TYPES[s.kind]?.icon || '•';
+    if (name && name !== oldName) {
+      if (this.nameTaken(name)) throw new Error('같은 이름이 이미 있어요.');
+      s.input.name = name; this.sources[name] = s; delete this.sources[oldName];
+    }
+    this.emit('items');
   }
   sourceSettings(name) { const s = this.sources[name]; return s ? { kind: s.kind, settings: s.input.settings } : null; }
   updateSource(name, kind, opt) { const s = this.sources[name]; if (s) s.input.update(this.settingsFor(kind, opt)); }
 
-  // ================================================================ 선택 / 끌기 / 크기 조절 (캔버스 좌표)
-  select(sceneId, itemId) {
-    this.clearSelection();
-    const it = this.itemObj(itemId, sceneId); if (!it) return;
-    it.selected = true; this.selected = { sceneId, itemId };
+  // ================================================================ 선택 (단일 / Ctrl 토글 / Shift 범위)
+  select(itemId, mode = 'single') {
+    const order = this.items().map((x) => x.id);   // 목록 순서 (위→아래)
+    if (mode === 'single') { this.sel = new Set([itemId]); this.anchor = itemId; }
+    else if (mode === 'toggle') { this.sel.has(itemId) ? this.sel.delete(itemId) : this.sel.add(itemId); this.anchor = itemId; }
+    else if (mode === 'range') {
+      const a = order.indexOf(this.anchor ?? itemId), b = order.indexOf(itemId);
+      if (a < 0 || b < 0) this.sel = new Set([itemId]);
+      else { const [lo, hi] = a < b ? [a, b] : [b, a]; this.sel = new Set(order.slice(lo, hi + 1)); }
+    }
+    this.primary = this.sel.has(itemId) ? itemId : [...this.sel].pop() ?? null;
+    this.syncSelected();
     this.emit('items');
   }
-  clearSelection() {
-    if (this.selected) { const it = this.itemObj(this.selected.itemId, this.selected.sceneId); if (it) { try { it.selected = false; } catch {} } }
-    this.selected = null;
+  syncSelected() {
+    const s = this.currentScene; if (!s) return;
+    for (const it of s.scene.getItems()) { const on = this.sel.has(it.id); try { if (it.selected !== on) it.selected = on; } catch {} }
   }
-  // 항목이 실제로 차지하는 사각형
+  clearSelection() {
+    const s = this.currentScene;
+    if (s) for (const id of this.sel) { const it = s.scene.findItem(id); if (it) { try { it.selected = false; } catch {} } }
+    this.sel.clear(); this.primary = null; this.anchor = null;
+  }
+
+  // ================================================================ 끌기 / 크기 조절 (캔버스 좌표)
   itemRect(it) {
     const src = it.source;
     const sw = src.width || 0, sh = src.height || 0;
@@ -337,7 +356,6 @@ class Engine {
     }
     return { x, y, w, h, sw, sh };
   }
-  // 위에 있는 것부터 검사해서 클릭한 항목 찾기
   hitTest(cx, cy) {
     const s = this.currentScene; if (!s) return null;
     const list = s.scene.getItems();
@@ -350,15 +368,12 @@ class Engine {
     }
     return null;
   }
-  // 끌기 시작 전에 단순한 형태(왼쪽 위 기준, 크기=배율)로 바꿔 둠
   normalize(itemId) {
     const it = this.itemObj(itemId); if (!it) return null;
     const r = this.itemRect(it);
     if (r.sw > 0 && r.sh > 0) {
-      it.boundsType = E.Bounds.None;
-      it.alignment = E.Align.TopLeft;
-      it.scale = { x: r.w / r.sw, y: r.h / r.sh };
-      it.position = { x: r.x, y: r.y };
+      it.boundsType = E.Bounds.None; it.alignment = E.Align.TopLeft;
+      it.scale = { x: r.w / r.sw, y: r.h / r.sh }; it.position = { x: r.x, y: r.y };
     }
     return this.itemRect(it);
   }
@@ -376,7 +391,7 @@ class Engine {
     if (mode === 'reset') { it.scale = { x: 1, y: 1 }; it.position = { x: (this.width - r.sw) / 2, y: (this.height - r.sh) / 2 }; }
   }
 
-  // ================================================================ 오디오 (항상 켜짐: 데스크톱 / 마이크 / 앱별)
+  // ================================================================ 오디오 (항상 켜짐: 데스크톱 / 마이크 / 프로그램별)
   addAudio(name, type, settings, label, kind) {
     if (this.audio[name]) return this.audio[name];
     const osn = this.osn;
@@ -398,7 +413,7 @@ class Engine {
   setupAudio(cfg) {
     this.addAudio('데스크톱 소리', 'wasapi_output_capture', { device_id: 'default' }, '데스크톱 소리', 'desktop');
     this.addAudio('마이크', 'wasapi_input_capture', { device_id: 'default' }, '마이크', 'mic');
-    for (const a of cfg.appAudio || []) { try { this.addAppAudio(a.window, a.label); } catch (e) { console.warn(e); } }
+    for (const a of cfg.appAudio || []) { try { this.addAppAudio(a.exe || String(a.window || '').split(':').pop(), a.label); } catch (e) { console.warn(e); } }
     for (const [n, v] of Object.entries(cfg.audioState || {})) {
       const a = this.audio[n]; if (!a) continue;
       if (typeof v.vol === 'number') a.fader.deflection = v.vol;
@@ -411,50 +426,37 @@ class Engine {
     if (!t) throw new Error('이 PC에서는 프로그램별 소리 분리를 쓸 수 없어요. (윈도우 10 2004 이상 필요)');
     return t;
   }
-  // 지금 켜져 있는 프로그램 목록 (소리 분리 대상 후보)
-  appChoices() {
-    const type = this.processType();
-    try {
-      const tmp = this.osn.InputFactory.createPrivate(type, '__probe_apps_' + Date.now(), {});
-      const p = tmp.properties.get('window');
-      const items = p && p.details ? p.details.items.filter((x) => x.value).map((x) => ({ name: x.name, value: String(x.value) })) : [];
-      tmp.release();
-      return items;
-    } catch (e) { console.error(e); return []; }
-  }
-  // window 값 "제목:클래스:실행파일.exe" — 실행 파일 이름으로 매칭(priority 2)
-  addAppAudio(windowValue, label) {
-    const type = this.processType();
-    const exe = String(windowValue).split(':').pop() || windowValue;
-    const name = '앱 · ' + (label || exe.replace(/\.exe$/i, ''));
-    if (Object.values(this.audio).some((a) => a.window && a.window.split(':').pop().toLowerCase() === exe.toLowerCase())) throw new Error('이미 따로 잡고 있는 프로그램이에요.');
-    const a = this.addAudio(name, type, { window: windowValue, priority: 2 }, label || exe.replace(/\.exe$/i, ''), 'app');
-    a.window = windowValue;
+  // 실행 파일 이름(예: Discord.exe)으로 소리 잡기 — 창 제목이 바뀌어도 계속 잡힘
+  addAppAudio(exe, label) {
+    exe = String(exe || '').trim(); if (!exe) throw new Error('프로그램을 알 수 없어요.');
+    if (!/\.exe$/i.test(exe)) exe += '.exe';
+    const lower = exe.toLowerCase();
+    if (Object.values(this.audio).some((a) => a.exe && a.exe.toLowerCase() === lower)) throw new Error('이미 따로 잡고 있는 프로그램이에요.');
+    const nice = label || exe.replace(/\.exe$/i, '');
+    const name = this.uniqueName('앱 · ' + nice, (n) => this.nameTaken(n));
+    const win = `${nice.replace(/:/g, ' ')}::${exe}`;          // 제목:클래스:실행파일 (priority 2 = 실행파일로 매칭)
+    const a = this.addAudio(name, this.processType(), { window: win, priority: 2 }, nice, 'app');
+    a.exe = exe;
+    this.emit('audio');
     return name;
   }
-  appAudioList() { return Object.entries(this.audio).filter(([, a]) => a.kind === 'app').map(([name, a]) => ({ name, label: a.label, window: a.window })); }
-  audioList() {
-    return Object.entries(this.audio).map(([name, a]) => ({ name, label: a.label, kind: a.kind, muted: a.input.muted, vol: a.fader.deflection }));
-  }
+  appAudioList() { return Object.entries(this.audio).filter(([, a]) => a.kind === 'app').map(([name, a]) => ({ name, label: a.label, exe: a.exe })); }
+  audioList() { return Object.entries(this.audio).map(([name, a]) => ({ name, label: a.label, kind: a.kind, exe: a.exe, muted: a.input.muted, vol: a.fader.deflection })); }
   setVolume(name, v) { const a = this.audio[name]; if (a) a.fader.deflection = Math.max(0, Math.min(1, v)); }
   setMuted(name, m) { const a = this.audio[name]; if (a) { a.input.muted = m; this.emit('audio'); } }
+  // 장치 목록은 이미 있는 데스크톱/마이크 소스에서 읽음 (새 소스를 만들지 않음)
   audioDevices(kind) {
-    const type = kind === 'mic' ? 'wasapi_input_capture' : 'wasapi_output_capture';
+    const a = this.audio[kind === 'mic' ? '마이크' : '데스크톱 소리'];
     try {
-      const tmp = this.osn.InputFactory.createPrivate(type, '__probe_audio_' + Date.now(), {});
-      const p = tmp.properties.get('device_id');
-      const items = p && p.details ? p.details.items.map((x) => ({ name: x.name, value: x.value })) : [];
-      tmp.release(); return items;
-    } catch { return []; }
+      const p = a ? a.input.properties.get('device_id') : null;
+      return p && p.details ? p.details.items.map((x) => ({ name: String(x.name), value: String(x.value) })) : [];
+    } catch (e) { console.error('audioDevices', e); return []; }
   }
   setAudioDevice(name, deviceId) { const a = this.audio[name]; if (a) a.input.update({ device_id: deviceId }); }
-
-  // 볼륨미터 → 0..1 레벨 (−60dB ~ 0dB)
   onVolmeter(arr) {
     for (const d of arr || []) {
       const mags = d.magnitude || [], peaks = d.peak || [];
-      const db = mags.length ? Math.max(...mags) : -Infinity;
-      const pk = peaks.length ? Math.max(...peaks) : -Infinity;
+      const db = mags.length ? Math.max(...mags) : -Infinity, pk = peaks.length ? Math.max(...peaks) : -Infinity;
       const toLvl = (x) => (!isFinite(x) ? 0 : Math.max(0, Math.min(1, (x + 60) / 60)));
       this.levels[d.sourceName] = { level: toLvl(db), peak: toLvl(pk), t: Date.now() };
     }
@@ -467,9 +469,9 @@ class Engine {
       boundsType: it.boundsType, bounds: it.bounds, boundsAlign: it.boundsAlignment, crop: it.crop,
     }));
     return {
-      version: 3,
+      version: 5,
       current: this.currentScene ? this.currentScene.name : null,
-      sources: Object.entries(this.sources).map(([name, s]) => ({ name, kind: s.kind, type: s.input.id, settings: s.input.settings, muted: s.input.muted })),
+      sources: Object.entries(this.sources).map(([name, s]) => ({ name, kind: s.kind, icon: s.icon, type: s.input.id, settings: s.input.settings, muted: s.input.muted })),
       scenes: this.scenes.map((s) => ({ name: s.name, items: items(s) })),
     };
   }
@@ -479,75 +481,113 @@ class Engine {
       try {
         const input = osn.InputFactory.create(src.type, src.name, src.settings || {});
         if (src.muted) input.muted = true;
-        this.sources[src.name] = { input, kind: src.kind };
+        this.sources[src.name] = { input, kind: src.kind, icon: src.icon || SOURCE_TYPES[src.kind]?.icon || '•' };
       } catch (e) { console.warn('source load failed', src.name, e); }
     }
     for (const sc of data.scenes || []) {
-      const scene = osn.SceneFactory.create(sc.name);
-      const s = { id: 's' + this.seq++, name: sc.name, scene };
-      this.scenes.push(s);
-      for (const it of sc.items || []) {
-        const src = this.sources[it.source]; if (!src) continue;
-        const item = scene.add(src.input);
-        try {
-          item.alignment = it.align; item.boundsType = it.boundsType; item.boundsAlignment = it.boundsAlign;
-          item.bounds = it.bounds; item.scale = it.scale; item.position = it.pos; item.visible = it.visible;
-          if (it.crop) item.crop = it.crop;
-        } catch (e) { console.warn(e); }
-      }
+      try {
+        const scene = osn.SceneFactory.create(sc.name);
+        const s = { id: 's' + this.seq++, name: sc.name, scene };
+        this.scenes.push(s);
+        for (const it of sc.items || []) {
+          const src = this.sources[it.source]; if (!src) continue;
+          try {
+            const item = scene.add(src.input);
+            item.alignment = it.align; item.boundsType = it.boundsType; item.boundsAlignment = it.boundsAlign;
+            item.bounds = it.bounds; item.scale = it.scale; item.position = it.pos; item.visible = it.visible;
+            if (it.crop) item.crop = it.crop;
+          } catch (e) { console.warn('item load failed', it.source, e); }
+        }
+      } catch (e) { console.warn('scene load failed', sc.name, e); }
     }
     const cur = this.scenes.find((s) => s.name === data.current) || this.scenes[0];
     if (cur) this.switchScene(cur.id, true);
     this.emit('scenes'); this.emit('items');
   }
 
-  // ================================================================ 송출
+  // ================================================================ 인코더
   encoderTypes() { try { return this.osn.VideoEncoderFactory.types(); } catch { return ['obs_x264']; } }
-  pickEncoder() { const all = this.encoderTypes(); const id = ENCODER_PRIORITY.find((e) => all.includes(e)) || 'obs_x264'; return { id, label: ENCODER_LABEL[id] || id }; }
+  availableEncoders() { const all = this.encoderTypes(); return ENCODERS.filter((e) => all.includes(e.id)); }
+  pickEncoder() {
+    const avail = this.availableEncoders();
+    const chosen = this.encoderPref !== 'auto' && avail.find((e) => e.id === this.encoderPref);
+    return chosen || avail[0] || ENCODERS[ENCODERS.length - 1];
+  }
   encoderSettings(id, p) {
     if (id === 'obs_x264') return { rate_control: 'CBR', bitrate: p.bitrate, keyint_sec: p.keyint, preset: 'veryfast', profile: 'high', tune: p.bframes === 0 ? 'zerolatency' : '', x264opts: p.bframes === 0 ? 'bframes=0 scenecut=0' : '' };
     return { rate_control: 'CBR', bitrate: p.bitrate, keyint_sec: p.keyint, preset2: 'p5', preset: 'quality', profile: 'high', bf: p.bframes, multipass: 'qres' };
   }
-  startStream({ platform, key }) {
-    if (this.stream) throw new Error('이미 방송 중이에요.');
-    const p = PLATFORMS[platform]; if (!p) throw new Error('플랫폼을 골라 주세요.');
-    if (!key) throw new Error(p.name + ' 스트림 키를 입력해 주세요.');
-    const osn = this.osn, enc = this.pickEncoder();
-    const service = osn.ServiceFactory.create('rtmp_custom', 'streamy-service-' + platform, { server: p.server, key, use_auth: false, bwtest: false });
-    const venc = osn.VideoEncoderFactory.create(enc.id, 'streamy-video-' + Date.now(), this.encoderSettings(enc.id, p));
-    const aenc = osn.AudioEncoderFactory.create('ffmpeg_aac', 'streamy-audio-' + Date.now()); aenc.bitrate = 160;
+
+  // ================================================================ 송출 (여러 플랫폼 동시)
+  get streaming() { return Object.values(this.streams).some((s) => s.state !== 'off'); }
+  streamStates() { const o = {}; for (const [k, s] of Object.entries(this.streams)) o[k] = { state: s.state, error: s.error, startedAt: s.startedAt }; return o; }
+  startStream(targets) {   // targets: [{ platform, key }]
+    if (this.streaming) throw new Error('이미 방송 중이에요.');
+    const list = targets.filter((t) => PLATFORMS[t.platform] && t.key);
+    if (!list.length) throw new Error('스트림 키를 하나 이상 입력해 주세요.');
+    const enc = this.pickEncoder();
+    this.streamInfo = { encoder: enc.label };
+    for (const t of list) {
+      try { this.startOne(t.platform, t.key, enc); }
+      catch (e) { this.streams[t.platform] = { state: 'off', error: e.message || String(e), parts: [] }; }
+    }
+    this.emit('stream', this.streamStates());
+  }
+  startOne(platform, key, enc) {
+    const osn = this.osn, p = PLATFORMS[platform], tag = platform + '-' + Date.now();
+    const service = osn.ServiceFactory.create('rtmp_custom', 'streamy-service-' + tag, { server: p.server, key, use_auth: false, bwtest: false });
+    const venc = osn.VideoEncoderFactory.create(enc.id, 'streamy-video-' + tag, this.encoderSettings(enc.id, p));
+    const aenc = osn.AudioEncoderFactory.create('ffmpeg_aac', 'streamy-audio-' + tag); aenc.bitrate = 160;
     const s = osn.SimpleStreamingFactory.create();
     s.video = this.video; s.videoEncoder = venc; s.audioEncoder = aenc; s.service = service; s.enforceServiceBitrate = false;
     s.delay = osn.DelayFactory.create(); s.delay.enabled = false;
     s.reconnect = osn.ReconnectFactory.create(); s.reconnect.enabled = true; s.reconnect.retryDelay = 10; s.reconnect.maxRetries = 20;
     s.network = osn.NetworkFactory.create();
-    s.signalHandler = (sig) => this.onStreamSignal(sig);
-    this.stream = s; this.streamParts = [venc, aenc, service];
-    this.streamInfo = { platform: p.name, encoder: enc.label, startedAt: 0 };
-    this.emit('stream', { state: 'starting', ...this.streamInfo });
+    const rec = { out: s, parts: [venc, aenc, service], state: 'starting', error: '', startedAt: 0 };
+    this.streams[platform] = rec;
+    s.signalHandler = (sig) => this.onStreamSignal(platform, sig);
     s.start();
   }
-  onStreamSignal(sig) {
+  onStreamSignal(platform, sig) {
+    const rec = this.streams[platform]; if (!rec) return;
     const n = sig.signal;
-    if (n === 'start' || n === 'activate') { if (!this.streamInfo.startedAt) this.streamInfo.startedAt = Date.now(); this.emit('stream', { state: 'live', ...this.streamInfo }); }
-    else if (n === 'reconnect') this.emit('stream', { state: 'reconnecting', ...this.streamInfo });
-    else if (n === 'reconnect_success') this.emit('stream', { state: 'live', ...this.streamInfo });
-    else if (n === 'stop' || n === 'deactivate') { const err = sig.code && sig.code !== 0 ? streamError(sig) : ''; this.cleanupStream(); this.emit('stream', { state: 'off', error: err }); }
+    if (n === 'start' || n === 'activate') { rec.state = 'live'; if (!rec.startedAt) rec.startedAt = Date.now(); rec.error = ''; }
+    else if (n === 'reconnect') rec.state = 'reconnecting';
+    else if (n === 'reconnect_success') rec.state = 'live';
+    else if (n === 'stop' || n === 'deactivate') {
+      if (rec.state === 'off') return;
+      rec.error = sig.code && sig.code !== 0 ? streamError(sig) : '';
+      rec.state = 'off';
+      this.releaseStream(rec);
+    }
+    this.emit('stream', this.streamStates());
   }
-  stopStream(force = false) { if (!this.stream) return; this.emit('stream', { state: 'stopping', ...this.streamInfo }); this.stream.stop(force); if (force) this.cleanupStream(); }
-  cleanupStream() {
-    if (!this.stream) return;
-    const s = this.stream; this.stream = null;
+  stopStream(force = false) {
+    for (const rec of Object.values(this.streams)) {
+      if (rec.state === 'off') continue;
+      rec.state = 'stopping';
+      try { rec.out.stop(force); } catch {}
+      if (force) { rec.state = 'off'; this.releaseStream(rec); }
+    }
+    this.emit('stream', this.streamStates());
+  }
+  releaseStream(rec) {
+    const s = rec.out; if (!s) return; rec.out = null;
+    const parts = rec.parts; rec.parts = [];
     setTimeout(() => {
       try { s.signalHandler = () => {}; this.osn.SimpleStreamingFactory.destroy(s); } catch {}
-      for (const x of this.streamParts) { try { x.release ? x.release() : this.osn.ServiceFactory.destroy(x); } catch {} }
-      this.streamParts = [];
+      for (const x of parts) { try { x.release ? x.release() : this.osn.ServiceFactory.destroy(x); } catch {} }
     }, 500);
   }
   stats() {
     const g = this.osn.Global;
     const out = { cpu: g.cpuPercentage, fps: g.currentFrameRate };
-    if (this.stream) { out.kbps = this.stream.kbitsPerSec; out.dropped = this.stream.droppedFrames; out.sent = this.stream.totalFrames; }
+    let kbps = 0, dropped = 0, sent = 0, any = false;
+    for (const rec of Object.values(this.streams)) {
+      if (!rec.out || rec.state === 'off') continue;
+      try { kbps += rec.out.kbitsPerSec; dropped += rec.out.droppedFrames; sent += rec.out.totalFrames; any = true; } catch {}
+    }
+    if (any) Object.assign(out, { kbps, dropped, sent });
     return out;
   }
 
@@ -575,8 +615,8 @@ class Engine {
 }
 
 function streamError(sig) {
-  const msg = { '-1': '스트림 키나 서버 주소가 잘못됐어요.', '-2': '서버에 연결할 수 없어요. 인터넷 연결을 확인해 주세요.', '-3': '인코더를 시작하지 못했어요.', '-4': '연결이 끊겼어요.', '-5': '방송을 시작할 수 없어요.', '-6': '서버가 연결을 거부했어요. 스트림 키를 확인해 주세요.' }[String(sig.code)];
+  const msg = { '-1': '스트림 키나 서버 주소가 잘못됐어요.', '-2': '서버에 연결할 수 없어요. 인터넷 연결을 확인해 주세요.', '-3': '인코더를 시작하지 못했어요. 다른 인코더를 골라 보세요.', '-4': '연결이 끊겼어요.', '-5': '방송을 시작할 수 없어요.', '-6': '서버가 연결을 거부했어요. 스트림 키를 확인해 주세요.' }[String(sig.code)];
   return (msg || '방송 오류') + (sig.error ? ' (' + sig.error + ')' : '');
 }
 
-module.exports = { Engine, SOURCE_TYPES, AUDIO_APPS, PLATFORMS };
+module.exports = { Engine, SOURCE_TYPES, PLATFORMS, ENCODERS };
