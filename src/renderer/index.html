@@ -166,11 +166,18 @@
 
       <!-- 소스 -->
       <section class="tab" id="tab-sources">
-        <div class="add-box" id="addBox" hidden>
+        <div class="add-box sec-card" id="addBox" hidden>
+          <h4>＋ 소스 추가 <small>무엇을 넣을까요?</small></h4>
           <div class="type-grid" id="typeGrid"></div>
           <div class="add-form" id="addForm"></div>
         </div>
-        <div id="propsBody"></div>
+        <div class="sec-card props-card">
+          <h4>선택한 소스</h4>
+          <div id="propsBody"></div>
+          <p class="props-empty">미리보기나 왼쪽 목록에서 소스를 누르면<br>여기에 그 소스 설정이 나와요.</p>
+        </div>
+        <div class="sec-card virt-card">
+        <h4>버추얼 <small>원클릭 연결 · VTube Studio</small></h4>
         <div class="vt-card" id="vtCard">
           <button class="vt-go" id="vtGo"><span>🧸</span><b>버추얼 원클릭 연결</b><small>켜져 있는 버추얼 프로그램을 찾아서 화면에 띄워요</small></button>
           <div class="vt-row"><label class="check tiny"><input type="checkbox" id="vtAuto"> 버추얼 프로그램을 켜면 자동으로 띄우기</label></div>
@@ -197,6 +204,7 @@
               <label class="vts-sl">회전 <input type="range" id="vtsR" min="-180" max="180" step="1" value="0"><em id="vtsRV">0</em></label>
               <div class="row"><button id="vtsCenter">가운데로</button><button class="ghost" id="vtsPosGet">지금 위치 불러오기</button></div></div>
           </div>
+        </div>
         </div>
         <div class="sec-card" id="timerCard">
           <h4>방송 타이머</h4>

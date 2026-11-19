@@ -803,3 +803,46 @@ body.theme-dark .cm .bd.b-mg{background:rgba(18,184,134,.18);color:#5FE3B2}
 body.theme-dark .cm .bd.b-hot{background:rgba(249,115,22,.2);color:#FDBA74}
 body.theme-dark .cm .bd.b-mb{background:rgba(124,92,255,.22);color:#C4B5FD}
 body.theme-dark .cm .bd.b-fan{background:rgba(236,72,153,.2);color:#F9A8D4}
+
+/* ================================================================== 소스 탭 정리 (v0.14) */
+#tab-sources .sec-card{margin-bottom:14px}
+.add-box.sec-card{border:none;padding:14px 14px 8px}
+.add-box.sec-card[hidden]{display:none!important}
+.sec-card>.type-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px}
+.tab .type-grid .type{flex-direction:column;justify-content:center;gap:6px;min-height:72px;padding:10px 6px!important;border-radius:14px!important;background:var(--card2)!important;border:1.5px solid transparent!important;font-size:12px;text-align:center}
+.type-grid .type span{width:auto;font-size:22px;line-height:1}
+.tab .type-grid .type:hover{background:var(--hover)!important}
+.tab .type-grid .type.on{border-color:var(--red)!important;background:var(--soft)!important}
+.sec-card>.add-form:empty{display:none!important}
+.sec-card>.add-form{border-top:none;padding:14px}
+/* 선택한 소스 */
+.props-card>#propsBody:empty{display:none!important}
+.props-card:has(#propsBody:not(:empty)) .props-empty{display:none}
+.props-empty{margin:0 0 8px;padding:18px 12px;border-radius:14px;background:var(--card);color:var(--sub);font-size:12px;line-height:1.7;text-align:center}
+.props-card #propsBody>h4:first-child{margin:0 0 12px;font-size:14px;color:var(--text)}
+.props-card #propsBody .field{margin-bottom:12px}
+/* 버추얼: 큰 분홍 띠 대신 흰 카드 안 버튼 */
+.virt-card>.vt-card{background:var(--card)!important;border:none!important;padding:12px}
+.tab .virt-card .vt-go{background:var(--card2)!important;color:var(--text)!important;border-radius:14px!important;padding:12px!important;grid-template-columns:44px 1fr;align-items:center}
+.tab .virt-card .vt-go span{grid-row:1/3;width:44px;height:44px;border-radius:13px;background:var(--soft);display:flex;align-items:center;justify-content:center;font-size:22px}
+.tab .virt-card .vt-go b{font-size:14px}
+.tab .virt-card .vt-go small{color:var(--sub);font-weight:500}
+.tab .virt-card .vt-go:hover{background:var(--hover)!important}
+.virt-card .vt-row{margin-top:10px}
+.virt-card>.vts-card{background:var(--card)!important;border:none!important;padding:14px}
+.virt-card .vts-head b{font-size:14px}
+.virt-card .vts-body{border-top:1px solid var(--line)}
+.virt-card .vts-sec>b{font-size:12px;color:var(--sub)}
+#tab-sources .type-grid .type{background:var(--card2)!important}
+#tab-sources .type-grid .type:hover{background:var(--hover)!important}
+#tab-sources .type-grid .type.on{background:var(--soft)!important}
+.virt-card .vts-row{display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:6px}
+.tab .virt-card .vts-row button{white-space:nowrap;padding:9px 6px!important;font-size:12px}
+.sec-card>.grid2{gap:0 12px;align-items:start}
+.sec-card>.grid2 .field{margin:0}
+/* 왼쪽 소스 목록: 아이콘을 작은 타일로 */
+.src-rail .src-list li .ic{width:30px;height:30px;border-radius:9px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:15px;flex:none}
+.src-rail .src-list li.on .ic{background:var(--card)}
+.src-rail .src-list li .nm{font-weight:600}
+.src-rail .src-list li .eye{opacity:.45}
+.src-rail .src-list li:hover .eye{opacity:.9}
