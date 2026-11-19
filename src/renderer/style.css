@@ -1226,3 +1226,5 @@ small.muted{color:var(--sub);font-size:11px}
 #bcCard .bc-to-chip.on{border-color:var(--red)!important;color:var(--text)!important;background:var(--soft2)!important}
 #bcCard .bc-to-chip.wait{opacity:.6}
 #bcCard [hidden]{display:none!important}
+/* v0.24.1 플랫폼 뱃지(색 점 · 치/유/숲) 빼기 — 채팅 메시지 안의 표시만 남김 */
+i.pd,.bc-tabs .pm,.bc-to-chip .pm,.chat-switch .pm,.chat-switch .pd,#miniPlat .pm,#miniPlat .pd,.bc-row .pm,.bc-row .pd{display:none!important}
