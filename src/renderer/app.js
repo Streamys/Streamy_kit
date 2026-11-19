@@ -912,7 +912,7 @@ function renderViewers() {
   if (!cfg.showViewers) { num.textContent = '•••'; num.classList.add('masked'); det.textContent = ''; return; }
   num.classList.remove('masked');
   if (DEMO) { num.textContent = '1,284'; det.textContent = '치지직 912 · 유튜브 372'; return; }
-  if (!cfg.channels.chzzk) { num.textContent = '-'; det.textContent = '설정에서 채널 연결'; return; }
+  if (!cfg.channels.chzzk) { num.textContent = '-'; det.textContent = '치지직 로그인 필요'; return; }
   const parts = []; if (viewers.chzzk != null) parts.push(['치지직', viewers.chzzk]);
   num.textContent = parts.length ? parts.reduce((a, [, n]) => a + n, 0).toLocaleString('ko-KR') : '-';
   det.textContent = parts.length ? parts.map(([k, n]) => `${k} ${n.toLocaleString('ko-KR')}`).join(' · ') : '방송 중이 아니에요';
@@ -923,12 +923,12 @@ async function pollViewers() {
   renderViewers();
 }
 $('viewerEye').addEventListener('click', () => { cfg.showViewers = !cfg.showViewers; save(); renderViewers(); if (cfg.showViewers) pollViewers(); });
-$('chzzkId').value = cfg.channels.chzzk || '';
-$('chzzkId').addEventListener('change', () => {
-  const v = $('chzzkId').value.trim().replace(/^.*chzzk\.naver\.com\/(live\/)?/, '').replace(/[/?#].*$/, '');
-  $('chzzkId').value = v; cfg.channels.chzzk = v; save();
-  if (v && !/^[0-9a-f]{32}$/i.test(v)) toast('치지직 채널 ID는 32자리예요. 채널 주소 chzzk.naver.com/ 뒤의 값을 넣어 주세요.', true); else pollViewers();
-});
+// 치지직 채널은 [방송 정보]에서 치지직 로그인하면 자동으로 들어감 (따로 넣을 필요 없음)
+function syncChzzkChannel(st) {
+  const id = st && st.chzzk && st.chzzk.connected && st.chzzk.channel ? st.chzzk.channel.id : '';
+  if (!id || id === cfg.channels.chzzk) return;
+  cfg.channels.chzzk = id; save(); try { chatConfigure(); } catch {} pollViewers();
+}
 setInterval(pollViewers, 60000);
 
 // ================================================================== 채팅 탭 (통합 + 플랫폼별 공식 창)
@@ -947,7 +947,6 @@ $('ytId').value = cfg.channels.youtube || '';
 $('soopId').value = cfg.channels.soop || '';
 $('ytId').addEventListener('change', () => { const v = normYt($('ytId').value); $('ytId').value = v; cfg.channels.youtube = v; save(); chatConfigure(); });
 $('soopId').addEventListener('change', () => { const v = normSoop($('soopId').value); $('soopId').value = v; cfg.channels.soop = v; save(); chatConfigure(); });
-$('chzzkId').addEventListener('change', () => chatConfigure());
 async function chatConfigure() {
   const ch = { ...cfg.channels }; if (ch.chzzk && !/^[0-9a-f]{32}$/i.test(ch.chzzk)) ch.chzzk = '';
   try { const st = await ipcRenderer.invoke('chat:configure', ch); for (const [p, v] of Object.entries(st || {})) chat.status[p] = { p, ...v }; } catch (e) { rlog('error', 'chat configure', e); }
@@ -963,7 +962,7 @@ function renderChatState() {
   $('chatDot').className = 'tab-dot' + (chat.unseen && chat.view !== 'open' ? ' new' : anyLive ? ' live' : '');
   if (!on.length) {
     $('chatFeed').innerHTML = `<div class="chat-empty"><b>채널을 연결하면 여기에 채팅이 모여요</b><br>설정 탭 → 채널 연결에 치지직 · 유튜브 · SOOP 채널을 한 번만 넣어 주세요.<br><button id="chatGoSettings">채널 연결하러 가기</button></div>`;
-    $('chatGoSettings').onclick = () => { openTab('settings'); $('chzzkId').focus(); };
+    $('chatGoSettings').onclick = () => openTab(cfg.channels.chzzk ? 'settings' : 'stream');
   } else if (!$('chatFeed').querySelector('.cm')) {
     $('chatFeed').innerHTML = `<div class="chat-empty">${anyLive ? '채팅을 기다리는 중…' : '방송이 켜지면 채팅이 자동으로 붙어요.'}</div>`;
   }
@@ -1055,10 +1054,10 @@ function renderChatWeb() {
   let w = chat.webs[p];
   if (w && w.url !== url) { w.el.remove(); delete chat.webs[p]; w = null; }
   if (!url) {
-    const msg = !cfg.channels[p] ? `<b>${CHAT_P[p]} 채널이 연결되지 않았어요</b><br><button id="chatGoSettings2">채널 연결하러 가기</button>`
+    const msg = !cfg.channels[p] ? (p === 'chzzk' ? `<b>치지직 로그인이 필요해요</b><br><button id="chatGoSettings2">로그인하러 가기</button>` : `<b>${CHAT_P[p]} 채널이 연결되지 않았어요</b><br><button id="chatGoSettings2">채널 연결하러 가기</button>`)
       : p === 'youtube' ? '<b>유튜브 방송이 켜지면 채팅창이 떠요</b><br>방송 시작 후 몇 초 안에 자동으로 나타나요.' : '<b>채널 ID를 확인해 주세요</b>';
     box.insertAdjacentHTML('beforeend', `<div class="chat-empty">${msg}</div>`);
-    const b = $('chatGoSettings2'); if (b) b.onclick = () => openTab('settings');
+    const b = $('chatGoSettings2'); if (b) b.onclick = () => openTab(p === 'chzzk' ? 'stream' : 'settings');
     return;
   }
   if (!w) {
@@ -1987,7 +1986,7 @@ $('bcAcc').addEventListener('click', async (ev) => {
     bcSt = r.data; bcRenderAcc(); bcMsg(''); toast(`${BC_NAME[p]} 계정을 연결했어요!`); ipcRenderer.invoke('bc:focus');
   }
 });
-ipcRenderer.on('bc:status', (_e, st) => { bcSt = st; bcRenderAcc(); });
+ipcRenderer.on('bc:status', (_e, st) => { bcSt = st; bcRenderAcc(); syncChzzkChannel(st); });
 // 입력값 → cfg.bc 에 저장 (껐다 켜도 그대로)
 cfg.bc = { title: '', tags: '', desc: '', czCat: null, ytCat: '', toCz: true, toYt: true, auto: false, ...(cfg.bc || {}) };
 const bcTags = () => String($('bcTags').value).split(/[,，#\n]/).map((t) => t.trim()).filter(Boolean);
@@ -2068,7 +2067,7 @@ engine.on('stream', (states) => { for (const [k, s] of Object.entries(states)) i
   bcFill();
   if (DEMO) { bcSt = { chzzk: { hasApp: true, connected: true, channel: { name: '스트리미' } }, youtube: { hasApp: true, connected: false }, redirect: {} };
     cfg.bc.title = '오늘은 롤 랭크 올립니다!'; cfg.bc.tags = '롤, 랭크, 저챗, 버튜버'; cfg.bc.czCat = { type: 'GAME', id: 'League_of_Legends', name: '리그 오브 레전드' }; bcFill(); bcRenderAcc(); return; }
-  bcSt = await ipcRenderer.invoke('bc:status').catch(() => null); bcRenderAcc();
+  bcSt = await ipcRenderer.invoke('bc:status').catch(() => null); bcRenderAcc(); syncChzzkChannel(bcSt);
 })();
 
 
