@@ -668,3 +668,33 @@ h4{margin:26px 0 10px}
 .sec-card .bc-card{padding:0;background:transparent!important;border:none}
 .sec-card .chip:not(.on),.sec-card .plat:not(.on),.sec-card .type:not(.on){background:var(--card)}
 .sec-card .hint:last-child{margin-bottom:12px}
+
+/* 구역 카드 안을 한 번 더 묶기: 항목마다 흰 카드 (v0.10.4) */
+.tab .sec-card{padding:14px 14px 8px}
+.sec-card>:not(h4):not(.hint):not(.bc-card):not(.key-guess):not(.toast),.sec-card .bc-card>:not(.hint):not(.bc-msg):not(.chips){
+  display:block;background:var(--card);border-radius:14px;padding:12px 14px;margin:0 0 8px;box-shadow:0 1px 2px rgba(25,31,40,.04)}
+.sec-card>.row,.sec-card .bc-card>.row{display:flex}
+.sec-card>.grid2{display:grid}
+.sec-card>.key-list{display:flex;padding:8px}
+.sec-card>.key-list:empty{display:none}
+.sec-card .key-list .key-item{background:var(--card2);border:none}
+.sec-card>.key-row,.sec-card .key-row{display:flex}
+.sec-card .bc-card>.bc-acc{display:flex}
+.sec-card .bc-card>.bc-cat{display:block}
+.sec-card .bc-card>.chips{margin:-4px 0 8px;padding:0 4px}
+.sec-card .bc-msg:empty,.sec-card>.upd-notes[hidden]{display:none}
+.sec-card .field{margin-bottom:0}
+.sec-card .field+.field{margin-top:12px}
+/* 흰 카드 안의 입력칸 · 버튼은 다시 회색 */
+.sec-card :is(.field,.row,.key-row,.bc-acc,.bc-cat,.check,.grid2,.upd-box,.key-list,.enc-row) :is(input,select,textarea){background:var(--card2)!important}
+.tab .sec-card :is(.field,.row,.key-row,.bc-acc,.bc-cat,.grid2,.upd-box,.enc-row,.seg) button:not(.primary-sm):not(.chip):not(.link):not(.guess):not(.on){background:var(--card2)!important}
+.sec-card>.check,.sec-card .bc-card>.check{display:flex;margin:0 0 8px}
+body.theme-dark .sec-card>:not(h4):not(.hint):not(.bc-card):not(.key-guess):not(.toast),body.theme-dark .sec-card .bc-card>:not(.hint):not(.bc-msg):not(.chips){box-shadow:none}
+.sec-card>.row,.sec-card .bc-card>.row,.sec-card>.key-row,.sec-card>.enc-row,.sec-card .bc-card>.bc-acc,.sec-card>.key-list,.sec-card>.check,.sec-card .bc-card>.check,.sec-card>.upd-box{display:flex!important}
+.sec-card>.grid2{display:grid!important}
+.sec-card>.key-row,.sec-card>.enc-row{gap:8px;align-items:center}
+.sec-card>.key-row input,.sec-card>.enc-row select{flex:1;min-width:0}
+.sec-card>.key-list{flex-direction:column}
+.bc-row b{white-space:nowrap}
+.sec-card>.check,.sec-card .bc-card>.check{display:block!important;line-height:1.6}
+.sec-card>.check input,.sec-card .bc-card>.check input{margin:0 8px 0 0;vertical-align:-2px}
