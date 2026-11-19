@@ -1245,6 +1245,15 @@ function setMode(m, quiet) {
   if (!quiet) { cfg.mode = m; save(); }
 }
 $('modeSw').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setMode(b.dataset.m); });
+// 오른쪽 탭 안 구역 나누기: 제목(h4)마다 카드 하나로 묶기 (방송 · 설정 · 사운드 설정)
+for (const id of ['tab-stream', 'tab-settings', 'tab-sound']) {
+  const tab = $(id); if (!tab) continue;
+  let card = null;
+  for (const el of [...tab.children]) {
+    if (el.tagName === 'H4') { card = document.createElement('div'); card.className = 'sec-card'; tab.insertBefore(card, el); }
+    if (card && !el.classList.contains('tab-back')) card.appendChild(el);
+  }
+}
 // 화면 테마: 기본 = 밝은 카드, 설정에서 예전 검정·빨강
 function applyTheme() { document.body.classList.toggle('theme-dark', !!cfg.themeDark); $('themeDark').checked = !!cfg.themeDark; if (typeof guideDraw === 'function') guideDraw(); }
 $('themeDark').addEventListener('change', () => { cfg.themeDark = $('themeDark').checked; save(); applyTheme(); });
