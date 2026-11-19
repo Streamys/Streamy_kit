@@ -238,7 +238,7 @@ function renderAddMenu() {
   const m = $('addMenu');
   m.innerHTML = Object.entries(SOURCE_TYPES).map(([k, t]) => {
     const off = engineOk && !engine.available(k);
-    return `<button class="am-item${addKind === k ? ' on' : ''}" data-k="${k}"${off ? ' disabled title="이 PC에서는 쓸 수 없어요"' : ''}><span class="am-ic">${FLAT_ICONS[k] || t.icon}</span><span class="am-tx"><b>${esc(t.label)}</b><small>${esc(ADD_DESC[k] || '')}</small></span></button>`;
+    return `<button class="am-item${addKind === k ? ' on' : ''}" data-k="${k}"${off ? ' disabled title="이 PC에서는 쓸 수 없어요"' : ''}><span class="am-tx"><b>${esc(t.label)}</b><small>${esc(ADD_DESC[k] || '')}</small></span></button>`;
   }).join('');
 }
 function setAddMenu(open) {
@@ -258,7 +258,7 @@ $('addMenu').addEventListener('click', (e) => {
   addKind = b.dataset.k;
   setAddMenu(false);
   const t = SOURCE_TYPES[addKind];
-  $('addTitle').innerHTML = `<span class="am-ic sm">${FLAT_ICONS[addKind] || ''}</span>${esc(t.label)} 추가`;
+  $('addTitle').textContent = `${t.label} 추가`;
   $('addBox').hidden = false; openTab('sources'); document.querySelector('.tab-body').scrollTop = 0;
   renderAddForm();
 });

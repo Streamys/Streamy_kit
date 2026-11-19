@@ -870,3 +870,4 @@ body.theme-dark .cm .bd.b-fan{background:rgba(236,72,153,.2);color:#F9A8D4}
 .am-tx small{font-size:11px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #addBox .type-grid{display:none!important}
 #addTitle{display:flex;align-items:center}
+.am-item{padding:10px 12px}.am-tx{gap:1px}
