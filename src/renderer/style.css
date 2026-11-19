@@ -1166,3 +1166,29 @@ body.scene-dragging #sceneDel,body.src-dragging-list #srcDel{box-shadow:0 0 0 2p
 .titlebar>*{flex:none}
 .titlebar .win-btns{margin-left:auto}
 #aoDesc{display:none}
+
+/* v0.22.1 글자 · 아이콘 줄 맞춤 */
+/* 사운드: % 숫자를 막대 줄에 맞춤 */
+.ch .pct{grid-row:2!important;align-self:center;line-height:1;color:var(--sub)!important;font-weight:700}
+.ch .mute{grid-row:1/3}
+/* 아이콘 + 글자 버튼: 세로 가운데 · 간격 통일 */
+button:has(>span[data-ic]),button:has(>.ico),.tag:has(.ico){display:inline-flex!important;align-items:center;justify-content:center;gap:6px}
+button>span[data-ic]{margin:0!important;display:inline-flex;align-items:center}
+button>span[data-ic] .ico,button>.ico{width:14px;height:14px;vertical-align:0;display:block}
+.ico{vertical-align:middle}
+/* 체크 상자 + 글자 */
+label.check,.lay-chk{display:flex!important;align-items:center;gap:8px}
+label.check input,.lay-chk input{margin:0;flex:none}
+.ch .mute{grid-column:1;grid-row:1/3}
+.ch .nm{grid-column:2/4;grid-row:1}
+.ch>.bar{grid-column:2;grid-row:2}
+.ch .pct{grid-column:3;grid-row:2!important;text-align:right}
+.ch .nm.grab::before{content:none!important}
+/* 버추얼 원클릭: 아이콘 · 제목 세로 가운데 */
+.tab .virt-card .vt-go{grid-template-rows:auto!important;align-items:center!important;min-height:68px}
+.tab .virt-card .vt-go span{grid-row:1!important}
+.tab .virt-card .vt-go b{align-self:center}
+/* VTS 버튼 셋: 같은 폭 · 같은 모양 */
+.vts-row{display:grid!important;grid-template-columns:repeat(3,1fr);gap:8px}
+.vts-row button{height:38px;padding:0!important;border-radius:10px!important;background:var(--card2)!important;border:1px solid var(--line)!important;color:var(--text)!important;font-weight:800}
+.vts-row button.primary-sm{background:var(--red)!important;border-color:var(--red)!important;color:var(--onac)!important}
