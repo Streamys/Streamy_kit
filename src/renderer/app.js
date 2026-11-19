@@ -403,7 +403,7 @@ function guideData() {
 }
 function guideDraw() {
   if (guideRaf) return;
-  guideRaf = requestAnimationFrame(() => { guideRaf = 0; try { ipcRenderer.send('ov:draw', { ...guideData(), color: cfg.themeDark ? ['#8B7CF6', '#B3A9FA', 'rgba(139,124,246,.12)'] : ['#6B5CE7', '#9A8FF5', 'rgba(107,92,231,.10)'] }); } catch (e) { rlog('warn', 'guide', e); } });
+  guideRaf = requestAnimationFrame(() => { guideRaf = 0; try { ipcRenderer.send('ov:draw', { ...guideData(), color: cfg.themeDark ? ['#25C08F', '#5FE3B8', 'rgba(37,192,143,.12)'] : ['#0F9F74', '#3DCB9D', 'rgba(15,159,116,.10)'] }); } catch (e) { rlog('warn', 'guide', e); } });
 }
 function guideShow() {
   const on = engineOk && mode !== 'air' && cfg.guide !== false;
