@@ -149,6 +149,8 @@
         <h4>인코더</h4>
         <div class="enc-row"><select id="encSel"></select><button class="ghost" id="encAuto" title="이 PC에서 가장 좋은 인코더 고르기">자동</button></div>
         <p class="hint" id="encHint"></p>
+        <h4>화질</h4>
+        <label class="field"><select id="quality"><option value="1080p60">1080p 60fps (권장)</option><option value="1080p30">1080p 30fps</option><option value="720p60">720p 60fps (저사양 PC)</option></select></label>
       </section>
 
       <!-- 채팅: 통합(직접 연결) + 플랫폼별 공식 채팅창 -->
@@ -244,10 +246,6 @@
 
       <!-- 설정 -->
       <section class="tab" id="tab-settings">
-        <h4>채널 연결 <small>채팅 · 시청자 수</small></h4>
-        <label class="field">유튜브 채널<input id="ytId" placeholder="@핸들 또는 채널 주소"></label>
-        <label class="field">SOOP 아이디<input id="soopId" placeholder="방송국 주소나 아이디"></label>
-        <p class="hint">한 번만 넣으면 방송이 켜질 때 채팅 탭에 자동으로 붙어요. 스트림 키로는 채널을 알 수 없어서 여기에 따로 넣어야 해요.<br>시청자 수는 지금은 치지직만 합쳐 보여 줘요 (위쪽 눈 모양 버튼).</p>
         <h4>최소화 오버레이 <small>창을 내리면 방송 상태 + 최근 채팅</small></h4>
         <label class="check"><input type="checkbox" id="miniOn"> 프로그램을 최소화하면 오버레이 띄우기</label>
         <div class="field">채팅을 보여줄 플랫폼<div class="seg" id="miniPlat"><button data-p="chzzk"><i class="pd chzzk"></i>치지직</button><button data-p="youtube"><i class="pd youtube"></i>유튜브</button><button data-p="soop"><i class="pd soop"></i>SOOP</button></div></div>
@@ -268,19 +266,15 @@
         <div class="field">포인트 색
           <div class="accent-row" id="accentRow"></div>
         </div>
-        <h4>ON AIR 화면</h4>
-        <label class="check"><input type="checkbox" id="airOnLive"> 방송이 시작되면 자동으로 ON AIR 화면으로 바꾸기</label>
         <h4>채팅 기록</h4>
         <label class="check"><input type="checkbox" id="chatLogOn"> 채팅을 파일로 저장하기 (날짜별 .txt)</label>
         <div class="row"><button id="chatLogDir2">기록 폴더 열기</button></div>
-        <h4>화질</h4>
-        <label class="field"><select id="quality"><option value="1080p60">1080p 60fps (권장)</option><option value="1080p30">1080p 30fps</option><option value="720p60">720p 60fps (저사양 PC)</option></select></label>
-        <p class="hint">화질 변경은 다시 시작한 뒤 적용돼요.</p>
         <h4>업데이트</h4>
         <div class="upd-box">
           <div><b id="updCur"></b><small id="updStatus">확인 전</small></div>
           <button id="updCheck">업데이트 확인</button>
         </div>
+        <button class="link oss-link" id="srcLink">오픈소스 라이선스 (OBS Studio · GPL-2.0)</button>
         <div class="upd-notes" id="updNotes" hidden></div>
         <label class="check"><input type="checkbox" id="updAuto"> 업데이트 파일이 들어오면 <b>바로 적용</b> (방송·녹화 중이면 끝난 뒤에)</label>
         <p class="hint">새 버전은 <b>GitHub 릴리즈</b>에 올라오면 5분 안에 알아서 받아서 적용돼요 (켤 때도 확인).<br>
@@ -292,10 +286,6 @@
         <label class="check"><input type="checkbox" id="gpuOff"> 화면 그래픽 가속 끄기 (창이 검게 나올 때)</label>
         <p class="hint" style="margin-top:0">바꾸면 다시 시작한 뒤 적용돼요. 방송 화면(송출) 품질에는 영향 없어요.</p>
         <div class="row"><button id="btnLogs2">로그 폴더 열기</button><button id="btnRestart">다시 시작</button></div>
-        <h4>단축키</h4>
-        <p class="hint">F1~F9 장면 전환 · 방향키 소스 이동 (Shift = 10배) · Delete 선택한 소스 삭제 · Esc 선택 해제</p>
-        <h4>정보</h4>
-        <p class="hint">Streamy Kit은 OBS Studio 엔진(GPL-2.0)과 obs-studio-node(GPL-2.0)를 사용합니다. <button class="link inline" id="srcLink">소스 코드</button></p>
       </section>
     </div>
 

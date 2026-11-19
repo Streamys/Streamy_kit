@@ -1192,3 +1192,5 @@ label.check input,.lay-chk input{margin:0;flex:none}
 .vts-row{display:grid!important;grid-template-columns:repeat(3,1fr);gap:8px}
 .vts-row button{height:38px;padding:0!important;border-radius:10px!important;background:var(--card2)!important;border:1px solid var(--line)!important;color:var(--text)!important;font-weight:800}
 .vts-row button.primary-sm{background:var(--red)!important;border-color:var(--red)!important;color:var(--onac)!important}
+.oss-link{display:block;margin:10px 0 2px;font-size:11px;color:var(--sub)!important}
+.sec-card>.oss-link{display:block!important;background:none!important;box-shadow:none!important;border:none!important;padding:0 4px!important;margin:0 0 10px!important;font-size:11px!important;font-weight:600;text-align:left;color:var(--sub)!important}

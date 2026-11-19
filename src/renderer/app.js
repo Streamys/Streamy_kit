@@ -925,9 +925,13 @@ async function pollViewers() {
 $('viewerEye').addEventListener('click', () => { cfg.showViewers = !cfg.showViewers; save(); renderViewers(); if (cfg.showViewers) pollViewers(); });
 // 치지직 채널은 [방송 정보]에서 치지직 로그인하면 자동으로 들어감 (따로 넣을 필요 없음)
 function syncChzzkChannel(st) {
-  const id = st && st.chzzk && st.chzzk.connected && st.chzzk.channel ? st.chzzk.channel.id : '';
-  if (!id || id === cfg.channels.chzzk) return;
-  cfg.channels.chzzk = id; save(); try { chatConfigure(); } catch {} pollViewers();
+  let changed = false;
+  for (const p of ['chzzk', 'youtube']) {
+    const id = st && st[p] && st[p].connected && st[p].channel ? st[p].channel.id : '';
+    if (id && id !== cfg.channels[p]) { cfg.channels[p] = id; changed = true; }
+  }
+  if (!changed) return;
+  save(); try { chatConfigure(); } catch {} pollViewers();
 }
 setInterval(pollViewers, 60000);
 
@@ -943,10 +947,6 @@ function normYt(v) {
   return v.replace(/^https?:\/\/(www\.)?youtube\.com\//, '').replace(/[/?#].*$/, '');
 }
 function normSoop(v) { return v.trim().replace(/^https?:\/\/(ch\.|play\.|www\.)?sooplive\.(co\.kr|com)\/(station\/)?/, '').replace(/[/?#].*$/, ''); }
-$('ytId').value = cfg.channels.youtube || '';
-$('soopId').value = cfg.channels.soop || '';
-$('ytId').addEventListener('change', () => { const v = normYt($('ytId').value); $('ytId').value = v; cfg.channels.youtube = v; save(); chatConfigure(); });
-$('soopId').addEventListener('change', () => { const v = normSoop($('soopId').value); $('soopId').value = v; cfg.channels.soop = v; save(); chatConfigure(); });
 async function chatConfigure() {
   const ch = { ...cfg.channels }; if (ch.chzzk && !/^[0-9a-f]{32}$/i.test(ch.chzzk)) ch.chzzk = '';
   try { const st = await ipcRenderer.invoke('chat:configure', ch); for (const [p, v] of Object.entries(st || {})) chat.status[p] = { p, ...v }; } catch (e) { rlog('error', 'chat configure', e); }
@@ -961,8 +961,8 @@ function renderChatState() {
   const anyLive = on.some((p) => chat.status[p]?.state === 'live');
   $('chatDot').className = 'tab-dot' + (chat.unseen && chat.view !== 'open' ? ' new' : anyLive ? ' live' : '');
   if (!on.length) {
-    $('chatFeed').innerHTML = `<div class="chat-empty"><b>채널을 연결하면 여기에 채팅이 모여요</b><br>설정 탭 → 채널 연결에 치지직 · 유튜브 · SOOP 채널을 한 번만 넣어 주세요.<br><button id="chatGoSettings">채널 연결하러 가기</button></div>`;
-    $('chatGoSettings').onclick = () => openTab(cfg.channels.chzzk ? 'settings' : 'stream');
+    $('chatFeed').innerHTML = `<div class="chat-empty"><b>로그인하면 채팅이 여기 모여요</b><br><button id="chatGoSettings">로그인하러 가기</button></div>`;
+    $('chatGoSettings').onclick = () => openTab('stream');
   } else if (!$('chatFeed').querySelector('.cm')) {
     $('chatFeed').innerHTML = `<div class="chat-empty">${anyLive ? '채팅을 기다리는 중…' : '방송이 켜지면 채팅이 자동으로 붙어요.'}</div>`;
   }
@@ -1054,10 +1054,10 @@ function renderChatWeb() {
   let w = chat.webs[p];
   if (w && w.url !== url) { w.el.remove(); delete chat.webs[p]; w = null; }
   if (!url) {
-    const msg = !cfg.channels[p] ? (p === 'chzzk' ? `<b>치지직 로그인이 필요해요</b><br><button id="chatGoSettings2">로그인하러 가기</button>` : `<b>${CHAT_P[p]} 채널이 연결되지 않았어요</b><br><button id="chatGoSettings2">채널 연결하러 가기</button>`)
+    const msg = !cfg.channels[p] ? (p === 'soop' ? `<b>SOOP 연동 준비 중이에요</b>` : `<b>${CHAT_P[p]} 로그인이 필요해요</b><br><button id="chatGoSettings2">로그인하러 가기</button>`)
       : p === 'youtube' ? '<b>유튜브 방송이 켜지면 채팅창이 떠요</b><br>방송 시작 후 몇 초 안에 자동으로 나타나요.' : '<b>채널 ID를 확인해 주세요</b>';
     box.insertAdjacentHTML('beforeend', `<div class="chat-empty">${msg}</div>`);
-    const b = $('chatGoSettings2'); if (b) b.onclick = () => openTab(p === 'chzzk' ? 'stream' : 'settings');
+    const b = $('chatGoSettings2'); if (b) b.onclick = () => openTab('stream');
     return;
   }
   if (!w) {
@@ -1748,8 +1748,6 @@ $('accentRow').addEventListener('click', (e) => { const b = e.target.closest('bu
 $('accentRow').addEventListener('input', (e) => { if (e.target.id !== 'accentPick') return; cfg.accent = e.target.value; applyAccent(); if (typeof guideDraw === 'function') guideDraw(); });
 $('accentRow').addEventListener('change', (e) => { if (e.target.id !== 'accentPick') return; cfg.accent = e.target.value; save(); applyTheme(); });
 applyTheme();
-$('airOnLive').checked = cfg.airOnLive !== false;
-$('airOnLive').addEventListener('change', () => { cfg.airOnLive = $('airOnLive').checked; save(); });
 
 // ================================================================== 채팅 기록 (파일 저장)
 async function setChatLog(on, quiet) {
