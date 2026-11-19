@@ -259,7 +259,7 @@ function renderAddMenu() {
   $('addBox').appendChild($('addForm'));          // 다시 그리기 전에 설정 칸을 잠깐 빼 둠
   m.innerHTML = Object.entries(SOURCE_TYPES).map(([k, t]) => {
     const off = engineOk && !engine.available(k);
-    return `<button class="am-item${addKind === k ? ' on' : ''}" data-k="${k}"${off ? ' disabled title="이 PC에서는 쓸 수 없어요"' : ''}><span class="am-tx"><b>${esc(t.label)}</b><small>${esc(ADD_DESC[k] || '')}</small></span></button>`;
+    return `<button class="am-item${addKind === k ? ' on' : ''}" data-k="${k}"${off ? ' disabled title="이 PC에서는 쓸 수 없어요"' : ' draggable="true" title="누르면 설정 · 끌어서 화면에 놓으면 추가"'}><span class="am-tx"><b>${esc(t.label)}</b><small>${esc(ADD_DESC[k] || '')}</small></span><span class="am-grip" aria-hidden="true">⠿</span></button>`;
   }).join('');
   if (addKind) { const it = m.querySelector(`.am-item[data-k="${addKind}"]`); if (it) { it.after($('addForm')); renderAddForm(); } }
 }
@@ -286,7 +286,7 @@ function closeAdd() { addKind = null; $('addBox').appendChild($('addForm')); $('
 const IMG_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i;
 let dropDepth = 0;
 const isFileOrUrl = (e) => [...(e.dataTransfer?.types || [])].some((t) => t === 'Files' || t === 'text/uri-list');
-window.addEventListener('dragenter', (e) => { if (!isFileOrUrl(e) || DEMO) return; dropDepth++; document.body.classList.add('dropping'); });
+window.addEventListener('dragenter', (e) => { if (!isFileOrUrl(e) || DEMO || srcDrag) return; dropDepth++; document.body.classList.add('dropping'); });
 window.addEventListener('dragleave', () => { if (--dropDepth <= 0) { dropDepth = 0; document.body.classList.remove('dropping'); } });
 window.addEventListener('dragover', (e) => { if (isFileOrUrl(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
 window.addEventListener('drop', guard((e) => {
@@ -367,9 +367,13 @@ function renderAddForm() {
   const box = $('addForm');
   if (!addKind) { box.innerHTML = ''; return; }
   const t = SOURCE_TYPES[addKind];
-  box.innerHTML = sourceForm(addKind, 'a') + '<button class="primary-sm add-go" id="aAdd">＋ 이 장면에 넣기</button>';
+  box.innerHTML = sourceForm(addKind, 'a') + '<p class="add-drag-hint">위의 <b>' + esc(t.label) + '</b>을(를) 끌어서 화면에 놓으면 들어가요</p>';
   bindForm(addKind, 'a');
-  $('aAdd').addEventListener('click', guard(() => {
+}
+function addFromForm() {
+  if (!addKind) return;
+  const t = SOURCE_TYPES[addKind];
+  {
     const opt = readForm('a');
     if (t.prop && addKind !== 'game' && !opt.value && !(addKind === 'virtual' && opt.virt?.method === 'spout')) return toast('목록에서 골라 주세요.', true);
     if (addKind === 'virtual') opt.name = appOfExe(exeOf(opt.value))?.name || '버추얼';
@@ -379,6 +383,30 @@ function renderAddForm() {
     const r = engine.addSource(addKind, opt);
     saveScenes(); closeAdd();
     toast(`'${r.name}'을(를) 넣었어요. 미리보기에서 끌어서 위치를 맞추세요.`);
+  }
+}
+// 소스 종류를 끌어서 화면(또는 소스 목록)에 놓으면 추가. 끄는 동안엔 엔진 미리보기·가이드 창을 잠깐 숨겨야 놓기가 먹힘
+let srcDrag = false;
+function setSrcDrag(on) {
+  srcDrag = on; document.body.classList.toggle('src-dragging', on);
+  if (!engineOk) return;
+  if (on) { try { engine.moveDisplay(-20000, -20000, 1, 1); } catch {} ipcRenderer.send('ov:show', false); }
+  else { layoutDisplay(); guideShow(); }
+}
+$('addMenu').addEventListener('dragstart', (e) => {
+  const b = e.target.closest && e.target.closest('.am-item'); if (!b || b.disabled) { if (!b) e.preventDefault(); return; }
+  e.dataTransfer.setData('application/x-streamy-add', b.dataset.k); e.dataTransfer.effectAllowed = 'copy';
+  setTimeout(() => setSrcDrag(true), 0);
+});
+$('addMenu').addEventListener('dragend', () => setSrcDrag(false));
+for (const zone of [$('previewWrap'), $('sourceList')]) {
+  zone.addEventListener('dragover', (e) => { if (e.dataTransfer.types.includes('application/x-streamy-add')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; zone.classList.add('add-over'); } });
+  zone.addEventListener('dragleave', () => zone.classList.remove('add-over'));
+  zone.addEventListener('drop', guard((e) => {
+    const k = e.dataTransfer.getData('application/x-streamy-add'); zone.classList.remove('add-over'); if (!k) return;
+    e.preventDefault(); e.stopPropagation(); setSrcDrag(false);
+    if (addKind !== k) { addKind = k; renderAddMenu(); }      // 안 펼친 걸 끌어오면 기본값으로
+    addFromForm();
   }));
 }
 function showProps() {

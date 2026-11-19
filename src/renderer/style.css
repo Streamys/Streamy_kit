@@ -895,3 +895,16 @@ body.dropping .stage .preview-wrap::after{content:'여기에 놓으면 소스로
 .src-list li.dragging{opacity:.4}
 .src-list li.drop-b{box-shadow:inset 0 2px 0 var(--red)}
 .src-list li.drop-a{box-shadow:inset 0 -2px 0 var(--red)}
+
+/* v0.15.2 끌어서 추가 */
+.am-item[draggable=true]{cursor:grab}
+.am-item:active{cursor:grabbing}
+.am-grip{margin-left:auto;color:var(--sub);opacity:.35;font-size:14px;letter-spacing:-1px}
+.am-item:hover .am-grip,.am-item.on .am-grip{opacity:.8;color:var(--red)}
+.add-drag-hint{margin:10px 0 0;padding:9px 10px;border:1.5px dashed var(--red);border-radius:10px;font-size:12px;color:var(--sub);text-align:center;background:var(--card)}
+.add-drag-hint b{color:var(--red)}
+body.src-dragging .stage .preview-wrap{position:relative;box-shadow:inset 0 0 0 3px var(--red),var(--shadow)}
+body.src-dragging .stage .preview-wrap::after{content:'여기에 놓으면 이 장면에 들어가요';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--soft2);color:var(--red);font-weight:800;font-size:16px;border-radius:inherit;z-index:5;pointer-events:none}
+body.src-dragging .stage .preview-wrap.add-over::after{background:var(--soft)}
+body.src-dragging #sourceList{box-shadow:inset 0 0 0 2px var(--soft)}
+#sourceList.add-over{box-shadow:inset 0 0 0 2px var(--red)!important}
