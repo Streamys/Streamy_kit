@@ -15,7 +15,7 @@ const CHZZK_API = 'https://openapi.chzzk.naver.com';
 const YT_API = 'https://www.googleapis.com/youtube/v3';
 // Streamy 기본 앱 (공개돼도 되는 값만)
 const STREAMY = {
-  relay: '',                                                   // 중계 서버 주소 (예: https://streamy-relay.xxx.workers.dev)
+  relay: 'https://streamy-relay.tiredblack07782.workers.dev',                                                   // 중계 서버 주소 (예: https://streamy-relay.xxx.workers.dev)
   chzzkClientId: '5d62b982-08a0-4300-a4df-b9bf7849d92a',
   googleClientId: '',
 };
