@@ -450,7 +450,7 @@ function main() {
     } catch (e) { log.warn('monitors', String(e)); }
   }
   loadMonitors();
-  screen.on('display-added', loadMonitors); screen.on('display-removed', loadMonitors);
+  app.whenReady().then(() => { try { screen.on('display-added', loadMonitors); screen.on('display-removed', loadMonitors); } catch {} });
   ipcMain.on('app:displays', (e) => {
     if (monCache && monCache.length) { e.returnValue = monCache.map((m, i) => ({ i, id: m.id, name: m.name, primary: m.primary, w: m.w, h: m.h })); return; }
     try {
