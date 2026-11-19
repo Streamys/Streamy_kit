@@ -278,7 +278,10 @@ class Engine {
 
   settingsFor(kind, opt) {
     switch (kind) {
-      case 'monitor': return { monitor_id: opt.value, capture_cursor: true };
+      case 'monitor': {
+        const m = /^mon:(\d+)$/.exec(String(opt.value || ''));
+        return m ? { monitor_id: 'DUMMY', monitor: Number(m[1]), capture_cursor: true } : { monitor_id: opt.value, capture_cursor: true };
+      }
       case 'window': return { window: opt.value, capture_cursor: true, priority: 2 };
       case 'game': return opt.value ? { capture_mode: 'window', window: opt.value, priority: 2, capture_cursor: false, allow_transparency: false }
         : { capture_mode: 'any_fullscreen', capture_cursor: false };

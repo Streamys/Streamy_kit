@@ -437,6 +437,14 @@ function main() {
     try { const dir = path.join(app.getPath('userData'), 'fonts'); if (file && path.dirname(file) === dir) fs.unlinkSync(file); } catch {}
     return true;
   });
+  // 모니터 목록: 엔진에 물어보면(임시 소스 만들기) 일부 PC에서 엔진이 죽어서, 윈도우가 아는 화면 목록을 씀
+  ipcMain.on('app:displays', (e) => {
+    try {
+      const pri = screen.getPrimaryDisplay().id;
+      e.returnValue = screen.getAllDisplays().sort((a, b) => a.bounds.x - b.bounds.x || a.bounds.y - b.bounds.y)
+        .map((d, i) => ({ i, primary: d.id === pri, w: Math.round(d.size.width * d.scaleFactor), h: Math.round(d.size.height * d.scaleFactor) }));
+    } catch { e.returnValue = []; }
+  });
   ipcMain.handle('app:pick-image', async () => {
     const r = await dialog.showOpenDialog(win, { title: '이미지 고르기', properties: ['openFile'], filters: [{ name: '이미지', extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'] }] });
     return r.canceled ? null : r.filePaths[0];

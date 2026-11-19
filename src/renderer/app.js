@@ -364,6 +364,11 @@ const PICK_LABEL = { monitor: '모니터', window: '프로그램 창', game: '�
 function pickOptions(kind) {
   const first = kind === 'game' ? '<option value="">전체 화면 게임 자동 감지</option>' : '';
   if (kind === 'virtual') return virtualPickOptions('') || '<option value="">찾지 못했어요 — 프로그램을 켜고 다시 찾기</option>';
+  if (kind === 'monitor') {
+    let ds = []; try { ds = ipcRenderer.sendSync('app:displays') || []; } catch {}
+    return optionList(ds.map((d) => ({ name: `모니터 ${d.i + 1}${d.primary ? ' (주 모니터)' : ''} · ${d.w}×${d.h}`, value: 'mon:' + d.i })), '찾지 못했어요');
+  }
+  crumb('choices ' + kind);
   let items = []; try { items = engineOk ? engine.choices(kind) : []; } catch (e) { rlog('error', 'choices', e); }
   return first + optionList(items, kind === 'game' ? '' : '찾지 못했어요');
 }
@@ -408,13 +413,15 @@ var engineReadyAt = 0;
 function tabAddMaybe() { if (tabAddReady || !(engineOk || DEMO)) return; tabAddReady = true; const wait = Math.max(250, 2500 - (Date.now() - engineReadyAt)); setTimeout(() => { try { renderTabAdd(); } catch (e) { rlog('warn', 'tabAdd', e); } }, wait); }
 function renderTabAdd() {
   const sel = $('tKind'); if (!sel) return;
-  const cur = sel.value || cfg.tabAddKind || 'monitor';
-  sel.innerHTML = Object.entries(SOURCE_TYPES).map(([k, t]) => { return `<option value="${k}">${esc(t.label)} — ${esc(ADD_DESC[k] || '')}</option>`; }).join('');
-  sel.value = SOURCE_TYPES[cur] ? cur : 'monitor';
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">어떤 소스를 넣을까요? (골라 주세요)</option>' + Object.entries(SOURCE_TYPES).map(([k, t]) => `<option value="${k}">${esc(t.label)} — ${esc(ADD_DESC[k] || '')}</option>`).join('');
+  sel.value = SOURCE_TYPES[cur] ? cur : '';
+  if (!sel.value) { $('tForm').innerHTML = ''; $('tAdd').disabled = true; return; }
+  $('tAdd').disabled = false;
   $('tForm').innerHTML = sourceForm(sel.value, 't'); bindForm(sel.value, 't');
 }
 $('tKind').addEventListener('change', () => { cfg.tabAddKind = $('tKind').value; save(); renderTabAdd(); });
-$('tAdd').addEventListener('click', guard(() => addSourceFrom($('tKind').value, 't', () => renderTabAdd())));
+$('tAdd').addEventListener('click', guard(() => { if ($('tKind').value) addSourceFrom($('tKind').value, 't', () => { $('tKind').value = ''; renderTabAdd(); }); }));
 $('tDel').addEventListener('click', guard(() => removeSelected()));
 function syncSourceCards(items) {
   $('timerCard').hidden = !items.some((x) => x.kind === 'timer');      // 타이머는 넣었을 때만
