@@ -120,6 +120,23 @@ function renderScenes() {
       b.title = s.name;
       b.addEventListener('click', guard(() => { if (DEMO) { demo.current = s.id; renderScenes(); return; } engine.switchScene(s.id); saveScenes(); }));
       b.addEventListener('dblclick', () => { if (DEMO) return; renamingScene = s.id; renderScenes(); });
+      b.draggable = !DEMO; b.dataset.id = s.id;
+      b.addEventListener('dragstart', (e) => { e.dataTransfer.setData('application/x-streamy-scene', String(s.id)); e.dataTransfer.effectAllowed = 'move'; b.classList.add('dragging'); document.body.classList.add('scene-dragging'); });
+      b.addEventListener('dragend', () => { b.classList.remove('dragging'); document.body.classList.remove('scene-dragging'); box.querySelectorAll('.drop-a,.drop-b').forEach((x) => x.classList.remove('drop-a', 'drop-b')); });
+      b.addEventListener('dragover', (e) => {
+        if (!e.dataTransfer.types.includes('application/x-streamy-scene')) return;
+        e.preventDefault(); const r = b.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2;
+        box.querySelectorAll('.drop-a,.drop-b').forEach((x) => x.classList.remove('drop-a', 'drop-b')); b.classList.add(after ? 'drop-a' : 'drop-b');
+      });
+      b.addEventListener('drop', guard((e) => {
+        const from = e.dataTransfer.getData('application/x-streamy-scene'); if (!from) return; e.preventDefault();
+        const order = list.map((x) => String(x.id)), fi = order.indexOf(from); if (fi < 0) return;
+        const r = b.getBoundingClientRect(); let ti = order.indexOf(String(s.id)) + (e.clientY > r.top + r.height / 2 ? 1 : 0); if (ti > fi) ti -= 1;
+        const mid = list[fi].id;
+        for (let k = fi; k < ti; k++) engine.moveScene(mid, 1);
+        for (let k = fi; k > ti; k--) engine.moveScene(mid, -1);
+        if (ti !== fi) { saveScenes(); renderScenes(); }
+      }));
       b.addEventListener('contextmenu', guard(async (e) => {
         e.preventDefault(); if (DEMO) return;
         const r = await ipcRenderer.invoke('app:confirm', { title: '장면', message: `'${s.name}' 장면을 어떻게 할까요?`, buttons: ['삭제', '왼쪽으로', '오른쪽으로', '취소'] });
@@ -129,9 +146,27 @@ function renderScenes() {
     }
     box.appendChild(b);
   });
-  const add = document.createElement('button'); add.className = 'tile add'; add.textContent = '+'; add.title = '장면 추가';
-  add.addEventListener('click', guard(() => { if (DEMO) return; const sc = engine.addScene(); engine.switchScene(sc.id, true); renamingScene = sc.id; renderScenes(); saveScenes(); }));
-  box.appendChild(add);
+}
+function addSceneNow() { if (DEMO) return; const sc = engine.addScene(); engine.switchScene(sc.id, true); renamingScene = sc.id; renderScenes(); saveScenes(); }
+async function deleteScene(id) {
+  if (DEMO || !engineOk) return;
+  const sc = engine.scenes.find((x) => x.id === id); if (!sc) return;
+  if (engine.scenes.length <= 1) return toast('장면은 하나 이상 있어야 해요.', true);
+  const r = await ipcRenderer.invoke('app:confirm', { title: '장면 삭제', message: `'${sc.name}' 장면을 삭제할까요?\n안에 있는 소스 배치도 같이 사라져요.`, buttons: ['삭제', '취소'] });
+  if (r === 0) { engine.removeScene(id); saveScenes(); renderScenes(); renderSources(); }
+}
+$('sceneAdd').addEventListener('click', guard(addSceneNow));
+$('sceneDel').addEventListener('click', guard(() => deleteScene(DEMO ? null : engine.currentId)));
+// [삭제] 버튼으로 끌어와서 빼기 (장면 · 소스 둘 다)
+for (const [btn, type] of [['sceneDel', 'application/x-streamy-scene'], ['srcDel', 'application/x-streamy-src']]) {
+  const el = $(btn);
+  el.addEventListener('dragover', (e) => { if (e.dataTransfer.types.includes(type)) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; el.classList.add('drop-del'); } });
+  el.addEventListener('dragleave', () => el.classList.remove('drop-del'));
+  el.addEventListener('drop', guard((e) => {
+    el.classList.remove('drop-del'); const id = e.dataTransfer.getData(type); if (!id) return; e.preventDefault(); e.stopPropagation();
+    if (type.endsWith('scene')) { const sc = engine.scenes.find((x) => String(x.id) === id); if (sc) deleteScene(sc.id); }
+    else { engine.select(Number(id), 'single'); removeSelected(); }
+  }));
 }
 engine.on('scenes', renderScenes);
 
@@ -172,8 +207,8 @@ function renderSources() {
       li.querySelector('.eye').addEventListener('click', guard((e) => { e.stopPropagation(); if (DEMO) return; engine.setVisible(it.id, !it.visible); saveScenes(); }));
       // 끌어서 순서 바꾸기 (위 = 화면 앞)
       li.draggable = !DEMO; li.dataset.id = it.id;
-      li.addEventListener('dragstart', (e) => { e.dataTransfer.setData('application/x-streamy-src', String(it.id)); e.dataTransfer.effectAllowed = 'move'; li.classList.add('dragging'); });
-      li.addEventListener('dragend', () => { li.classList.remove('dragging'); ul.querySelectorAll('.drop-a,.drop-b').forEach((x) => x.classList.remove('drop-a', 'drop-b')); });
+      li.addEventListener('dragstart', (e) => { e.dataTransfer.setData('application/x-streamy-src', String(it.id)); e.dataTransfer.effectAllowed = 'move'; li.classList.add('dragging'); document.body.classList.add('src-dragging-list'); });
+      li.addEventListener('dragend', () => { li.classList.remove('dragging'); document.body.classList.remove('src-dragging-list'); ul.querySelectorAll('.drop-a,.drop-b').forEach((x) => x.classList.remove('drop-a', 'drop-b')); });
       li.addEventListener('dragover', (e) => {
         if (!e.dataTransfer.types.includes('application/x-streamy-src')) return;
         e.preventDefault(); e.stopPropagation();
@@ -195,6 +230,7 @@ function renderSources() {
     }
     ul.appendChild(li);
   }
+  syncSourceCards(items);
   renderEditBar();
 }
 function selIds() { return engineOk ? [...engine.sel] : []; }
@@ -350,7 +386,7 @@ function sourceForm(kind, prefix, cur = {}) {
   if (kind === 'color') h += `<label class="field">색<input id="${prefix}Color" type="color" value="#0e0e10"></label>`;
   if (kind === 'virtual') h += `<label class="field">연결 방식<select id="${prefix}Method"><option value="game">창 바로 잡기 · 투명 배경 (추천)</option><option value="spout">Spout2 (VTube Studio·VSeeFace·Warudo에서 Spout2를 켰을 때)</option></select></label>
       <p class="hint">켜져 있는 프로그램만 목록에 나와요. 더 쉬운 방법: 위의 <b>버추얼 원클릭 연결</b>.</p>`;
-  if (kind === 'timer') h += '<p class="hint">오른쪽 위에 들어가요. 조작은 <b>타이머</b> 탭에서 해요.</p>';
+  if (kind === 'timer') h += '<p class="hint">오른쪽 위에 들어가요. 넣고 나면 <b>소스</b> 탭에 <b>방송 타이머</b> 칸이 생겨요.</p>';
   return h;
 }
 function readForm(prefix) {
@@ -364,6 +400,22 @@ function bindForm(kind, prefix) {
   const b = $(prefix + 'Browse');
   if (b) b.addEventListener('click', async () => { const f = await ipcRenderer.invoke('app:pick-image'); if (f) $(prefix + 'File').value = f; });
 }
+// 소스 탭: 콤보박스로 고르고 바로 넣기 · 선택한 소스 빼기
+function renderTabAdd() {
+  const sel = $('tKind'); if (!sel) return;
+  const cur = sel.value || cfg.tabAddKind || 'monitor';
+  sel.innerHTML = Object.entries(SOURCE_TYPES).map(([k, t]) => { const off = engineOk && !engine.available(k); return `<option value="${k}"${off ? ' disabled' : ''}>${esc(t.label)} — ${esc(ADD_DESC[k] || '')}</option>`; }).join('');
+  sel.value = SOURCE_TYPES[cur] ? cur : 'monitor';
+  $('tForm').innerHTML = sourceForm(sel.value, 't'); bindForm(sel.value, 't');
+}
+setTimeout(() => { try { renderTabAdd(); } catch (e) { rlog('warn', 'tabAdd', e); } }, 0);
+$('tKind').addEventListener('change', () => { cfg.tabAddKind = $('tKind').value; save(); renderTabAdd(); });
+$('tAdd').addEventListener('click', guard(() => addSourceFrom($('tKind').value, 't', () => renderTabAdd())));
+$('tDel').addEventListener('click', guard(() => removeSelected()));
+function syncSourceCards(items) {
+  $('timerCard').hidden = !items.some((x) => x.kind === 'timer');      // 타이머는 넣었을 때만
+  $('tDel').disabled = !(DEMO ? items.some((x) => x.selected) : selIds().length);
+}
 function renderAddForm() {
   const box = $('addForm');
   if (!addKind) { box.innerHTML = ''; return; }
@@ -372,18 +424,20 @@ function renderAddForm() {
   bindForm(addKind, 'a');
   $('aAdd').addEventListener('click', guard(() => addFromForm()));
 }
-function addFromForm() {
-  if (!addKind) return;
+function addFromForm() { if (addKind) addSourceFrom(addKind, 'a', closeAdd); }
+function addSourceFrom(kind, prefix, after) {
+  const addKind = kind;
   const t = SOURCE_TYPES[addKind];
   {
-    const opt = readForm('a');
+    if (!engineOk) return toast('방송 엔진이 아직 준비되지 않았어요.', true);
+    const opt = readForm(prefix);
     if (t.prop && addKind !== 'game' && !opt.value && !(addKind === 'virtual' && opt.virt?.method === 'spout')) return toast('목록에서 골라 주세요.', true);
     if (addKind === 'virtual') opt.name = appOfExe(exeOf(opt.value))?.name || '버추얼';
     if (t.file && !opt.file) return toast('이미지 파일을 골라 주세요.', true);
     if (t.url && !/^https?:\/\//.test(opt.url || '')) return toast('http(s)로 시작하는 주소를 넣어 주세요.', true);
     if (['webcam', 'monitor', 'window'].includes(addKind) && opt.label) opt.name = opt.label.replace(/^\[[^\]]*\]:?\s*/, '').slice(0, 40);
     const r = engine.addSource(addKind, opt);
-    saveScenes(); closeAdd();
+    saveScenes(); if (after) after();
     toast(`'${r.name}'을(를) 넣었어요. 미리보기에서 끌어서 위치를 맞추세요.`);
   }
 }
@@ -1306,6 +1360,7 @@ async function boot() {
     engine.start({ osnDir: info.osnDir, dataDir: info.dataDir, width: q[0], height: q[1], fps: q[2] });
     rlog('info', `engine started in ${Math.round(performance.now() - t0)}ms`, 'encoders:', engine.encoderTypes().join(','));
     engineOk = true;
+    setTimeout(() => { try { renderTabAdd(); } catch {} }, 0);
   } catch (e) { engineError(e); return; }
   try {
     let saved = null; try { saved = JSON.parse(fs.readFileSync(scenesFile, 'utf8')); } catch {}
@@ -1504,12 +1559,46 @@ function fontInstalled(f) {
   const c = document.createElement('canvas').getContext('2d'), t = '가나다라ABCabc123';
   return ['monospace', 'serif'].some((base) => { c.font = `20px ${base}`; const w0 = c.measureText(t).width; c.font = `20px '${f}',${base}`; return c.measureText(t).width !== w0; });
 }
+// 사용자가 가져온 글꼴 (파일 → FontFace 등록, 이름만 넣은 건 PC에 깔린 글꼴)
+const userFonts = () => Array.isArray(cfg.customFonts) ? cfg.customFonts : [];
+function loadUserFonts() {
+  for (const f of userFonts()) {
+    if (!f.file || document.fonts.check(`12px '${f.family}'`) && f._ok) continue;
+    try { const ff = new FontFace(f.family, `url("${require('url').pathToFileURL(f.file).href}")`); ff.load().then((x) => { document.fonts.add(x); f._ok = true; if (!$('layOv').hidden) renderLayFonts(); }).catch(() => {}); } catch {}
+  }
+}
 function renderLayFonts() {
   const cur = lay().font;
-  $('layFonts').innerHTML = FONT_CHOICES.filter(([f]) => fontInstalled(f) || f === cur)
-    .map(([f, n]) => `<button class="${f === cur ? 'on' : ''}" data-f="${esc(f)}" style="font-family:${f ? `'${esc(f)}',` : ''}'Pretendard',sans-serif">${esc(n)}<small>가나다 ABC 123</small></button>`).join('');
+  const base = FONT_CHOICES.filter(([f]) => fontInstalled(f) || f === cur).map(([f, n]) => ({ f, n }));
+  const mine = userFonts().map((u) => ({ f: u.family, n: u.family, mine: true }));
+  $('layFonts').innerHTML = [...base, ...mine.filter((m) => !base.some((b) => b.f === m.f))]
+    .map(({ f, n, mine: my }) => `<button class="${f === cur ? 'on' : ''}${my ? ' mine' : ''}" data-f="${esc(f)}" style="font-family:${f ? `'${esc(f)}',` : ''}'Pretendard',sans-serif">${esc(n)}<small>가나다 ABC 123</small>${my ? `<i class="fx" data-rm="${esc(f)}" title="목록에서 빼기">${ic('x')}</i>` : ''}</button>`).join('');
 }
-$('layFonts').addEventListener('click', (e) => { const x = e.target.closest('button'); if (!x) return; setLay({ font: x.dataset.f }); renderLayFonts(); });
+$('layFonts').addEventListener('click', (e) => {
+  const rm = e.target.closest('.fx');
+  if (rm) {
+    e.stopPropagation(); const fam = rm.dataset.rm, it = userFonts().find((u) => u.family === fam);
+    cfg.customFonts = userFonts().filter((u) => u.family !== fam); save();
+    if (it && it.file) ipcRenderer.invoke('app:remove-font', it.file);
+    if (lay().font === fam) setLay({ font: '' }); renderLayFonts(); return;
+  }
+  const x = e.target.closest('button'); if (!x) return; setLay({ font: x.dataset.f }); renderLayFonts();
+});
+$('layFontFile').addEventListener('click', guard(async () => {
+  const got = await ipcRenderer.invoke('app:pick-font'); if (!got || !got.length) return;
+  const list = userFonts().filter((u) => !got.some((g) => g.family === u.family));
+  cfg.customFonts = [...list, ...got.map((g) => ({ family: g.family, file: g.file }))]; save();
+  loadUserFonts(); setLay({ font: got[got.length - 1].family }); renderLayFonts();
+  toast(`글꼴 '${got[got.length - 1].family}'을(를) 가져와서 적용했어요.`);
+}));
+$('layFontNameAdd').addEventListener('click', () => {
+  const name = $('layFontName').value.trim(); if (!name) return;
+  if (!fontInstalled(name)) return toast(`'${name}' 글꼴을 이 PC에서 못 찾았어요. 이름을 정확히 넣거나 파일로 가져와 주세요.`, true);
+  if (!userFonts().some((u) => u.family === name)) { cfg.customFonts = [...userFonts(), { family: name, file: null }]; save(); }
+  $('layFontName').value = ''; setLay({ font: name }); renderLayFonts();
+});
+$('layFontName').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('layFontNameAdd').click(); e.stopPropagation(); });
+loadUserFonts();
 $('layZoom').addEventListener('input', (e) => { $('layZoomV').textContent = e.target.value + '%'; });
 $('layZoom').addEventListener('change', (e) => setLay({ zoom: +e.target.value }));
 // 배치 지도: 칸 끌어 옮기기 + 기둥 너비 끌기

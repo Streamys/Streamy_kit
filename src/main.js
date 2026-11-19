@@ -426,6 +426,17 @@ function main() {
     const r = await dialog.showMessageBox(win, { type: 'question', title, message, detail, buttons, defaultId: 0, cancelId: buttons.length - 1 });
     return r.response;
   });
+  // 화면 꾸미기: 사용자가 가져온 글꼴 파일 → 내 폴더(userData/fonts)로 복사
+  ipcMain.handle('app:pick-font', async () => {
+    const r = await dialog.showOpenDialog(win, { title: '글꼴 파일 고르기', properties: ['openFile', 'multiSelections'], filters: [{ name: '글꼴', extensions: ['ttf', 'otf', 'woff', 'woff2'] }] });
+    if (r.canceled) return [];
+    const dir = path.join(app.getPath('userData'), 'fonts'); fs.mkdirSync(dir, { recursive: true });
+    return r.filePaths.map((f) => { const dst = path.join(dir, path.basename(f)); try { fs.copyFileSync(f, dst); } catch { return null; } return { file: dst, family: path.basename(f).replace(/\.(ttf|otf|woff2?)$/i, '').replace(/[-_](Regular|Medium|Bold|Light|R|M|B)$/i, '') }; }).filter(Boolean);
+  });
+  ipcMain.handle('app:remove-font', async (_e, file) => {
+    try { const dir = path.join(app.getPath('userData'), 'fonts'); if (file && path.dirname(file) === dir) fs.unlinkSync(file); } catch {}
+    return true;
+  });
   ipcMain.handle('app:pick-image', async () => {
     const r = await dialog.showOpenDialog(win, { title: '이미지 고르기', properties: ['openFile'], filters: [{ name: '이미지', extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'] }] });
     return r.canceled ? null : r.filePaths[0];

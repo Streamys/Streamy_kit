@@ -1042,3 +1042,29 @@ body.custom-font,body.custom-font input,body.custom-font select,body.custom-font
 .lay-sized{overflow:auto}
 .scene-row.lay-sized,.src-rail.lay-sized,.sound.lay-sized{overflow:hidden;display:flex;flex-direction:column}
 .scene-row.lay-sized .scene-tiles,.src-rail.lay-sized .src-list,.sound.lay-sized .sound-list{flex:1;min-height:0;overflow:auto}
+/* v0.19 글꼴 가져오기 · 소스 탭 추가/삭제 · 장면 도구 */
+.lay-fonts button{position:relative}
+.lay-fonts .fx{position:absolute;right:6px;top:6px;width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:6px;opacity:.5}
+.lay-fonts .fx:hover{opacity:1;background:var(--card)}
+.lay-fonts .fx .ico{width:10px;height:10px;color:var(--sub)}
+.lay-font-add{margin-top:8px}
+.lay-font-add button{width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px;border-radius:10px;border:1.5px dashed var(--red);background:var(--soft2);color:var(--red);font-weight:700;font-size:12px}
+.lay-font-name{display:flex;gap:6px;margin-top:6px}
+.lay-font-name input{flex:1;padding:7px 10px;font-size:12px}
+.lay-font-name button{border:1px solid var(--line);background:var(--card2);border-radius:8px;padding:0 12px;font-weight:700;font-size:12px}
+.tab-add-btns{display:flex;gap:8px;margin-top:4px}
+.tab-add-btns button{flex:1}
+.tab .tab-add-btns .del-btn:not(:disabled):hover{color:var(--live)!important;border-color:var(--live)!important}
+.tab .tab-add-btns .del-btn:disabled{opacity:.45}
+#tabAddCard .tab-add{display:block}
+.scene-tools{margin:0 0 10px}
+.scene-tools button{flex:1}
+.src-rail .src-tools,.scene-tools{display:flex;gap:6px}
+.scene-tools button{height:32px;border-radius:10px;font-size:12px;font-weight:700;border:1px solid transparent;background:var(--card2)}
+.scene-tools button.accent{background:var(--red);color:var(--onac)}
+.scene-tools button.del:hover,.src-tools button.del:hover{color:var(--live)}
+.drop-del{background:var(--live)!important;color:var(--onac)!important;transform:scale(1.06)}
+body.scene-dragging #sceneDel,body.src-dragging-list #srcDel{box-shadow:0 0 0 2px var(--live);color:var(--live)}
+.scene-row .tile.dragging{opacity:.4}
+.scene-row .tile.drop-b{box-shadow:inset 0 2px 0 var(--red)}
+.scene-row .tile.drop-a{box-shadow:inset 0 -2px 0 var(--red)}
