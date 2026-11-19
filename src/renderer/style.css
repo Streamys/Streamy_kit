@@ -781,3 +781,8 @@ body.theme-dark .tab .chat-switch button.on{background:var(--hover)!important}
 .chat-feed.compact .cm .av{font-size:0}
 .chat-feed.compact .cm .av .pm{position:static;box-shadow:none;width:15px;height:15px;font-size:9px;vertical-align:-3px}
 .pm.sm{width:15px;height:15px;font-size:9px}
+/* 플랫폼 글자 배지: 각 플랫폼 색 */
+.pm.chzzk{background:#00FFA3;color:#002B1C}
+.pm.youtube{background:#FF0000;color:#fff}
+.pm.soop{background:#2F6BF0;color:#fff}
+.pm{font-size:9px;letter-spacing:-.5px}

@@ -770,7 +770,7 @@ $('chatState').addEventListener('click', (e) => {
 });
 // 채팅 한 줄: 프로필(첫 글자 + 플랫폼 점) · 이름 · 배지 · 시간 / 내용. 같은 사람이 연달아 치면 이름 줄 생략
 // 플랫폼 표시: platform/<이름>.png 공식 로고가 있으면 로고, 없으면 색 + 글자 배지
-const PLAT_LETTER = { chzzk: '치', youtube: 'Y', soop: 'S' };
+const PLAT_LETTER = { chzzk: '치', youtube: '유', soop: '숲' };
 const PLAT_IMG = {};
 for (const k of Object.keys(PLAT_LETTER)) { try { if (require('fs').existsSync(require('path').join(__dirname, 'platform', `${k}.png`))) PLAT_IMG[k] = `platform/${k}.png`; } catch {} }
 function platMark(p, cls = '') { return `<i class="pm ${p} ${cls}" title="${CHAT_P[p] || p}">${PLAT_IMG[p] ? `<img src="${PLAT_IMG[p]}" alt="">` : (PLAT_LETTER[p] || '?')}</i>`; }
