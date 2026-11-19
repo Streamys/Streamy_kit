@@ -46,7 +46,7 @@
     </section>
     <section class="src-rail">
         <div class="src-head">
-          <div class="src-title"><b id="srcSceneName">장면</b><small>의 소스</small></div>
+          <div class="src-title"><b>소스</b></div>
           <div class="src-tools">
             <button id="srcAdd" class="accent" title="소스 추가">＋ 추가</button>
             <button id="srcDel" class="del" title="선택한 소스 삭제 (Delete)">삭제</button>
@@ -128,7 +128,7 @@
         <div class="bc-card" id="bcCard">
           <div class="bc-acc" id="bcAcc"></div>
           <label class="field">제목 <small id="bcTitleN">0/100</small><input id="bcTitle" maxlength="100" placeholder="오늘 방송 제목"></label>
-          <label class="field">태그 <small>쉼표(,)로 나눠요 · 치지직은 5개까지, 띄어쓰기·특수문자 빠져요</small><input id="bcTags" placeholder="예: 저챗, 롤, 버튜버"></label>
+          <label class="field">태그 <input id="bcTags" placeholder="저챗, 롤, 버튜버"></label>
           <div class="chips bc-tagprev" id="bcTagPrev"></div>
           <label class="field yt-only">설명 <small>유튜브만</small><textarea id="bcDesc" rows="3" placeholder="방송 설명 (유튜브)"></textarea></label>
           <div class="bc-cat">
@@ -245,9 +245,9 @@
       <!-- 설정 -->
       <section class="tab" id="tab-settings">
         <h4>채널 연결 <small>채팅 · 시청자 수</small></h4>
-        <label class="field">치지직 채널 ID<input id="chzzkId" placeholder="chzzk.naver.com/ 뒤의 32자리 (주소 통째로 붙여도 OK)"></label>
+        <label class="field">치지직 채널 ID<input id="chzzkId" placeholder="채널 주소나 ID"></label>
         <label class="field">유튜브 채널<input id="ytId" placeholder="@핸들 또는 채널 주소"></label>
-        <label class="field">SOOP 아이디<input id="soopId" placeholder="방송국 주소 sooplive.com/ 뒤의 아이디"></label>
+        <label class="field">SOOP 아이디<input id="soopId" placeholder="방송국 주소나 아이디"></label>
         <p class="hint">한 번만 넣으면 방송이 켜질 때 채팅 탭에 자동으로 붙어요. 스트림 키로는 채널을 알 수 없어서 여기에 따로 넣어야 해요.<br>시청자 수는 지금은 치지직만 합쳐 보여 줘요 (위쪽 눈 모양 버튼).</p>
         <h4>최소화 오버레이 <small>창을 내리면 방송 상태 + 최근 채팅</small></h4>
         <label class="check"><input type="checkbox" id="miniOn"> 프로그램을 최소화하면 오버레이 띄우기</label>
@@ -266,7 +266,7 @@
             <button class="mode-tile" data-m="auto" title="윈도우 설정(밝게/어둡게)을 따라가요"><span class="mt-prev auto"><i></i><b></b></span><span>자동</span></button>
           </div>
         </div>
-        <div class="field">포인트 색 <small>버튼 · 선택 표시 · 테두리에 쓰여요</small>
+        <div class="field">포인트 색
           <div class="accent-row" id="accentRow"></div>
         </div>
         <h4>ON AIR 화면</h4>
@@ -313,7 +313,7 @@
     <div class="ao-body">
       <div class="ao-list" id="aoList"></div>
       <div class="ao-right">
-        <div class="ao-empty" id="aoEmpty"><b>왼쪽에서 넣을 소스를 골라 주세요</b><small>고르면 여기에 바로 설정이 나와요</small></div>
+        <div class="ao-empty" id="aoEmpty"><b>넣을 소스를 골라 주세요</b></div>
         <div class="ao-pane" id="aoPane" hidden>
           <div class="ao-title"><span class="ic" id="aoIc"></span><div><b id="aoName"></b><small id="aoDesc"></small></div></div>
           <div class="ao-form" id="aoForm"></div>

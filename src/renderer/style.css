@@ -1129,3 +1129,40 @@ body.scene-dragging #sceneDel,body.src-dragging-list #srcDel{box-shadow:0 0 0 2p
 @keyframes cfPop{from{transform:scale(.94);opacity:0}to{transform:none;opacity:1}}
 .tabs{grid-template-columns:repeat(5,1fr)!important}
 .tabs button{white-space:nowrap}
+
+/* ===== v0.22 글 줄이기 · 정렬 맞추기 ===== */
+/* 설명 글 숨김: 화면만 보고 알 수 있게 */
+.hint,.ph-hint,.lay-tip,.add-drag-hint,.props-empty,.tab .sec-card>h4 small,.row-head small,.vt-go small,.ao-tx small,.lay-head small,.lay-marks,.src-rail p.tiny{display:none!important}
+/* 카드 제목: 크기 · 굵기 · 간격 통일 */
+.scene-row .row-head h3,.src-rail .src-title b,.sound .row-head h3,.tab .sec-card>h4:first-child,.props-card #propsBody>h4:first-child{font-size:14px!important;font-weight:800!important;line-height:20px;margin:0!important;color:var(--text)}
+.scene-row .row-head,.sound .row-head,.src-rail .src-head{display:flex;align-items:center;min-height:32px;margin:0 0 12px!important;padding:0!important;gap:8px}
+.tab .sec-card>h4:first-child{margin-bottom:12px!important}
+/* 바깥 카드 안쪽 여백 통일 */
+.scene-row,.src-rail,.sound{padding:16px!important}
+.tab .sec-card{padding:16px 16px 8px!important}
+/* 장면 · 소스 도구 버튼: 같은 모양 · 같은 비율 */
+.scene-tools,.src-rail .src-tools{display:grid!important;grid-template-columns:1fr 64px;gap:8px;width:100%;margin:0 0 12px}
+.src-rail .src-head{flex-wrap:wrap}
+.src-rail .src-head .src-title{width:100%}
+.scene-tools button,.src-rail .src-tools button{height:34px!important;border-radius:10px!important;font-size:12px!important;font-weight:800!important;padding:0!important;display:flex!important;align-items:center;justify-content:center}
+.src-rail .src-head{margin-bottom:0!important}
+/* 장면 · 소스 목록: 같은 줄 높이, 테두리 통일 */
+.src-rail .src-list{border:none!important;background:transparent!important;padding:0!important;display:flex;flex-direction:column;gap:6px}
+.scene-row .scene-tiles{gap:6px!important}
+.scene-row .tile,.src-rail .src-list li{min-height:46px;border-radius:12px}
+/* 사운드 머리: 톱니 버튼 오른쪽 끝 */
+.sound .row-head .gear{margin-left:auto}
+/* 정렬 버튼 줄: 이름 없을 땐 버튼만 가운데 */
+.edit-bar .sel-name:empty{display:none}
+.edit-bar .sel-name{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.edit-bar{justify-content:center}
+.edit-bar .edit-actions{margin-left:auto}
+.edit-bar:not(.has-sel) .edit-actions{margin:0 auto}
+/* 스트림 키 플랫폼 버튼: 같은 크기 */
+.key-guess .kg-btns{display:grid!important;grid-template-columns:repeat(3,1fr);gap:8px}
+.key-guess .kg-btns button{height:44px;padding:0!important}
+/* 제목줄: 좁으면 성능 숫자 숨김 (잘려 보이지 않게) */
+@media (max-width:1460px){.titlebar .stats{display:none}}
+.titlebar>*{flex:none}
+.titlebar .win-btns{margin-left:auto}
+#aoDesc{display:none}

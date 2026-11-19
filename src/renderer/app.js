@@ -194,7 +194,7 @@ engine.on('scenes', renderScenes);
 let editingItem = null;
 function renderSources() {
   const ul = $('sourceList'); ul.innerHTML = '';
-  $('srcSceneName').textContent = DEMO ? '게임 방송' : engineOk && engine.currentScene ? engine.currentScene.name : '장면';
+  // (소스 칸 제목은 '소스' 고정)
   const items = DEMO ? demo.items : engineOk ? engine.items() : [];
   if (!items.length) ul.innerHTML = '<li class="empty">아직 소스가 없어요. <b>＋ 추가</b>를 눌러 모니터 화면이나 게임을 넣어 보세요.</li>';
   for (const it of items) {
@@ -256,14 +256,14 @@ function renderSources() {
 function selIds() { return engineOk ? [...engine.sel] : []; }
 function renderEditBar() {
   const bar = $('editBar'), name = $('selName'), size = $('selSize');
-  const hint = '끌어서 이동 · 모서리를 끌어 크기 조절 · Alt = 자석 끄기';
-  if (DEMO) { bar.classList.add('has-sel'); name.innerHTML = '선택: <b>웹캠</b> · ' + hint; size.textContent = '576 × 324 · 30%'; return; }
+  const hint = '';
+  if (DEMO) { bar.classList.add('has-sel'); name.innerHTML = '<b>웹캠</b>'; size.textContent = '576 × 324 · 30%'; return; }
   const ids = selIds();
   bar.classList.toggle('has-sel', ids.length === 1);
-  if (!ids.length) { name.innerHTML = '미리보기에서 소스를 클릭하면 선택돼요 · ' + hint; size.textContent = ''; return; }
+  if (!ids.length) { name.innerHTML = ''; size.textContent = ''; return; }
   if (ids.length > 1) { name.innerHTML = `<b>${ids.length}개</b> 선택됨 · [삭제] 또는 Delete로 한 번에 삭제`; size.textContent = ''; return; }
   const it = engine.items().find((x) => x.id === ids[0]);
-  name.innerHTML = it ? `선택: <b>${esc(it.name)}</b> · ${hint}` : hint;
+  name.innerHTML = it ? `<b>${esc(it.name)}</b>` : '';
   updateSizeLabel();
 }
 function updateSizeLabel() {
@@ -1123,13 +1123,13 @@ function showGuess() {
   const g = guessKey(raw);
   box.hidden = false;
   $('kgMsg').innerHTML = g.platform
-    ? `<b>${esc(PLATFORMS[g.platform].name)}</b> 키로 보여요. 맞으면 눌러서 저장하세요.`
+    ? `<b>${esc(PLATFORMS[g.platform].name)}</b> 키 같아요`
     : '어느 플랫폼 키인가요? 눌러서 저장하세요.';
   const btns = $('kgBtns'); btns.innerHTML = '';
   for (const [k, p] of Object.entries(PLATFORMS)) {
     const b = document.createElement('button');
     b.className = g.platform === k ? 'guess' : '';
-    b.innerHTML = esc(p.name) + (cfg.keys[k] ? '<small>기존 키 바꾸기</small>' : '<small>새로 저장</small>');
+    b.innerHTML = esc(p.name);
     b.addEventListener('click', () => saveKey(k, g.key));
     btns.appendChild(b);
   }
@@ -1954,7 +1954,7 @@ function bcRenderAcc() {
   $('bcSub').textContent = yt ? '치지직 · 유튜브에 제목·태그를 한 번에' : '치지직 제목·태그·카테고리';
   $('bcAcc').innerHTML = (yt ? ['chzzk', 'youtube'] : ['chzzk']).map((p) => {
     const a = st[p] || {};
-    const state = a.connected ? `<span class="ok">연결됨${a.channel ? ' · ' + esc(a.channel.name) : ''}</span>` : a.hasApp ? '<span>로그인하면 제목·태그를 바꿀 수 있어요</span>' : '<span>준비 중</span>';
+    const state = a.connected ? `<span class="ok">연결됨${a.channel ? ' · ' + esc(a.channel.name) : ''}</span>` : a.hasApp ? '' : '<span>준비 중</span>';
     return `<div class="bc-row" data-p="${p}"><i class="pd ${p}"></i><b>${BC_NAME[p]}</b>${state}
       <span class="sp"></span>
       ${a.connected ? `<button class="ghost" data-act="logout">로그아웃</button>` : `<button class="${a.hasApp ? 'primary-sm' : ''}" data-act="login" ${a.hasApp ? '' : 'disabled'}>로그인</button>`}
