@@ -1230,3 +1230,4 @@ small.muted{color:var(--sub);font-size:11px}
 i.pd,.bc-tabs .pm,.bc-to-chip .pm,.chat-switch .pm,.chat-switch .pd,#miniPlat .pm,#miniPlat .pd,.bc-row .pm,.bc-row .pd{display:none!important}
 /* 숨김은 언제나 숨김 (아이콘 버튼 정렬 규칙이 hidden을 덮어쓰던 문제) */
 [hidden]{display:none!important}
+[hidden][hidden][hidden]{display:none!important}
