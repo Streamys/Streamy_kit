@@ -389,11 +389,17 @@ function addFromForm() {
 }
 // 소스 종류를 끌어서 화면(또는 소스 목록)에 놓으면 추가. 끄는 동안엔 엔진 미리보기·가이드 창을 잠깐 숨겨야 놓기가 먹힘
 let srcDrag = false;
+// 엔진 미리보기(네이티브 창)는 HTML 위에 떠 있어서, 위에 뭘 띄우거나 끌어 놓을 땐 잠깐 숨김
+const prevHide = new Set();
+function hidePreview(why, on) {
+  const before = prevHide.size; on ? prevHide.add(why) : prevHide.delete(why);
+  if (!engineOk || (before > 0) === (prevHide.size > 0)) return;
+  if (prevHide.size) { try { engine.moveDisplay(-20000, -20000, 1, 1); } catch {} ipcRenderer.send('ov:show', false); }
+  else { layoutDisplay(); guideShow(); }
+}
 function setSrcDrag(on) {
   srcDrag = on; document.body.classList.toggle('src-dragging', on);
-  if (!engineOk) return;
-  if (on) { try { engine.moveDisplay(-20000, -20000, 1, 1); } catch {} ipcRenderer.send('ov:show', false); }
-  else { layoutDisplay(); guideShow(); }
+  hidePreview('drag', on);
 }
 $('addMenu').addEventListener('dragstart', (e) => {
   const b = e.target.closest && e.target.closest('.am-item'); if (!b || b.disabled) { if (!b) e.preventDefault(); return; }
@@ -1259,6 +1265,7 @@ function layoutDisplay() {
   if (!engineOk || layoutRaf) return;
   layoutRaf = requestAnimationFrame(() => {
     layoutRaf = 0;
+    if (prevHide.size) return;
     const r = prev.getBoundingClientRect(), z = window.devicePixelRatio || 1;
     try { engine.moveDisplay(r.left * z, r.top * z, r.width * z, r.height * z); } catch (e) { rlog('warn', 'moveDisplay', e); }
     ipcRenderer.send('ov:rect', { x: r.left, y: r.top, width: r.width, height: r.height });
@@ -1443,6 +1450,35 @@ function applyAppIcon(c) {
     im.src = url;
   }, 250);
 }
+// 레이아웃: 좌우 바꾸기 · 설정 칸 너비 · 칸 보이기/숨기기
+const LAY_DEF = { side: 'left', width: 'm', rail: true, sound: true, edit: true };
+function lay() { return { ...LAY_DEF, ...(cfg.layout || {}) }; }
+function applyLayout() {
+  const L = lay(), b = document.body.classList;
+  b.toggle('lay-swap', L.side === 'right');
+  b.remove('lay-w-s', 'lay-w-l'); if (L.width !== 'm') b.add('lay-w-' + L.width);
+  b.toggle('lay-norail', !L.rail); b.toggle('lay-nosound', !L.sound); b.toggle('lay-noedit', !L.edit);
+  document.querySelectorAll('#laySide button').forEach((x) => x.classList.toggle('on', x.dataset.v === L.side));
+  document.querySelectorAll('#layWidth button').forEach((x) => x.classList.toggle('on', x.dataset.v === L.width));
+  $('layRail').checked = L.rail; $('laySound').checked = L.sound; $('layEdit').checked = L.edit;
+  layoutDisplay();
+}
+function setLay(k, v) { cfg.layout = { ...lay(), [k]: v }; save(); applyLayout(); }
+function layOpen(on) {
+  $('layPop').hidden = !on; $('layBtn').classList.toggle('on', on);
+  hidePreview('layout', on);
+}
+$('layBtn').addEventListener('click', (e) => { e.stopPropagation(); layOpen($('layPop').hidden); });
+$('layPop').addEventListener('click', (e) => e.stopPropagation());
+document.addEventListener('click', () => { if (!$('layPop').hidden) layOpen(false); });
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('layPop').hidden) layOpen(false); }, true);
+$('laySide').addEventListener('click', (e) => { const x = e.target.closest('button'); if (x) setLay('side', x.dataset.v); });
+$('layWidth').addEventListener('click', (e) => { const x = e.target.closest('button'); if (x) setLay('width', x.dataset.v); });
+$('layRail').addEventListener('change', (e) => setLay('rail', e.target.checked));
+$('laySound').addEventListener('change', (e) => setLay('sound', e.target.checked));
+$('layEdit').addEventListener('change', (e) => setLay('edit', e.target.checked));
+$('layReset').addEventListener('click', () => { cfg.layout = { ...LAY_DEF }; save(); applyLayout(); });
+applyLayout();
 // 화면 모드: 밝게 · 어둡게 · 윈도우 따라가기
 const darkMQ = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 function themeMode() { return ['light', 'dark', 'auto'].includes(cfg.themeMode) ? cfg.themeMode : (cfg.themeDark ? 'dark' : 'light'); }
