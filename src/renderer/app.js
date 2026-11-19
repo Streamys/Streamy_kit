@@ -4,6 +4,9 @@ const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { Engine, SOURCE_TYPES, PLATFORMS, ENCODERS, VIRTUAL_APPS, VIRTUAL_SPOTS, VIRTUAL_DEFAULT, VTS_SENDER, appOfExe, exeOf } = require('./engine.js');
+const { FLAT_ICONS } = require('./icons.js');
+// 소스 아이콘: 기본 이모지 그대로면 플랫 아이콘, 사용자가 바꾼 이모지면 그 이모지
+function srcIcon(kind, icon) { const def = SOURCE_TYPES[kind]; if (FLAT_ICONS[kind] && (!icon || !def || icon === def.icon)) return FLAT_ICONS[kind]; const k = Object.keys(SOURCE_TYPES).find((x) => SOURCE_TYPES[x].icon === icon); return (k && FLAT_ICONS[k]) || esc(icon || '•'); }
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -159,7 +162,7 @@ function renderSources() {
       setTimeout(() => { nmi.focus(); nmi.select(); });
     } else {
       li.className = (it.selected ? 'on' : '') + (it.visible ? '' : ' hidden');
-      li.innerHTML = `<span class="ic">${esc(it.icon)}</span><span class="nm">${esc(it.name)}</span><button class="eye" title="보이기/숨기기">${it.visible ? '👁' : '◌'}</button>`;
+      li.innerHTML = `<span class="ic">${srcIcon(it.kind, it.icon)}</span><span class="nm">${esc(it.name)}</span><button class="eye" title="보이기/숨기기">${it.visible ? '👁' : '◌'}</button>`;
       li.addEventListener('click', guard((e) => {
         if (DEMO) return;
         engine.select(it.id, e.shiftKey ? 'range' : (e.ctrlKey || e.metaKey) ? 'toggle' : 'single');
@@ -238,7 +241,7 @@ function renderTypes() {
   for (const [k, t] of Object.entries(SOURCE_TYPES)) {
     const b = document.createElement('button');
     b.className = 'type' + (addKind === k ? ' on' : '');
-    b.innerHTML = `<span>${t.icon}</span>${esc(t.label)}`;
+    b.innerHTML = `<span>${FLAT_ICONS[k] || t.icon}</span>${esc(t.label)}`;
     if (engineOk && !engine.available(k)) { b.disabled = true; b.title = '이 PC에서는 쓸 수 없어요'; }
     b.addEventListener('click', () => { addKind = k; renderTypes(); renderAddForm(); });
     g.appendChild(b);
@@ -316,7 +319,7 @@ function showProps() {
   if (s && s.kind === 'virtual') { renderVirtualProps(it.name, engine.getVirtual(it.name), s.settings.window, engine.getVirtual(it.name).method); return; }
   const t = s ? SOURCE_TYPES[s.kind] || {} : {};
   if (!s || !(t.prop || t.file || t.text || t.url || s.kind === 'color')) { body.innerHTML = ''; return; }
-  body.innerHTML = `<h4>${esc(it.icon)} ${esc(it.name)} 설정</h4>` + sourceForm(s.kind, 'p', s.settings) + '<button class="primary-sm" id="pSave">적용</button>';
+  body.innerHTML = `<h4 class="props-h"><span class="ic">${srcIcon(it.kind, it.icon)}</span>${esc(it.name)} 설정</h4>` + sourceForm(s.kind, 'p', s.settings) + '<button class="primary-sm" id="pSave">적용</button>';
   bindForm(s.kind, 'p');
   if (t.prop) { const cur = s.settings[t.prop]; if (cur != null) $('pPick').value = cur; }
   $('pSave').addEventListener('click', guard(() => {
@@ -1286,6 +1289,7 @@ for (const id of ['tab-stream', 'tab-settings', 'tab-sound']) {
     if (card && !el.classList.contains('tab-back')) card.appendChild(el);
   }
 }
+try { const vg = document.querySelector('#vtGo > span'); if (vg) vg.innerHTML = FLAT_ICONS.virtual; } catch {}
 // 화면 테마: 기본 = 밝은 카드, 설정에서 예전 검정·빨강
 // 포인트 색: 사용자가 고름 (기본 핑크). 밝게/다크에 맞춰 글자용 · 옅은 배경색을 계산
 const ACCENTS = [['#E5577E', '핑크'], ['#0F9F74', '민트'], ['#6B5CE7', '보라'], ['#3D7BEA', '블루'], ['#F08A24', '오렌지']];
