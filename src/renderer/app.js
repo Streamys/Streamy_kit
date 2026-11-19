@@ -4,9 +4,10 @@ const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { Engine, SOURCE_TYPES, PLATFORMS, ENCODERS, VIRTUAL_APPS, VIRTUAL_SPOTS, VIRTUAL_DEFAULT, VTS_SENDER, appOfExe, exeOf } = require('./engine.js');
-const { FLAT_ICONS } = require('./icons.js');
+const { FLAT_ICONS, UI_ICON } = require('./icons.js');
+const ic = (n) => UI_ICON(n);
 // 소스 아이콘: 기본 이모지 그대로면 플랫 아이콘, 사용자가 바꾼 이모지면 그 이모지
-function srcIcon(kind, icon) { const def = SOURCE_TYPES[kind]; if (FLAT_ICONS[kind] && (!icon || !def || icon === def.icon)) return FLAT_ICONS[kind]; const k = Object.keys(SOURCE_TYPES).find((x) => SOURCE_TYPES[x].icon === icon); return (k && FLAT_ICONS[k]) || esc(icon || '•'); }
+function srcIcon(kind) { return FLAT_ICONS[kind] || UI_ICON('dot'); }
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -145,16 +146,16 @@ function renderSources() {
     const li = document.createElement('li');
     if (editingItem === it.id) {
       li.className = 'editing';
-      li.innerHTML = '<input class="emo" maxlength="4" title="이모지"><input class="nmi">';
-      const emo = li.querySelector('.emo'), nmi = li.querySelector('.nmi');
-      emo.value = it.icon; nmi.value = it.name;
+      li.innerHTML = `<span class="ic">${srcIcon(it.kind)}</span><input class="nmi">`;
+      const nmi = li.querySelector('.nmi');
+      nmi.value = it.name;
       let finished = false;
       const done = (ok) => {
         if (finished) return; finished = true; editingItem = null;
-        if (ok) guard(() => { engine.renameSource(it.name, nmi.value.trim() || it.name, emo.value.trim()); saveScenes(); })();
+        if (ok) guard(() => { engine.renameSource(it.name, nmi.value.trim() || it.name, it.icon); saveScenes(); })();
         renderSources();
       };
-      for (const inp of [emo, nmi]) {
+      for (const inp of [nmi]) {
         inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); e.stopPropagation(); });
         inp.addEventListener('click', (e) => e.stopPropagation());
       }
@@ -162,7 +163,7 @@ function renderSources() {
       setTimeout(() => { nmi.focus(); nmi.select(); });
     } else {
       li.className = (it.selected ? 'on' : '') + (it.visible ? '' : ' hidden');
-      li.innerHTML = `<span class="ic">${srcIcon(it.kind, it.icon)}</span><span class="nm">${esc(it.name)}</span><button class="eye" title="보이기/숨기기">${it.visible ? '👁' : '◌'}</button>`;
+      li.innerHTML = `<span class="ic">${srcIcon(it.kind)}</span><span class="nm">${esc(it.name)}</span><button class="eye" title="보이기/숨기기">${it.visible ? ic('eye') : ic('eyeOff')}</button>`;
       li.addEventListener('click', guard((e) => {
         if (DEMO) return;
         engine.select(it.id, e.shiftKey ? 'range' : (e.ctrlKey || e.metaKey) ? 'toggle' : 'single');
@@ -206,7 +207,7 @@ function renderEditBar() {
   if (!ids.length) { name.innerHTML = '미리보기에서 소스를 클릭하면 선택돼요 · ' + hint; size.textContent = ''; return; }
   if (ids.length > 1) { name.innerHTML = `<b>${ids.length}개</b> 선택됨 · [삭제] 또는 Delete로 한 번에 삭제`; size.textContent = ''; return; }
   const it = engine.items().find((x) => x.id === ids[0]);
-  name.innerHTML = it ? `선택: <b>${esc(it.icon)} ${esc(it.name)}</b> · ${hint}` : hint;
+  name.innerHTML = it ? `선택: <b>${esc(it.name)}</b> · ${hint}` : hint;
   updateSizeLabel();
 }
 function updateSizeLabel() {
@@ -312,7 +313,7 @@ function renderTypes() {
   for (const [k, t] of Object.entries(SOURCE_TYPES)) {
     const b = document.createElement('button');
     b.className = 'type' + (addKind === k ? ' on' : '');
-    b.innerHTML = `<span>${FLAT_ICONS[k] || t.icon}</span>${esc(t.label)}`;
+    b.innerHTML = `<span>${srcIcon(k)}</span>${esc(t.label)}`;
     if (engineOk && !engine.available(k)) { b.disabled = true; b.title = '이 PC에서는 쓸 수 없어요'; }
     b.addEventListener('click', () => { addKind = k; renderTypes(); renderAddForm(); });
     g.appendChild(b);
@@ -325,7 +326,7 @@ function optionList(items, empty) {
 const PICK_LABEL = { monitor: '모니터', window: '프로그램 창', game: '게임 창', webcam: '웹캠', virtual: '버추얼 프로그램 창' };
 function pickOptions(kind) {
   const first = kind === 'game' ? '<option value="">전체 화면 게임 자동 감지</option>' : '';
-  if (kind === 'virtual') return virtualPickOptions('') || '<option value="">찾지 못했어요 — 프로그램을 켜고 ↻</option>';
+  if (kind === 'virtual') return virtualPickOptions('') || '<option value="">찾지 못했어요 — 프로그램을 켜고 다시 찾기</option>';
   let items = []; try { items = engineOk ? engine.choices(kind) : []; } catch (e) { rlog('error', 'choices', e); }
   return first + optionList(items, kind === 'game' ? '' : '찾지 못했어요');
 }
@@ -333,9 +334,9 @@ function sourceForm(kind, prefix, cur = {}) {
   const t = SOURCE_TYPES[kind];
   let h = '';
   if (t.prop) {
-    h += `<label class="field">${PICK_LABEL[kind]}<div class="row" style="margin:6px 0 0"><select id="${prefix}Pick">${pickOptions(kind)}</select><button class="ghost" id="${prefix}Refresh" title="다시 찾기">↻</button></div></label>`;
+    h += `<label class="field">${PICK_LABEL[kind]}<div class="row" style="margin:6px 0 0"><select id="${prefix}Pick">${pickOptions(kind)}</select><button class="ghost" id="${prefix}Refresh" title="다시 찾기">${ic('refresh')}</button></div></label>`;
     if (kind === 'webcam') h += '<p class="hint">웹캠은 처음에 왼쪽 아래에 들어가요. 미리보기에서 <b>끌어서 옮기고 모서리로 크기</b>를 맞추세요.</p>';
-    if (kind === 'game') h += '<p class="hint">특정 게임만 잡으려면 게임을 켠 상태에서 ↻를 누르고 고르세요.</p>';
+    if (kind === 'game') h += '<p class="hint">특정 게임만 잡으려면 게임을 켠 상태에서 다시 찾기 버튼을 누르고 고르세요.</p>';
   }
   if (t.file) h += `<label class="field">이미지 파일<div class="key-row"><input id="${prefix}File" readonly placeholder="파일을 골라 주세요" value="${esc(cur.file || '')}"><button class="ghost" id="${prefix}Browse">찾기</button></div></label>`;
   if (t.text) {
@@ -348,7 +349,7 @@ function sourceForm(kind, prefix, cur = {}) {
       <div class="grid2"><label class="field">가로<input id="${prefix}W" type="number" value="${esc(cur.width || 800)}"></label><label class="field">세로<input id="${prefix}H" type="number" value="${esc(cur.height || 600)}"></label></div>`;
   if (kind === 'color') h += `<label class="field">색<input id="${prefix}Color" type="color" value="#0e0e10"></label>`;
   if (kind === 'virtual') h += `<label class="field">연결 방식<select id="${prefix}Method"><option value="game">창 바로 잡기 · 투명 배경 (추천)</option><option value="spout">Spout2 (VTube Studio·VSeeFace·Warudo에서 Spout2를 켰을 때)</option></select></label>
-      <p class="hint">켜져 있는 프로그램만 목록에 나와요. 더 쉬운 방법: 위의 <b>🧸 버추얼 원클릭 연결</b>.</p>`;
+      <p class="hint">켜져 있는 프로그램만 목록에 나와요. 더 쉬운 방법: 위의 <b>버추얼 원클릭 연결</b>.</p>`;
   if (kind === 'timer') h += '<p class="hint">오른쪽 위에 들어가요. 조작은 <b>타이머</b> 탭에서 해요.</p>';
   return h;
 }
@@ -419,7 +420,7 @@ function showProps() {
   if (s && s.kind === 'virtual') { renderVirtualProps(it.name, engine.getVirtual(it.name), s.settings.window, engine.getVirtual(it.name).method); return; }
   const t = s ? SOURCE_TYPES[s.kind] || {} : {};
   if (!s || !(t.prop || t.file || t.text || t.url || s.kind === 'color')) { body.innerHTML = ''; return; }
-  body.innerHTML = `<h4 class="props-h"><span class="ic">${srcIcon(it.kind, it.icon)}</span>${esc(it.name)} 설정</h4>` + sourceForm(s.kind, 'p', s.settings) + '<button class="primary-sm" id="pSave">적용</button>';
+  body.innerHTML = `<h4 class="props-h"><span class="ic">${srcIcon(it.kind)}</span>${esc(it.name)} 설정</h4>` + sourceForm(s.kind, 'p', s.settings) + '<button class="primary-sm" id="pSave">적용</button>';
   bindForm(s.kind, 'p');
   if (t.prop) { const cur = s.settings[t.prop]; if (cur != null) $('pPick').value = cur; }
   $('pSave').addEventListener('click', guard(() => {
@@ -491,7 +492,7 @@ function guideData() {
   const selId = engine.sel.size === 1 ? engine.primary : null;
   for (const r of rects.slice().reverse()) {                     // 아래(뒤)부터 그림
     const state = engine.sel.has(r.id) ? 'sel' : r.id === hoverId ? 'hover' : 'norm';
-    items.push({ x: m.ox + r.x * m.s, y: m.oy + r.y * m.s, w: r.w * m.s, h: r.h * m.s, name: `${r.icon} ${r.name}`, state });
+    items.push({ x: m.ox + r.x * m.s, y: m.oy + r.y * m.s, w: r.w * m.s, h: r.h * m.s, name: r.name, state });
   }
   let size = '', hint = '';
   const sr = selId != null ? rects.find((r) => r.id === selId) : null;
@@ -639,7 +640,7 @@ function renderMixer() {
   for (const a of list) {
     const row = document.createElement('div');
     row.className = 'ch' + (a.muted ? ' muted' : '');
-    row.innerHTML = `<button class="mute" title="음소거">${a.muted ? '✕' : '🔊'}</button><div class="nm">${esc(a.label)}<span class="dot"></span></div><span class="pct"></span>
+    row.innerHTML = `<button class="mute" title="음소거">${a.muted ? ic('mute') : ic('volume')}</button><div class="nm">${esc(a.label)}<span class="dot"></span></div><span class="pct"></span>
       <div class="bar"><div class="lvl"></div><div class="pkw"><div class="pk"></div></div><div class="ticks"></div><input type="range" min="0" max="100"></div>`;
     const r = row.querySelector('input'), pct = row.querySelector('.pct');
     r.value = Math.round(a.vol * 100); pct.textContent = r.value + '%';
@@ -735,7 +736,7 @@ function renderApps(force) {
     const c = document.createElement('div');
     c.className = 'acard' + (on ? ' in' : ''); c.draggable = !on; c.dataset.exe = a.exe;
     c.title = on ? '이미 사운드에 있어요' : '끌어서 아래 사운드 칸에 놓기 (더블클릭해도 돼요)';
-    c.innerHTML = `<div class="lv"></div><span class="ava">${esc(label.slice(0, 1).toUpperCase())}</span><div class="nm">${esc(label)}<small>${on ? '<b class="tag">✓ 사운드에 있음</b>' : esc(a.exe)}</small></div>`;
+    c.innerHTML = `<div class="lv"></div><span class="ava">${esc(label.slice(0, 1).toUpperCase())}</span><div class="nm">${esc(label)}<small>${on ? `<b class="tag">${ic('check')}사운드에 있음</b>` : esc(a.exe)}</small></div>`;
     if (!on) {
       c.addEventListener('dragstart', (e) => { e.dataTransfer.setData('application/x-streamy-app', JSON.stringify({ exe: a.exe, label })); e.dataTransfer.effectAllowed = 'copy'; c.classList.add('dragging'); document.body.classList.add('drag-app'); });
       c.addEventListener('dragend', () => { c.classList.remove('dragging'); document.body.classList.remove('drag-app'); });
@@ -805,7 +806,7 @@ const viewers = { chzzk: null };
 function renderViewers() {
   const eye = $('viewerEye'), num = $('viewerTotal'), det = $('viewerDetail');
   eye.classList.toggle('on', cfg.showViewers);
-  eye.textContent = cfg.showViewers ? '👁' : '🙈';
+  eye.innerHTML = cfg.showViewers ? ic('eye') : ic('eyeOff');
   if (!cfg.showViewers) { num.textContent = '•••'; num.classList.add('masked'); det.textContent = ''; return; }
   num.classList.remove('masked');
   if (DEMO) { num.textContent = '1,284'; det.textContent = '치지직 912 · 유튜브 372'; return; }
@@ -1051,7 +1052,7 @@ function renderKeyList() {
     const st = platformState(k);
     const item = document.createElement('div'); item.className = 'key-item';
     const cls = { live: 'live', ready: 'ready', err: 'err', starting: 'wait', reconnecting: 'wait', stopping: 'wait' }[st] || '';
-    item.innerHTML = `<b>${esc(PLATFORMS[k].name)}</b><span class="pstate ${cls}"><i></i><span>${esc(STATE_TEXT[st] || st)}</span></span><code>${esc(maskKey(cfg.keys[k]))}</code><button class="x" title="키 지우기">✕</button>`;
+    item.innerHTML = `<b>${esc(PLATFORMS[k].name)}</b><span class="pstate ${cls}"><i></i><span>${esc(STATE_TEXT[st] || st)}</span></span><code>${esc(maskKey(cfg.keys[k]))}</code><button class="x" title="키 지우기">${ic('x')}</button>`;
     item.querySelector('.x').addEventListener('click', () => {
       if (streamStates[k] && streamStates[k].state !== 'off') return toast('방송 중에는 지울 수 없어요.', true);
       cfg.keys[k] = ''; save(); delete streamStates[k]; renderKeyList();
@@ -1320,7 +1321,7 @@ async function boot() {
 // 개발용 화면 미리보기 (윈도우가 아닌 환경에서 STREAMY_DEMO=1)
 const demo = {
   scenes: [{ id: 'a', name: '게임 방송', n: 3 }, { id: 'b', name: '저챗', n: 2 }, { id: 'c', name: '쉬는 시간', n: 1 }, { id: 'd', name: '합방', n: 4 }], current: 'a',
-  items: [{ id: 3, name: '웹캠', icon: '📷', visible: true, selected: true }, { id: 2, name: '타이머', icon: '⏱️', visible: true, selected: true }, { id: 1, name: '모니터 1', icon: '🖥️', visible: true }],
+  items: [{ id: 3, name: '웹캠', kind: 'webcam', icon: '', visible: true, selected: true }, { id: 2, name: '타이머', kind: 'timer', icon: '', visible: true, selected: true }, { id: 1, name: '모니터 1', kind: 'monitor', icon: '', visible: true }],
   audio: [{ name: 'd', label: '데스크톱 소리', vol: 0.8, muted: false }, { name: 'm', label: '마이크', vol: 0.72, muted: false }, { name: 'dc', label: '디스코드', vol: 0.55, muted: false, kind: 'app' }, { name: 'ch', label: 'Google Chrome', vol: 0.4, muted: false, kind: 'app' }],
   sep: [{ name: 'dc', label: '디스코드', exe: 'Discord.exe' }, { name: 'ch', label: 'Google Chrome', exe: 'chrome.exe' }],
   live: [{ exe: 'Spotify.exe', desc: 'Spotify', peak: 0.4 }, { exe: 'msedge.exe', desc: 'Microsoft Edge', peak: 0.2 }, { exe: 'League of Legends.exe', desc: 'League of Legends', peak: 0.6 }, { exe: 'KakaoTalk.exe', desc: '카카오톡', peak: 0 }],
@@ -1391,6 +1392,7 @@ for (const id of ['tab-stream', 'tab-settings', 'tab-sound']) {
   }
 }
 try { const vg = document.querySelector('#vtGo > span'); if (vg) vg.innerHTML = FLAT_ICONS.virtual; } catch {}
+document.querySelectorAll('[data-ic]').forEach((el) => { el.innerHTML = UI_ICON(el.dataset.ic); });
 // 화면 테마: 기본 = 밝은 카드, 설정에서 예전 검정·빨강
 // 포인트 색: 사용자가 고름 (기본 핑크). 밝게/다크에 맞춰 글자용 · 옅은 배경색을 계산
 const ACCENTS = [['#E5577E', '핑크'], ['#0F9F74', '민트'], ['#6B5CE7', '보라'], ['#3D7BEA', '블루'], ['#F08A24', '오렌지']];
@@ -1554,7 +1556,7 @@ $('vtGo').addEventListener('click', guard(() => {
   if (DEMO) { renderVtFound([], '데모 화면이에요.'); return; }
   openWins = ipcRenderer.sendSync('windows:get') || openWins;
   const list = virtualApps(); vtLastSeen = list;
-  if (!list.length) return renderVtFound([], `켜져 있는 버추얼 프로그램을 찾지 못했어요. 먼저 프로그램을 켜 주세요.<br>지원: ${VIRTUAL_APPS.map((a) => a.name).join(' · ')}<br>목록에 없는 프로그램은 ＋ 추가 → 🧸 버추얼에서 창을 직접 고르면 돼요.`);
+  if (!list.length) return renderVtFound([], `켜져 있는 버추얼 프로그램을 찾지 못했어요. 먼저 프로그램을 켜 주세요.<br>지원: ${VIRTUAL_APPS.map((a) => a.name).join(' · ')}<br>목록에 없는 프로그램은 ＋ 추가 → 버추얼에서 창을 직접 고르면 돼요.`);
   if (list.length > 1) return renderVtFound(list);
   connectVirtual(list[0]); renderVtFound(list);
 }));
@@ -1592,12 +1594,12 @@ function renderVirtualProps(name, v, curWindow, method) {
   const app = appOfExe(exeOf(curWindow));
   const seg = (id, items, val) => `<div class="seg" id="${id}">${items.map(([k, l]) => `<button data-v="${k}" class="${k === val ? 'on' : ''}">${l}</button>`).join('')}</div>`;
   const c = v.crop || {};
-  body.innerHTML = `<div class="vprops"><h4>🧸 ${esc(name)} <small>버추얼 설정 · 바꾸면 바로 적용돼요</small></h4>
+  body.innerHTML = `<div class="vprops"><h4>${FLAT_ICONS.virtual} ${esc(name)} <small>버추얼 설정 · 바꾸면 바로 적용돼요</small></h4>
     ${method === 'spout' ? `<div class="vsec"><b>연결 · Spout2</b>
         <div class="row" style="margin:6px 0 0"><select id="vSender">${[[v.sender || 'usefirstavailablesender'], [VTS_SENDER], ['usefirstavailablesender']].filter((x, i, a) => a.findIndex((y) => y[0] === x[0]) === i).map(([k]) => `<option value="${esc(k)}"${k === (v.sender || 'usefirstavailablesender') ? ' selected' : ''}>${k === 'usefirstavailablesender' ? '처음 보이는 Spout2 화면' : k === VTS_SENDER ? 'VTube Studio (VTubeStudioSpout)' : esc(k)}</option>`).join('')}</select>
         <select id="vComposite" title="가장자리가 검게/하얗게 보이면 바꿔 보세요"><option value="3"${(v.composite || 3) == 3 ? ' selected' : ''}>투명도: 기본</option><option value="4"${v.composite == 4 ? ' selected' : ''}>투명도: 미리 곱한 알파</option><option value="1"${v.composite == 1 ? ' selected' : ''}>투명도: 끔</option></select></div>
-        <p class="hint" style="margin:6px 0 0">VTube Studio 설정(⚙) → 카메라 설정에서 <b>Spout2 출력</b>을 켜고, 배경을 <b>투명</b>으로 두세요. 가장자리가 검게 나오면 투명도 방식을 바꿔 보세요.</p></div>`
-      : `<div class="vsec"><b>연결할 창</b><div class="row" style="margin:6px 0 0"><select id="vPick">${virtualPickOptions(curWindow)}</select><button class="ghost" id="vRefresh" title="다시 찾기">↻</button></div></div>`}
+        <p class="hint" style="margin:6px 0 0">VTube Studio 설정(톱니바퀴) → 카메라 설정에서 <b>Spout2 출력</b>을 켜고, 배경을 <b>투명</b>으로 두세요. 가장자리가 검게 나오면 투명도 방식을 바꿔 보세요.</p></div>`
+      : `<div class="vsec"><b>연결할 창</b><div class="row" style="margin:6px 0 0"><select id="vPick">${virtualPickOptions(curWindow)}</select><button class="ghost" id="vRefresh" title="다시 찾기">${ic('refresh')}</button></div></div>`}
     <div class="vsec"><b>위치</b>${seg('vSpot', Object.entries(VIRTUAL_SPOTS).map(([k, x]) => [k, x.label]), v.spot)}
       <label class="field" style="margin-top:8px">크기 <b id="vSizeV">${v.size}%</b> <small>(화면 높이 기준)</small><input type="range" id="vSize" min="20" max="120" step="5" value="${v.size}"></label>
       <label class="check" style="margin-top:6px"><input type="checkbox" id="vFlip" ${v.flip ? 'checked' : ''}> 좌우 반전 (거울처럼)</label></div>
@@ -1661,7 +1663,7 @@ function bcRenderAcc() {
     return `<div class="bc-row" data-p="${p}"><i class="pd ${p}"></i><b>${BC_NAME[p]}</b>${state}
       <span class="sp"></span>
       ${a.connected ? `<button class="ghost" data-act="logout">로그아웃</button>` : `<button class="${a.hasApp ? 'primary-sm' : ''}" data-act="login" ${a.hasApp ? '' : 'disabled'}>로그인</button>`}
-      ${a.builtin && !a.custom ? '' : '<button class="ghost" data-act="app" title="내 앱 정보 직접 넣기 (고급)">⚙</button>'}</div>
+      ${a.builtin && !a.custom ? '' : '<button class="ghost" data-act="app" title="내 앱 정보 직접 넣기 (고급)">' + ic('gear') + '</button>'}</div>
       ${bcOpen === p ? `<div class="bc-app" data-p="${p}">${BC_HELP[p]}
         <label class="field">리디렉션 주소 <div class="row"><input readonly value="${esc((st.redirect || {})[p] || '')}"><button class="ghost" data-act="copy">복사</button></div></label>
         <label class="field">Client ID<input data-k="clientId" value="${esc(a.clientId || '')}" spellcheck="false"></label>
@@ -1734,7 +1736,7 @@ async function bcApply({ only, quiet } = {}) {
   bcMsg('적용하는 중…');
   const r = await bcInvoke('bc:apply', bcInfo(), targets);
   if (!r.ok) { bcMsg(esc(r.error), true); return null; }
-  const lines = Object.entries(r.data).map(([p, x]) => x.ok ? `✅ ${BC_NAME[p]} 적용됨${x.warn && x.warn.length ? ` <small>(${esc(x.warn.join(' / '))})</small>` : ''}` : `⚠️ ${BC_NAME[p]}: ${esc(x.error)}`);
+  const lines = Object.entries(r.data).map(([p, x]) => x.ok ? `${ic('ok')} ${BC_NAME[p]} 적용됨${x.warn && x.warn.length ? ` <small>(${esc(x.warn.join(' / '))})</small>` : ''}` : `${ic('warn')} ${BC_NAME[p]}: ${esc(x.error)}`);
   const bad = Object.values(r.data).some((x) => !x.ok);
   bcMsg(lines.join('<br>'), bad);
   if (!bad) toast('방송 정보를 바꿨어요.');
@@ -1770,7 +1772,7 @@ engine.on('stream', (states) => { for (const [k, s] of Object.entries(states)) i
 (async () => {
   bcFill();
   if (DEMO) { bcSt = { chzzk: { hasApp: true, connected: true, channel: { name: '스트리미' } }, youtube: { hasApp: true, connected: false }, redirect: {} };
-    cfg.bc.title = '오늘은 롤 랭크 올립니다 🔥'; cfg.bc.tags = '롤, 랭크, 저챗, 버튜버'; cfg.bc.czCat = { type: 'GAME', id: 'League_of_Legends', name: '리그 오브 레전드' }; bcFill(); bcRenderAcc(); return; }
+    cfg.bc.title = '오늘은 롤 랭크 올립니다!'; cfg.bc.tags = '롤, 랭크, 저챗, 버튜버'; cfg.bc.czCat = { type: 'GAME', id: 'League_of_Legends', name: '리그 오브 레전드' }; bcFill(); bcRenderAcc(); return; }
   bcSt = await ipcRenderer.invoke('bc:status').catch(() => null); bcRenderAcc();
 })();
 
@@ -1786,10 +1788,10 @@ function vtsRender(st) {
   const label = { off: '꺼짐', connecting: '연결 중…', 'waiting-allow': '허용 기다리는 중', connected: '연결됨', error: '오류' }[s] || s;
   $('vtsSt').className = 'vts-st ' + (s === 'connected' ? 'on' : s === 'connecting' || s === 'waiting-allow' ? 'wait' : s === 'error' ? 'err' : '');
   $('vtsSt').querySelector('em').textContent = label + (s === 'connected' && vtsState.model ? ` · ${vtsState.model.name}` : '');
-  $('vtsConnect').textContent = s === 'connected' ? '연결 끊기' : '🔗 연결';
+  $('vtsConnect').innerHTML = s === 'connected' ? '연결 끊기' : ic('link') + ' 연결';
   $('vtsBody').hidden = s !== 'connected';
   if (s === 'waiting-allow') vtsMsg('VTube Studio 화면에 <b>Streamy Kit 허용</b> 창이 떴어요. <b>허용</b>을 눌러 주세요. (한 번만 하면 돼요)');
-  else if (s === 'off' && vtsState.detail && cfg.vtsUse) vtsMsg(`${esc(vtsState.detail)} · 켜지면 자동으로 다시 붙어요.<br>처음이면 VTube Studio 설정(⚙) → <b>VTube Studio 플러그인 API 켜기</b>(포트 8001)를 켜 주세요.`);
+  else if (s === 'off' && vtsState.detail && cfg.vtsUse) vtsMsg(`${esc(vtsState.detail)} · 켜지면 자동으로 다시 붙어요.<br>처음이면 VTube Studio 설정(톱니바퀴) → <b>VTube Studio 플러그인 API 켜기</b>(포트 8001)를 켜 주세요.`);
   else if (s === 'error') vtsMsg(esc(vtsState.detail || ''));
   else if (s === 'connected') vtsMsg('');
   if (s === 'connected' && vtsState.model) vtsFillPos(vtsState.model.pos);

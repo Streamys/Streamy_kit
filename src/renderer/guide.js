@@ -85,9 +85,9 @@ window.addEventListener('resize', later);
 if (process.env.STREAMY_DEMO_GUIDE) {
   data = {
     items: [
-      { x: 0, y: 0, w: innerWidth, h: innerHeight, name: '🖥️ 모니터 1', state: 'norm' },
-      { x: innerWidth * 0.72, y: innerHeight * 0.05, w: innerWidth * 0.25, h: innerHeight * 0.14, name: '⏱️ 타이머', state: 'hover' },
-      { x: innerWidth * 0.05, y: innerHeight * 0.58, w: innerWidth * 0.3, h: innerHeight * 0.36, name: '📷 웹캠', state: 'sel' },
+      { x: 0, y: 0, w: innerWidth, h: innerHeight, name: '모니터 1', state: 'norm' },
+      { x: innerWidth * 0.72, y: innerHeight * 0.05, w: innerWidth * 0.25, h: innerHeight * 0.14, name: '타이머', state: 'hover' },
+      { x: innerWidth * 0.05, y: innerHeight * 0.58, w: innerWidth * 0.3, h: innerHeight * 0.36, name: '웹캠', state: 'sel' },
     ],
     guides: [{ x1: innerWidth * 0.05, y1: 0, x2: innerWidth * 0.05, y2: innerHeight }],
     size: '576 × 324 · 30%', hint: '안쪽 = 이동 · 모서리 □ = 크기 · 변 가운데 ▬ = 자르기 · 방향키 1px (Shift 10px)',

@@ -1,6 +1,7 @@
 // Streamy Kit — 최소화 오버레이 (방송 상태 + 선택한 플랫폼의 최근 채팅)
 'use strict';
 const { ipcRenderer } = require('electron');
+const { UI_ICON } = require('./icons.js');
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const PN = { chzzk: '치지직', youtube: '유튜브', soop: 'SOOP' };
@@ -30,7 +31,7 @@ function renderState(s) {
   $('time').textContent = s.time || '';
   const parts = [];
   if (s.scene) parts.push(`장면 <b>${esc(s.scene)}</b>`);
-  if (s.viewers != null) parts.push(`👁 <b>${Number(s.viewers).toLocaleString('ko-KR')}</b>`);
+  if (s.viewers != null) parts.push(`${UI_ICON('eye')} <b>${Number(s.viewers).toLocaleString('ko-KR')}</b>`);
   if (s.state === 'live' && s.kbps != null) parts.push(`<b>${s.kbps.toLocaleString('ko-KR')}</b>kbps`);
   if (s.state === 'live' && s.drop != null) parts.push(`드롭 <b>${s.drop.toFixed(1)}%</b>`);
   if (s.rec) parts.push('<span class="rec">● 녹화</span>');

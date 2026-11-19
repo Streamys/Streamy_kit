@@ -17,10 +17,10 @@
     <span class="v-label">통합 시청자</span>
     <b id="viewerTotal" class="v-num masked">•••</b>
     <span class="v-detail" id="viewerDetail"></span>
-    <button class="v-eye" id="viewerEye" title="시청자 수 보이기/숨기기">👁</button>
+    <button class="v-eye" id="viewerEye" title="시청자 수 보이기/숨기기" data-ic="eye"></button>
   </div>
-  <button class="upd-check" id="updCheckTop" title="업데이트 확인 (GitHub 릴리즈 · 바탕화면 폴더)"><span>↻</span><em>업데이트 확인</em></button>
-  <button class="upd-btn" id="updBtn" hidden><span class="upd-ic">⬆</span><span id="updText">업데이트</span><i class="upd-bar" id="updBar"></i></button>
+  <button class="upd-check" id="updCheckTop" title="업데이트 확인 (GitHub 릴리즈 · 바탕화면 폴더)"><span data-ic="refresh"></span><em>업데이트 확인</em></button>
+  <button class="upd-btn" id="updBtn" hidden><span class="upd-ic" data-ic="up"></span><span id="updText">업데이트</span><i class="upd-bar" id="updBar"></i></button>
   <div class="stats">
     <span>CPU <b id="sCpu">-</b></span>
     <span>FPS <b id="sFps">-</b></span>
@@ -37,7 +37,7 @@
 <div class="layout">
   <aside class="rail" id="rail">
       <section class="scene-row">
-      <div class="row-head"><h3>장면</h3><small>F1~F9</small><button class="ph-toggle" id="phToggle" title="스마트폰으로 볼 때 화면 보이기/숨기기">📱 폰 화면</button></div>
+      <div class="row-head"><h3>장면</h3><small>F1~F9</small><button class="ph-toggle" id="phToggle" title="스마트폰으로 볼 때 화면 보이기/숨기기"><span data-ic="phone"></span>폰 화면</button></div>
       <div class="scene-tiles" id="sceneTiles"></div>
     </section>
     <section class="src-rail">
@@ -50,7 +50,7 @@
         </div>
         <div class="add-menu" id="addMenu" hidden></div>
         <ul class="list src-list" id="sourceList"></ul>
-        <p class="hint tiny">끌어서 순서 바꾸기 · 더블클릭: 이름·이모지 바꾸기 · Ctrl+클릭: 여러 개 고르기 · Shift+클릭: 범위 고르기</p>
+        <p class="hint tiny">끌어서 순서 바꾸기 · 더블클릭: 이름 바꾸기 · Ctrl+클릭: 여러 개 고르기 · Shift+클릭: 범위 고르기</p>
     </section>
   </aside>
   <main class="stage">
@@ -68,7 +68,7 @@
     <div class="splitter" id="phSplit" hidden title="끌어서 비율 조절 · 더블클릭 = 기본값"><i></i></div>
     <!-- ON AIR: 스마트폰으로 볼 때 -->
     <aside class="phone-col" id="phoneCol" hidden>
-      <div class="ph-head"><b>📱 폰으로 볼 때</b>
+      <div class="ph-head"><b><span data-ic="phone"></span>폰으로 볼 때</b>
         <div class="seg ph-seg" id="phOrient"><button data-o="v" class="on">세로</button><button data-o="h">가로</button></div>
       </div>
       <div class="ph-area" id="phArea"><div class="phone v" id="phone">
@@ -94,7 +94,7 @@
 
     <section class="sound">
       <div class="row-head"><h3>사운드</h3><small>막대 뒤 움직임 = 지금 들어오는 소리</small>
-        <button class="gear" id="soundGear" title="사운드 설정">⚙</button>
+        <button class="gear" id="soundGear" title="사운드 설정" data-ic="gear"></button>
       </div>
       <div class="sound-list" id="mixer"></div>
     </section>
@@ -156,7 +156,7 @@
         </div>
         <div class="chat-all" id="chatAll">
           <div class="chat-top"><div class="chat-state" id="chatState"></div>
-            <div class="chat-tools"><button id="chatCompact" title="한 줄로 촘촘하게 보기 / 말풍선처럼 보기">한 줄</button><button id="chatLog" title="채팅 기록 저장 켜기/끄기">기록</button><button id="chatLogDir" title="채팅 기록 폴더 열기">📁</button></div></div>
+            <div class="chat-tools"><button id="chatCompact" title="한 줄로 촘촘하게 보기 / 말풍선처럼 보기">한 줄</button><button id="chatLog" title="채팅 기록 저장 켜기/끄기">기록</button><button id="chatLogDir" title="채팅 기록 폴더 열기" data-ic="folder"></button></div></div>
           <div class="chat-feed" id="chatFeed"></div>
           <button class="chat-more" id="chatMore" hidden>새 채팅 ↓</button>
         </div>
@@ -178,22 +178,22 @@
         <div class="sec-card virt-card">
         <h4>버추얼 <small>원클릭 연결 · VTube Studio</small></h4>
         <div class="vt-card" id="vtCard">
-          <button class="vt-go" id="vtGo"><span>🧸</span><b>버추얼 원클릭 연결</b><small>켜져 있는 버추얼 프로그램을 찾아서 화면에 띄워요</small></button>
+          <button class="vt-go" id="vtGo"><span></span><b>버추얼 원클릭 연결</b><small>켜져 있는 버추얼 프로그램을 찾아서 화면에 띄워요</small></button>
           <div class="vt-row"><label class="check tiny"><input type="checkbox" id="vtAuto"> 버추얼 프로그램을 켜면 자동으로 띄우기</label></div>
           <div class="vt-found" id="vtFound"></div>
         </div>
         <div class="vts-card" id="vtsCard">
           <div class="vts-head"><b>VTube Studio 조종</b><span class="vts-st" id="vtsSt"><i></i><em>꺼짐</em></span></div>
           <div class="vts-row">
-            <button id="vtsLaunch">▶ 켜기</button>
-            <button id="vtsConnect">🔗 연결</button>
+            <button id="vtsLaunch"><span data-ic="play"></span>켜기</button>
+            <button id="vtsConnect"><span data-ic="link"></span> 연결</button>
             <button class="primary-sm" id="vtsSpout" title="VTube Studio 화면을 Spout2로 받아서 지금 장면에 넣어요">Spout2 넣기</button>
           </div>
           <label class="check tiny"><input type="checkbox" id="vtsAuto"> Streamy Kit을 켜면 VTube Studio도 뒤에서 자동으로 켜고 연결하기</label>
           <p class="vts-msg" id="vtsMsg"></p>
           <div class="vts-body" id="vtsBody" hidden>
             <div class="vts-sec"><b>모델</b>
-              <div class="row"><select id="vtsModel"></select><button id="vtsModelLoad">바꾸기</button><button class="ghost" id="vtsRefresh" title="목록 새로고침">↻</button></div></div>
+              <div class="row"><select id="vtsModel"></select><button id="vtsModelLoad">바꾸기</button><button class="ghost" id="vtsRefresh" title="목록 새로고침" data-ic="refresh"></button></div></div>
             <div class="vts-sec"><b>표정</b> <small class="hint">누르면 켜고 · 다시 누르면 꺼요</small><div class="chips" id="vtsExpr"></div></div>
             <div class="vts-sec"><b>단축키</b> <small class="hint">VTube Studio에 만들어 둔 동작</small><div class="chips" id="vtsKeys"></div></div>
             <div class="vts-sec"><b>위치</b> <small class="hint">VTube Studio 안에서의 모델 위치</small>
@@ -208,7 +208,7 @@
         <div class="sec-card" id="timerCard">
           <h4>방송 타이머</h4>
         <div class="timer-big" id="timerBig">00:00</div>
-        <div class="row"><button class="primary-sm" data-t="start">▶ 시작</button><button data-t="pause">⏸ 멈춤</button><button data-t="reset">↺ 리셋</button></div>
+        <div class="row"><button class="primary-sm" data-t="start"><span data-ic="play"></span>시작</button><button data-t="pause"><span data-ic="pause"></span>멈춤</button><button data-t="reset"><span data-ic="reset"></span>리셋</button></div>
         <label class="field">모드<select id="tMode"><option value="stopwatch">경과 시간 (방송 몇 시간째)</option><option value="countdown">카운트다운 (방송 시작까지)</option></select></label>
         <div class="grid2">
           <label class="field">분 (카운트다운)<input id="tMin" type="number" min="1" max="600" value="10"></label>
@@ -241,7 +241,7 @@
         <label class="field">치지직 채널 ID<input id="chzzkId" placeholder="chzzk.naver.com/ 뒤의 32자리 (주소 통째로 붙여도 OK)"></label>
         <label class="field">유튜브 채널<input id="ytId" placeholder="@핸들 또는 채널 주소"></label>
         <label class="field">SOOP 아이디<input id="soopId" placeholder="방송국 주소 sooplive.com/ 뒤의 아이디"></label>
-        <p class="hint">한 번만 넣으면 방송이 켜질 때 채팅 탭에 자동으로 붙어요. 스트림 키로는 채널을 알 수 없어서 여기에 따로 넣어야 해요.<br>시청자 수는 지금은 치지직만 합쳐 보여 줘요 (위쪽 👁 버튼).</p>
+        <p class="hint">한 번만 넣으면 방송이 켜질 때 채팅 탭에 자동으로 붙어요. 스트림 키로는 채널을 알 수 없어서 여기에 따로 넣어야 해요.<br>시청자 수는 지금은 치지직만 합쳐 보여 줘요 (위쪽 눈 모양 버튼).</p>
         <h4>최소화 오버레이 <small>창을 내리면 방송 상태 + 최근 채팅</small></h4>
         <label class="check"><input type="checkbox" id="miniOn"> 프로그램을 최소화하면 오버레이 띄우기</label>
         <div class="field">채팅을 보여줄 플랫폼<div class="seg" id="miniPlat"><button data-p="chzzk"><i class="pd chzzk"></i>치지직</button><button data-p="youtube"><i class="pd youtube"></i>유튜브</button><button data-p="soop"><i class="pd soop"></i>SOOP</button></div></div>

@@ -911,3 +911,26 @@ body.src-dragging #sourceList{box-shadow:inset 0 0 0 2px var(--soft)}
 
 /* v0.15.4 넣기 버튼 복귀 · 끌기 안내는 작게 */
 .add-form .add-drag-hint{margin:8px 0 0;padding:0;border:none;background:none;font-size:11px;text-align:center;color:var(--sub)}
+
+/* v0.16 단색 플랫 아이콘 — 포인트 색을 그대로 따라감 */
+.ico{width:1.15em;height:1.15em;display:inline-block;vertical-align:-.2em;flex:none;color:var(--red)}
+.fi.ico{display:block;width:100%;height:100%}
+button .ico+*,span[data-ic]+*{margin-left:0}
+[data-ic]{display:inline-flex;align-items:center;justify-content:center}
+button[data-ic] .ico{width:16px;height:16px}
+button>span[data-ic]{margin-right:5px}
+button>span[data-ic] .ico{width:14px;height:14px;vertical-align:middle}
+.ph-toggle span[data-ic],.ph-head b span[data-ic]{margin-right:4px}
+/* 색 있는 바탕 위에서는 글자색(흰색)으로 */
+.accent .ico,.primary-sm .ico,.vt-go .ico,.upd-btn .ico,.live-pill .ico,.am-item.on .ico.x,
+button.on .ico,.mode-tile.on .ico,.src-rail .src-tools .ico{color:currentColor}
+.vt-go>span .ico{color:#fff}
+/* 눈 · 음소거 · 지우기처럼 작은 버튼은 은은하게 */
+.list li .eye .ico{width:16px;height:16px}
+.list li.hidden .eye .ico{color:var(--sub)}
+.ch .mute .ico{width:14px;height:14px}
+.plat-row .x .ico,.key-item .x .ico{width:12px;height:12px;color:var(--sub)}
+.v-eye .ico{width:15px;height:15px}
+.gear .ico{width:16px;height:16px}
+.tag .ico{width:12px;height:12px;margin-right:3px;color:currentColor}
+.v-eye .ico,.vt-go>span .ico{color:var(--red)!important}
