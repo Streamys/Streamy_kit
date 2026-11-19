@@ -1409,6 +1409,12 @@ function applyAccent() {
   st.setProperty('--soft', rgba(a, dark ? 0.18 : 0.12));
   st.setProperty('--soft2', rgba(a, dark ? 0.08 : 0.06));
   st.setProperty('--link', dark ? mixHex(a, 'w', 0.42) : mixHex(a, 'k', 0.28));
+  // 바탕도 순흰색·순검정 대신 포인트 색이 아주 살짝 섞인 부드러운 톤으로
+  const tint = (base, t) => { const x = hexRgb(base), y = hexRgb(a); return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
+  const N = dark
+    ? { '--bg': ['#16171C', .04], '--bg2': ['#1F2128', .03], '--card': ['#1F2128', .03], '--card2': ['#282A33', .035], '--sec': ['#24262E', .035], '--line': ['#31343E', .04], '--line2': ['#3F4250', .04], '--hover': ['#2E3039', .05] }
+    : { '--bg': ['#E9EBF0', .05], '--bg2': ['#F7F7F9', .02], '--card': ['#F7F7F9', .02], '--card2': ['#EFF0F3', .035], '--sec': ['#EAECF0', .045], '--line': ['#DDE0E6', .05], '--line2': ['#CBCFD8', .05], '--hover': ['#E3E5EB', .06] };
+  for (const [k, [b, t]] of Object.entries(N)) st.setProperty(k, tint(b, t));
   applyAppIcon(a);
   const row = $('accentRow');
   if (row) {
