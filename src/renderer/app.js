@@ -367,8 +367,9 @@ function renderAddForm() {
   const box = $('addForm');
   if (!addKind) { box.innerHTML = ''; return; }
   const t = SOURCE_TYPES[addKind];
-  box.innerHTML = sourceForm(addKind, 'a') + '<p class="add-drag-hint">위의 <b>' + esc(t.label) + '</b>을(를) 끌어서 화면에 놓으면 들어가요</p>';
+  box.innerHTML = sourceForm(addKind, 'a') + '<button class="primary-sm add-go" id="aAdd">＋ 이 장면에 넣기</button><p class="add-drag-hint">또는 위의 <b>' + esc(t.label) + '</b>을(를) 끌어서 화면에 놓아도 돼요</p>';
   bindForm(addKind, 'a');
+  $('aAdd').addEventListener('click', guard(() => addFromForm()));
 }
 function addFromForm() {
   if (!addKind) return;
