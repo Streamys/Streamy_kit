@@ -1,15 +1,15 @@
 :root{
   /* 기본: 밝은 카드 테마 (--red = 포인트 색, --live = 방송 중 빨강) */
   --bg:#F3F4F8;--bg2:#FFFFFF;--card:#FFFFFF;--card2:#F2F3F7;--line:#E6E8EE;--line2:#D3D7E0;
-  --text:#191F28;--sub:#6B7684;--red:#0F9F74;--red2:#12B386;--red-dark:#0B6E51;--yellow:#B97F00;
-  --live:#F04452;--soft:rgba(15,159,116,.12);--soft2:rgba(15,159,116,.06);--link:#0B6E51;--hover:#ECEEF3;--warnbg:#FFF4D6;
+  --text:#191F28;--sub:#6B7684;--red:#E5577E;--red2:#EC6F91;--red-dark:#B02E55;--yellow:#B97F00;
+  --live:#F04452;--soft:rgba(229,87,126,.12);--soft2:rgba(229,87,126,.06);--link:#B02E55;--hover:#ECEEF3;--warnbg:#FFF4D6;
   --shadow:0 1px 2px rgba(25,31,40,.05),0 8px 24px rgba(25,31,40,.06);--radius:18px;
 }
 /* 다크 모드 (설정 › 화면 테마) — 같은 카드 디자인, 어두운 바탕 */
 body.theme-dark{
   --bg:#0E0F13;--bg2:#1A1B22;--card:#1A1B22;--card2:#24262F;--line:#2C2F39;--line2:#3A3D49;
-  --text:#ECEEF3;--sub:#9499A8;--red:#0F9F74;--red2:#16B585;--red-dark:#0B6E51;--yellow:#F5C04A;
-  --live:#F04452;--soft:rgba(37,192,143,.16);--soft2:rgba(37,192,143,.07);--link:#4FDCAD;--hover:#2C2F39;--warnbg:#3A2F12;
+  --text:#ECEEF3;--sub:#9499A8;--red:#E5577E;--red2:#EC6F91;--red-dark:#B02E55;--yellow:#F5C04A;
+  --live:#F04452;--soft:rgba(242,115,154,.17);--soft2:rgba(242,115,154,.07);--link:#FF9BBA;--hover:#2C2F39;--warnbg:#3A2F12;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25);--radius:18px;
 }
 *{box-sizing:border-box}
@@ -608,7 +608,7 @@ body.theme-dark .bar input::-webkit-slider-thumb{box-shadow:0 0 0 2px #0E0F13}
 body.theme-dark .cm .nk{color:#C3C7D2}
 body.theme-dark .cm.p-chzzk .nk{color:#5FE3B2}body.theme-dark .cm.p-youtube .nk{color:#FF8DA1}body.theme-dark .cm.p-soop .nk{color:#8DB4FF}
 body.theme-dark .preview-wrap{background:#14151B}
-body.theme-dark .vt-card{border-color:rgba(37,192,143,.35)}
+body.theme-dark .vt-card{border-color:rgba(242,115,154,.35)}
 
 /* 탭 4개: 방송 · 채팅 · 소스 · 설정 (사운드 = 사운드 칸 ⚙, 타이머 = 소스 탭 안) */
 .tabs{grid-template-columns:repeat(4,1fr)}
@@ -699,6 +699,6 @@ body.theme-dark .sec-card>:not(h4):not(.hint):not(.bc-card):not(.key-guess):not(
 .sec-card>.check,.sec-card .bc-card>.check{display:block!important;line-height:1.6}
 .sec-card>.check input,.sec-card .bc-card>.check input{margin:0 8px 0 0;vertical-align:-2px}
 
-/* 민트 베이스: 글자로 쓸 때는 더 진한(다크는 더 밝은) 민트로 읽기 쉽게 */
+/* 베이스 색: 글자로 쓸 때는 더 진한(다크는 더 밝은) 민트로 읽기 쉽게 */
 .brand span,.rail .tile.on kbd,.hint button.link{color:var(--link)}
 .rail .tile.on kbd{border-color:var(--red)}
