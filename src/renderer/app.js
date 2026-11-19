@@ -236,10 +236,12 @@ const ADD_DESC = {
 };
 function renderAddMenu() {
   const m = $('addMenu');
+  $('addBox').appendChild($('addForm'));          // 다시 그리기 전에 설정 칸을 잠깐 빼 둠
   m.innerHTML = Object.entries(SOURCE_TYPES).map(([k, t]) => {
     const off = engineOk && !engine.available(k);
     return `<button class="am-item${addKind === k ? ' on' : ''}" data-k="${k}"${off ? ' disabled title="이 PC에서는 쓸 수 없어요"' : ''}><span class="am-tx"><b>${esc(t.label)}</b><small>${esc(ADD_DESC[k] || '')}</small></span></button>`;
   }).join('');
+  if (addKind) { const it = m.querySelector(`.am-item[data-k="${addKind}"]`); if (it) { it.after($('addForm')); renderAddForm(); } }
 }
 function setAddMenu(open) {
   $('addMenu').hidden = !open;
@@ -255,14 +257,37 @@ $('srcAdd').addEventListener('click', () => {
 });
 $('addMenu').addEventListener('click', (e) => {
   const b = e.target.closest('.am-item'); if (!b || b.disabled) return;
-  addKind = b.dataset.k;
-  setAddMenu(false);
-  const t = SOURCE_TYPES[addKind];
-  $('addTitle').textContent = `${t.label} 추가`;
-  $('addBox').hidden = false; openTab('sources'); document.querySelector('.tab-body').scrollTop = 0;
-  renderAddForm();
+  addKind = addKind === b.dataset.k ? null : b.dataset.k;   // 같은 걸 다시 누르면 접기
+  renderAddMenu();
+  if (addKind) setTimeout(() => $('addForm').scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 0);
 });
-function closeAdd() { $('addBox').hidden = true; addKind = null; setAddMenu(false); }
+function closeAdd() { addKind = null; $('addBox').appendChild($('addForm')); $('addForm').innerHTML = ''; $('addBox').hidden = true; setAddMenu(false); }
+
+// 끌어다 놓기: 사진 파일 → 이미지 소스, 웹 주소(알림창) → 웹페이지 소스
+const IMG_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i;
+let dropDepth = 0;
+const isFileOrUrl = (e) => [...(e.dataTransfer?.types || [])].some((t) => t === 'Files' || t === 'text/uri-list');
+window.addEventListener('dragenter', (e) => { if (!isFileOrUrl(e) || DEMO) return; dropDepth++; document.body.classList.add('dropping'); });
+window.addEventListener('dragleave', () => { if (--dropDepth <= 0) { dropDepth = 0; document.body.classList.remove('dropping'); } });
+window.addEventListener('dragover', (e) => { if (isFileOrUrl(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
+window.addEventListener('drop', guard((e) => {
+  if (!isFileOrUrl(e)) return;
+  e.preventDefault(); dropDepth = 0; document.body.classList.remove('dropping');
+  if (DEMO || !engineOk) return toast('엔진이 아직 준비되지 않았어요.', true);
+  const added = [];
+  const { webUtils } = require('electron');
+  for (const f of e.dataTransfer.files || []) {
+    let fp = ''; try { fp = webUtils ? webUtils.getPathForFile(f) : f.path; } catch { fp = f.path || ''; }
+    if (fp && IMG_EXT.test(fp)) added.push(engine.addSource('image', { file: fp, name: require('path').basename(fp).replace(IMG_EXT, '').slice(0, 40) }).name);
+  }
+  if (!added.length) {
+    const url = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || '').split('\n').map((x) => x.trim()).find((x) => /^https?:\/\//.test(x));
+    if (url) added.push(engine.addSource('web', { url, width: 800, height: 600, name: '알림창' }).name);
+  }
+  if (!added.length) return toast('사진 파일(png · jpg · gif)이나 http 주소만 넣을 수 있어요.', true);
+  saveScenes(); openTab('sources');
+  toast(`${added.map((n) => `'${n}'`).join(', ')}을(를) 넣었어요. 미리보기에서 끌어서 위치를 맞추세요.`);
+}));
 function renderTypes() {
   const g = $('typeGrid'); g.innerHTML = '';
   for (const [k, t] of Object.entries(SOURCE_TYPES)) {
@@ -323,7 +348,7 @@ function renderAddForm() {
   const box = $('addForm');
   if (!addKind) { box.innerHTML = ''; return; }
   const t = SOURCE_TYPES[addKind];
-  box.innerHTML = sourceForm(addKind, 'a') + '<button class="primary-sm" id="aAdd">현재 장면에 추가</button>';
+  box.innerHTML = sourceForm(addKind, 'a') + '<button class="primary-sm add-go" id="aAdd">＋ 이 장면에 넣기</button>';
   bindForm(addKind, 'a');
   $('aAdd').addEventListener('click', guard(() => {
     const opt = readForm('a');
