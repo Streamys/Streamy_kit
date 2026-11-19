@@ -124,26 +124,30 @@
         <div class="key-list" id="keyList"></div>
         <p class="hint">저장된 키가 있는 플랫폼으로 <b>동시에</b> 송출돼요. 키 확인: <button class="link inline" data-help="chzzk">치지직</button> · <button class="link inline" data-help="youtube">유튜브</button> · <button class="link inline" data-help="soop">SOOP</button></p>
 
-        <h4>방송 정보 <small id="bcSub">치지직 · 유튜브에 제목·태그를 한 번에</small></h4>
+        <h4>방송 정보</h4>
         <div class="bc-card" id="bcCard">
+          <div class="bc-tabs" id="bcTabs"><button data-t="all" class="on">통합</button><button data-t="chzzk"><i class="pm chzzk">치</i>치지직</button><button data-t="youtube"><i class="pm youtube">유</i>유튜브</button><button data-t="soop"><i class="pm soop">숲</i>SOOP</button></div>
           <div class="bc-acc" id="bcAcc"></div>
-          <label class="field">제목 <small id="bcTitleN">0/100</small><input id="bcTitle" maxlength="100" placeholder="오늘 방송 제목"></label>
-          <label class="field">태그 <input id="bcTags" placeholder="저챗, 롤, 버튜버"></label>
-          <div class="chips bc-tagprev" id="bcTagPrev"></div>
-          <label class="field yt-only">설명 <small>유튜브만</small><textarea id="bcDesc" rows="3" placeholder="방송 설명 (유튜브)"></textarea></label>
+          <div class="bc-mode" id="bcMode"><button data-m="common">통합 내용 사용</button><button data-m="own">따로 설정</button></div>
+          <div class="bc-fields" id="bcFields">
+            <label class="field">제목 <small id="bcTitleN">0/100</small><input id="bcTitle" maxlength="100" placeholder="오늘 방송 제목"></label>
+            <label class="field">태그 <input id="bcTags" placeholder="저챗, 롤, 버튜버"></label>
+            <div class="chips bc-tagprev" id="bcTagPrev"></div>
+            <label class="field" id="bcDescF">설명<textarea id="bcDesc" rows="3" placeholder="방송 설명"></textarea></label>
+          </div>
+          <div class="bc-same" id="bcSame"></div>
           <div class="bc-cat">
-            <label class="field">치지직 카테고리
-              <div class="row"><input id="bcCzQ" placeholder="검색 (예: 리그 오브 레전드, talk)"><button class="ghost" id="bcCzSearch">검색</button></div>
+            <label class="field" id="bcCatCz">치지직 카테고리
+              <div class="row"><input id="bcCzQ" placeholder="카테고리 검색"><button class="ghost" id="bcCzSearch">검색</button></div>
               <div class="bc-czres" id="bcCzRes"></div>
               <div class="bc-czcur" id="bcCzCur"></div></label>
-            <label class="field yt-only">유튜브 카테고리<select id="bcYtCat">
+            <label class="field" id="bcCatYt">유튜브 카테고리<select id="bcYtCat">
               <option value="">그대로 두기</option><option value="20">게임</option><option value="22">인물/블로그</option><option value="24">엔터테인먼트</option><option value="10">음악</option><option value="17">스포츠</option><option value="23">코미디</option><option value="27">교육</option><option value="28">과학기술</option><option value="26">노하우/스타일</option><option value="19">여행/이벤트</option><option value="15">동물</option></select></label>
           </div>
-          <div class="bc-to yt-only"><span>적용할 곳</span><label class="check tiny"><input type="checkbox" id="bcToCz" checked> 치지직</label><label class="check tiny"><input type="checkbox" id="bcToYt" checked> 유튜브</label></div>
-          <div class="row"><button class="primary-sm" id="bcApply">지금 적용</button><button class="ghost" id="bcLoad" title="치지직/유튜브에 지금 설정된 제목·태그를 가져와요">불러오기</button></div>
-          <label class="check tiny"><input type="checkbox" id="bcAuto"> 방송을 시작하면 자동으로 적용</label>
+          <div class="bc-to" id="bcTo"></div>
+          <div class="row bc-btns"><button class="primary-sm" id="bcApply">모두 적용</button><button class="ghost" id="bcLoad">불러오기</button></div>
+          <label class="check tiny" id="bcAutoL"><input type="checkbox" id="bcAuto"> 방송 시작하면 자동 적용</label>
           <p class="bc-msg" id="bcMsg"></p>
-          <p class="hint tiny">SOOP은 공식 기능이 없어서 바꿀 수 없어요.</p>
         </div>
 
         <h4>인코더</h4>

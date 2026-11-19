@@ -1926,7 +1926,9 @@ function renderVirtualProps(name, v, curWindow, method) {
 
 
 // ================================================================== 방송 정보: 치지직 · 유튜브 제목/태그/설명/카테고리
-const BC_NAME = { chzzk: '치지직', youtube: '유튜브' };
+const BC_NAME = { chzzk: '치지직', youtube: '유튜브', soop: 'SOOP' };
+const BC_PS = ['chzzk', 'youtube', 'soop'];
+let bcTab = 'all';
 const BC_HELP = {
   chzzk: `<b>치지직 앱 만들기 (한 번만)</b><ol>
     <li><a href="#" data-url="https://developers.chzzk.naver.com/">치지직 개발자 센터</a>에 로그인 → <b>애플리케이션 등록</b></li>
@@ -1945,13 +1947,11 @@ const bcInvoke = async (ch, ...a) => { if (DEMO) return { ok: false, error: '데
 function bcMsg(t, err) { $('bcMsg').innerHTML = t || ''; $('bcMsg').classList.toggle('err', !!err); }
 function bcRenderAcc() {
   const st = bcSt || { chzzk: {}, youtube: {}, redirect: {} };
-  // 유튜브는 아직 준비 중 → 내 앱 정보를 직접 넣었거나 이미 연결된 경우만 보여 줌
-  const yt = !!(st.youtube && (st.youtube.hasApp || st.youtube.connected));
-  document.querySelectorAll('#bcCard .yt-only').forEach((el) => { el.hidden = !yt; });
-  $('bcSub').textContent = yt ? '치지직 · 유튜브에 제목·태그를 한 번에' : '치지직 제목·태그·카테고리';
-  $('bcAcc').innerHTML = (yt ? ['chzzk', 'youtube'] : ['chzzk']).map((p) => {
+  const list = bcTab === 'all' ? BC_PS : [bcTab];
+  $('bcAcc').innerHTML = list.map((p) => {
     const a = st[p] || {};
-    const state = a.connected ? `<span class="ok">연결됨${a.channel ? ' · ' + esc(a.channel.name) : ''}</span>` : a.hasApp ? '' : '<span>준비 중</span>';
+    if (p === 'soop') return `<div class="bc-row" data-p="soop"><i class="pd soop"></i><b>SOOP</b><span>심사 중</span><span class="sp"></span><button disabled>로그인</button></div>`;
+    const state = a.connected ? `<span class="ok">${a.channel ? esc(a.channel.name) : '연결됨'}</span>` : a.hasApp ? '' : '<span>준비 중</span>';
     return `<div class="bc-row" data-p="${p}"><i class="pd ${p}"></i><b>${BC_NAME[p]}</b>${state}
       <span class="sp"></span>
       ${a.connected ? `<button class="ghost" data-act="logout">로그아웃</button>` : `<button class="${a.hasApp ? 'primary-sm' : ''}" data-act="login" ${a.hasApp ? '' : 'disabled'}>로그인</button>`}
@@ -1985,73 +1985,109 @@ $('bcAcc').addEventListener('click', async (ev) => {
   }
 });
 ipcRenderer.on('bc:status', (_e, st) => { bcSt = st; bcRenderAcc(); syncChzzkChannel(st); });
-// 입력값 → cfg.bc 에 저장 (껐다 켜도 그대로)
-cfg.bc = { title: '', tags: '', desc: '', czCat: null, ytCat: '', toCz: true, toYt: true, auto: false, ...(cfg.bc || {}) };
-const bcTags = () => String($('bcTags').value).split(/[,，#\n]/).map((t) => t.trim()).filter(Boolean);
+// 방송 정보: [통합] 탭 = 모든 플랫폼 공통, 플랫폼 탭 = "따로 설정"을 켜면 그 플랫폼만 다른 제목·태그
+cfg.bc = { title: '', tags: '', desc: '', czCat: null, ytCat: '', toCz: true, toYt: true, toSoop: true, auto: false, own: {}, ...(cfg.bc || {}) };
+for (const p of BC_PS) cfg.bc.own[p] = { on: false, title: '', tags: '', desc: '', ...(cfg.bc.own[p] || {}) };
+const splitTags = (t) => String(t || '').split(/[,，#\n]/).map((x) => x.trim()).filter(Boolean);
+const bcTags = () => splitTags($('bcTags').value);
+const bcEditing = () => (bcTab !== 'all' && cfg.bc.own[bcTab].on ? cfg.bc.own[bcTab] : cfg.bc);   // 지금 칸이 고치는 대상
+const BC_TO = { chzzk: 'toCz', youtube: 'toYt', soop: 'toSoop' };
 function bcTagPreview() {
   const czOk = (t) => t.replace(/[^0-9A-Za-z가-힣ㄱ-ㅎㅏ-ㅣぁ-ゟ゠-ヿ一-龯]/g, '').slice(0, 15);
-  const tags = bcTags();
-  $('bcTagPrev').innerHTML = tags.map((t, i) => { const c = czOk(t); const off = i >= 5 || !c; return `<span class="chip ${off ? 'dim' : ''}" title="${off ? '치지직에는 안 들어가요' : c !== t ? '치지직: ' + esc(c) : ''}">#${esc(t)}</span>`; }).join('');
+  const tags = bcTags(), cz = bcTab === 'all' || bcTab === 'chzzk';
+  $('bcTagPrev').innerHTML = tags.map((t, i) => { const c = czOk(t); const off = cz && (i >= 5 || !c); return `<span class="chip ${off ? 'dim' : ''}" title="${off ? '치지직에는 안 들어가요' : ''}">#${esc(t)}</span>`; }).join('');
 }
 function bcRenderCzCur() {
   const c = cfg.bc.czCat;
-  $('bcCzCur').innerHTML = c ? `<span class="chip on">${esc(c.name)}</span><button class="link inline" id="bcCzClear">지우기</button>` : '<small class="hint">카테고리: 그대로 두기</small>';
+  $('bcCzCur').innerHTML = c ? `<span class="chip on">${esc(c.name)}</span><button class="link inline" id="bcCzClear">지우기</button>` : '';
   $('bcCzClear')?.addEventListener('click', () => { cfg.bc.czCat = null; save(); bcRenderCzCur(); });
 }
 function bcFill() {
-  $('bcTitle').value = cfg.bc.title; $('bcTags').value = cfg.bc.tags; $('bcDesc').value = cfg.bc.desc; $('bcYtCat').value = cfg.bc.ytCat || '';
-  $('bcToCz').checked = cfg.bc.toCz; $('bcToYt').checked = cfg.bc.toYt; $('bcAuto').checked = cfg.bc.auto;
-  $('bcTitleN').textContent = `${$('bcTitle').value.length}/100`; bcTagPreview(); bcRenderCzCur();
+  const t = bcTab, own = t !== 'all' && cfg.bc.own[t].on, src = bcEditing();
+  document.querySelectorAll('#bcTabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === t));
+  document.querySelectorAll('#bcTabs button').forEach((b) => b.classList.toggle('own', b.dataset.t !== 'all' && cfg.bc.own[b.dataset.t].on));
+  $('bcMode').hidden = t === 'all';
+  document.querySelectorAll('#bcMode button').forEach((b) => b.classList.toggle('on', b.dataset.m === (own ? 'own' : 'common')));
+  $('bcFields').hidden = t !== 'all' && !own;
+  $('bcSame').hidden = !(t !== 'all' && !own);
+  if (!$('bcSame').hidden) $('bcSame').innerHTML = `<b>${esc(cfg.bc.title || '제목 없음')}</b>${splitTags(cfg.bc.tags).length ? `<span>${splitTags(cfg.bc.tags).map((x) => '#' + esc(x)).join(' ')}</span>` : ''}`;
+  $('bcTitle').value = src.title || ''; $('bcTags').value = src.tags || ''; $('bcDesc').value = src.desc || '';
+  $('bcDescF').hidden = !(t === 'all' || t === 'youtube');
+  $('bcCatCz').hidden = !(t === 'all' || t === 'chzzk'); $('bcCatYt').hidden = !(t === 'all' || t === 'youtube');
+  $('bcYtCat').value = cfg.bc.ytCat || ''; $('bcAuto').checked = cfg.bc.auto;
+  $('bcTo').hidden = t !== 'all';
+  $('bcTo').innerHTML = BC_PS.map((p) => `<button class="bc-to-chip${cfg.bc[BC_TO[p]] ? ' on' : ''}${p === 'soop' ? ' wait' : ''}" data-p="${p}"><i class="pm ${p}">${PLAT_LETTER[p]}</i>${BC_NAME[p]}${cfg.bc.own[p].on ? '<em>따로</em>' : ''}</button>`).join('');
+  $('bcApply').textContent = t === 'all' ? '모두 적용' : `${BC_NAME[t]}에 적용`;
+  $('bcApply').disabled = t === 'soop';
+  $('bcAutoL').hidden = t !== 'all';
+  $('bcTitleN').textContent = `${$('bcTitle').value.length}/100`; bcTagPreview(); bcRenderCzCur(); bcRenderAcc();
 }
-const bcSave = () => { Object.assign(cfg.bc, { title: $('bcTitle').value, tags: $('bcTags').value, desc: $('bcDesc').value, ytCat: $('bcYtCat').value, toCz: $('bcToCz').checked, toYt: $('bcToYt').checked, auto: $('bcAuto').checked }); save(); };
-for (const id of ['bcTitle', 'bcTags', 'bcDesc', 'bcYtCat', 'bcToCz', 'bcToYt', 'bcAuto']) $(id).addEventListener(/^bc(To|Auto|YtCat)/.test(id) ? 'change' : 'input', () => { bcSave(); if (id === 'bcTitle') $('bcTitleN').textContent = `${$('bcTitle').value.length}/100`; if (id === 'bcTags') bcTagPreview(); });
+const bcSave = () => { const src = bcEditing(); Object.assign(src, { title: $('bcTitle').value, tags: $('bcTags').value, desc: $('bcDesc').value }); cfg.bc.ytCat = $('bcYtCat').value; cfg.bc.auto = $('bcAuto').checked; save(); };
+for (const id of ['bcTitle', 'bcTags', 'bcDesc', 'bcYtCat', 'bcAuto']) $(id).addEventListener(/^bc(Auto|YtCat)/.test(id) ? 'change' : 'input', () => { bcSave(); if (id === 'bcTitle') $('bcTitleN').textContent = `${$('bcTitle').value.length}/100`; if (id === 'bcTags') bcTagPreview(); });
+$('bcTabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; bcTab = b.dataset.t; bcMsg(''); bcFill(); });
+$('bcMode').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b || bcTab === 'all') return;
+  const o = cfg.bc.own[bcTab], on = b.dataset.m === 'own';
+  if (on && !o.title && !o.tags) Object.assign(o, { title: cfg.bc.title, tags: cfg.bc.tags, desc: cfg.bc.desc });   // 처음엔 통합 내용을 복사해서 시작
+  o.on = on; save(); bcFill();
+});
+$('bcTo').addEventListener('click', (e) => { const b = e.target.closest('.bc-to-chip'); if (!b) return; const k = BC_TO[b.dataset.p]; cfg.bc[k] = !cfg.bc[k]; save(); bcFill(); });
 async function bcCzSearch() {
   const q = $('bcCzQ').value.trim(); if (!q) return;
-  $('bcCzRes').innerHTML = '<small class="hint">찾는 중…</small>';
+  $('bcCzRes').innerHTML = '<small class="muted">찾는 중…</small>';
   const r = await bcInvoke('bc:chzzk-categories', q);
-  if (!r.ok) { $('bcCzRes').innerHTML = `<small class="hint err">${esc(r.error)}</small>`; return; }
+  if (!r.ok) { $('bcCzRes').innerHTML = `<small class="muted err">${esc(r.error)}</small>`; return; }
   const TY = { GAME: '게임', SPORTS: '스포츠', ETC: '기타' };
-  $('bcCzRes').innerHTML = r.data.length ? r.data.map((c, i) => `<button class="chip" data-i="${i}">${esc(c.name)} <small>${TY[c.type] || ''}</small></button>`).join('') : '<small class="hint">결과가 없어요</small>';
+  $('bcCzRes').innerHTML = r.data.length ? r.data.map((c, i) => `<button class="chip" data-i="${i}">${esc(c.name)} <small>${TY[c.type] || ''}</small></button>`).join('') : '<small class="muted">결과 없음</small>';
   $('bcCzRes').querySelectorAll('.chip').forEach((b) => b.addEventListener('click', () => { const c = r.data[Number(b.dataset.i)]; cfg.bc.czCat = { type: c.type, id: c.id, name: c.name }; save(); $('bcCzRes').innerHTML = ''; bcRenderCzCur(); }));
 }
 $('bcCzSearch').addEventListener('click', bcCzSearch);
 $('bcCzQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); bcCzSearch(); } });
-function bcInfo() { return { title: cfg.bc.title.trim(), tags: bcTags(), description: cfg.bc.desc, chzzkCategory: cfg.bc.czCat || undefined, youtubeCategory: cfg.bc.ytCat || undefined }; }
+// 플랫폼마다 보낼 내용 (따로 설정이 켜져 있으면 그 내용, 아니면 통합 내용)
+function bcInfoFor(p) {
+  const src = cfg.bc.own[p] && cfg.bc.own[p].on ? cfg.bc.own[p] : cfg.bc;
+  return { title: String(src.title || '').trim(), tags: splitTags(src.tags), description: src.desc || '', chzzkCategory: cfg.bc.czCat || undefined, youtubeCategory: cfg.bc.ytCat || undefined };
+}
 function bcTargets(only) {
   const st = bcSt || {};
-  return ['chzzk', 'youtube'].filter((p) => (p === 'chzzk' ? cfg.bc.toCz : cfg.bc.toYt) && st[p] && st[p].connected && (!only || only.includes(p)));
+  return ['chzzk', 'youtube'].filter((p) => (only ? only.includes(p) : cfg.bc[BC_TO[p]]) && st[p] && st[p].connected);
 }
 async function bcApply({ only, quiet } = {}) {
   const targets = bcTargets(only);
-  if (!targets.length) { if (!quiet) bcMsg('연결된 플랫폼이 없어요. 위에서 치지직/유튜브에 먼저 로그인해 주세요.', true); return null; }
-  if (!cfg.bc.title.trim() && !quiet) { bcMsg('제목을 넣어 주세요.', true); return null; }
+  if (!targets.length) { if (!quiet) bcMsg('로그인된 플랫폼이 없어요.', true); return null; }
+  const empty = targets.filter((p) => !bcInfoFor(p).title);
+  if (empty.length && !quiet) { bcMsg(`${empty.map((p) => BC_NAME[p]).join(' · ')} 제목이 비어 있어요.`, true); return null; }
   bcMsg('적용하는 중…');
-  const r = await bcInvoke('bc:apply', bcInfo(), targets);
-  if (!r.ok) { bcMsg(esc(r.error), true); return null; }
-  const lines = Object.entries(r.data).map(([p, x]) => x.ok ? `${ic('ok')} ${BC_NAME[p]} 적용됨${x.warn && x.warn.length ? ` <small>(${esc(x.warn.join(' / '))})</small>` : ''}` : `${ic('warn')} ${BC_NAME[p]}: ${esc(x.error)}`);
-  const bad = Object.values(r.data).some((x) => !x.ok);
+  const out = {};
+  for (const p of targets) {     // 플랫폼마다 내용이 다를 수 있어서 하나씩
+    const r = await bcInvoke('bc:apply', bcInfoFor(p), [p]);
+    out[p] = r.ok ? (r.data[p] || { ok: true }) : { ok: false, error: r.error };
+  }
+  const lines = Object.entries(out).map(([p, x]) => x.ok ? `${ic('ok')} ${BC_NAME[p]}${x.warn && x.warn.length ? ` <small>(${esc(x.warn.join(' / '))})</small>` : ''}` : `${ic('warn')} ${BC_NAME[p]}: ${esc(x.error)}`);
+  const bad = Object.values(out).some((x) => !x.ok);
   bcMsg(lines.join('<br>'), bad);
   if (!bad) toast('방송 정보를 바꿨어요.');
-  return r.data;
+  return out;
 }
-$('bcApply').addEventListener('click', () => bcApply());
+$('bcApply').addEventListener('click', () => bcApply(bcTab === 'all' ? {} : { only: [bcTab] }));
 $('bcLoad').addEventListener('click', async () => {
   const st = bcSt || {}; const got = [];
-  if (st.chzzk && st.chzzk.connected) {
+  const into = (p, d) => { const dst = bcTab === 'all' ? cfg.bc : cfg.bc.own[p]; if (bcTab !== 'all') dst.on = true; if (d.title) dst.title = d.title; if (d.tags && d.tags.length) dst.tags = d.tags.join(', '); if (d.description != null) dst.desc = d.description; };
+  if (st.chzzk && st.chzzk.connected && (bcTab === 'all' || bcTab === 'chzzk')) {
     const r = await bcInvoke('bc:chzzk-get');
-    if (r.ok) { cfg.bc.title = r.data.title || cfg.bc.title; if (r.data.tags.length) cfg.bc.tags = r.data.tags.join(', '); cfg.bc.czCat = r.data.category; got.push('치지직'); } else bcMsg(esc(r.error), true);
+    if (r.ok) { into('chzzk', r.data); cfg.bc.czCat = r.data.category; got.push('치지직'); } else bcMsg(esc(r.error), true);
   }
-  if (st.youtube && st.youtube.connected) {
+  if (st.youtube && st.youtube.connected && (bcTab === 'youtube' || (bcTab === 'all' && !got.length))) {
     const r = await bcInvoke('bc:youtube-get');
-    if (r.ok && r.data) { if (!got.length) { cfg.bc.title = r.data.title; if (r.data.tags.length) cfg.bc.tags = r.data.tags.join(', '); } cfg.bc.desc = r.data.description; if (r.data.categoryId) cfg.bc.ytCat = r.data.categoryId; got.push('유튜브'); }
+    if (r.ok && r.data) { into('youtube', r.data); if (r.data.categoryId) cfg.bc.ytCat = r.data.categoryId; got.push('유튜브'); }
   }
   save(); bcFill();
-  if (got.length) bcMsg(`${got.join(' · ')}에서 불러왔어요.`); else if (!$('bcMsg').classList.contains('err')) bcMsg('불러올 곳이 없어요. 먼저 연결해 주세요.', true);
+  if (got.length) bcMsg(`${got.join(' · ')}에서 불러왔어요.`); else if (!$('bcMsg').classList.contains('err')) bcMsg('불러올 곳이 없어요.', true);
 });
 // 방송 시작 → 자동 적용 (치지직은 바로, 유튜브는 방송이 잡힐 때까지 몇 번 다시 시도)
 async function bcAutoOnLive(platform) {
-  if (!cfg.bc.auto || !cfg.bc.title.trim()) return;
-  if (!bcTargets([platform]).length) return;
+  if (!cfg.bc.auto || !bcInfoFor(platform).title) return;
+  if (!bcTargets([platform]).length || !cfg.bc[BC_TO[platform]]) return;
   for (let i = 0; i < (platform === 'youtube' ? 6 : 2); i++) {
     await new Promise((res) => setTimeout(res, platform === 'youtube' ? 15000 : 3000));
     if (!engine.streaming) return;
@@ -2063,7 +2099,7 @@ let bcPrevLive = {};
 engine.on('stream', (states) => { for (const [k, s] of Object.entries(states)) if (s.state === 'live' && (bcPrevLive[k] !== 'live') && (k === 'chzzk' || k === 'youtube')) bcAutoOnLive(k); bcPrevLive = Object.fromEntries(Object.entries(states).map(([k, s]) => [k, s.state])); });
 (async () => {
   bcFill();
-  if (DEMO) { bcSt = { chzzk: { hasApp: true, connected: true, channel: { name: '스트리미' } }, youtube: { hasApp: true, connected: false }, redirect: {} };
+  if (DEMO) { bcSt = { chzzk: { hasApp: true, connected: true, channel: { name: '스트리미' } }, youtube: { hasApp: true, connected: true, channel: { name: 'Streamy' } }, redirect: {} };
     cfg.bc.title = '오늘은 롤 랭크 올립니다!'; cfg.bc.tags = '롤, 랭크, 저챗, 버튜버'; cfg.bc.czCat = { type: 'GAME', id: 'League_of_Legends', name: '리그 오브 레전드' }; bcFill(); bcRenderAcc(); return; }
   bcSt = await ipcRenderer.invoke('bc:status').catch(() => null); bcRenderAcc(); syncChzzkChannel(bcSt);
 })();

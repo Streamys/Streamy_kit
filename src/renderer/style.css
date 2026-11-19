@@ -1194,3 +1194,35 @@ label.check input,.lay-chk input{margin:0;flex:none}
 .vts-row button.primary-sm{background:var(--red)!important;border-color:var(--red)!important;color:var(--onac)!important}
 .oss-link{display:block;margin:10px 0 2px;font-size:11px;color:var(--sub)!important}
 .sec-card>.oss-link{display:block!important;background:none!important;box-shadow:none!important;border:none!important;padding:0 4px!important;margin:0 0 10px!important;font-size:11px!important;font-weight:600;text-align:left;color:var(--sub)!important}
+
+/* v0.24 방송 정보: 통합 / 플랫폼별 탭 */
+.bc-tabs{display:grid!important;grid-template-columns:repeat(4,1fr);gap:4px;padding:4px;background:var(--card2)!important;border-radius:12px;margin:0 0 10px!important}
+.bc-tabs button{display:inline-flex!important;align-items:center;justify-content:center;gap:5px;height:32px;border:none!important;background:transparent!important;border-radius:9px!important;font-size:12px;font-weight:800;color:var(--sub)!important;padding:0!important;position:relative}
+.bc-tabs button.on{background:var(--card)!important;color:var(--text)!important;box-shadow:0 1px 3px rgba(20,22,30,.12)}
+.bc-tabs button.own::after{content:'';position:absolute;top:5px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--red)}
+.bc-tabs .pm{width:15px;height:15px;font-size:9px}
+.bc-mode{display:grid!important;grid-template-columns:1fr 1fr;gap:4px;padding:4px;background:var(--card2)!important;border-radius:12px;margin:0 0 10px!important}
+.bc-mode[hidden],.bc-fields[hidden],.bc-same[hidden],.bc-to[hidden],#bcAutoL[hidden],#bcCatCz[hidden],#bcCatYt[hidden],#bcDescF[hidden]{display:none!important}
+.bc-mode button{height:30px;border:none!important;background:transparent!important;border-radius:9px!important;font-size:12px;font-weight:800;color:var(--sub)!important;padding:0!important}
+.bc-mode button.on{background:var(--red)!important;color:var(--onac)!important}
+.bc-same{display:flex!important;flex-direction:column;gap:4px;padding:12px 14px!important;border-radius:14px;background:var(--card)!important;border:1px dashed var(--line2)!important;box-shadow:none!important;margin-bottom:8px!important}
+.bc-same b{font-size:13px}.bc-same span{font-size:12px;color:var(--sub)}
+.bc-to{display:grid!important;grid-template-columns:repeat(3,1fr);gap:6px;padding:0!important;background:none!important;box-shadow:none!important;border:none!important}
+.bc-to-chip{display:flex!important;align-items:center;justify-content:center;gap:5px;height:36px;border-radius:10px!important;border:1.5px solid var(--line)!important;background:var(--card)!important;font-size:12px;font-weight:800;color:var(--sub)!important;padding:0 4px!important;position:relative}
+.bc-to-chip.on{border-color:var(--red)!important;color:var(--text)!important;background:var(--soft2)!important}
+.bc-to-chip:not(.on) .pm{opacity:.35}
+.bc-to-chip em{font-style:normal;font-size:9px;font-weight:800;color:var(--onac);background:var(--red);border-radius:5px;padding:1px 4px}
+.bc-to-chip .pm{width:15px;height:15px;font-size:9px}
+.bc-btns{display:grid!important;grid-template-columns:1fr auto;gap:8px}
+.bc-btns button{height:40px}
+small.muted{color:var(--sub);font-size:11px}
+#bcCard .bc-tabs,#bcCard .bc-mode{display:grid!important;gap:4px!important;padding:4px!important;background:var(--card2)!important;border-radius:12px!important;box-shadow:none!important;border:none!important}
+#bcCard .bc-tabs{grid-template-columns:repeat(4,1fr)}
+#bcCard .bc-mode{grid-template-columns:1fr 1fr}
+#bcCard .bc-tabs button,#bcCard .bc-mode button{height:32px!important;border:none!important;background:transparent!important;border-radius:9px!important;font-size:12px!important;font-weight:800!important;color:var(--sub)!important;padding:0!important;box-shadow:none!important;display:inline-flex!important;align-items:center;justify-content:center;gap:5px}
+#bcCard .bc-tabs button.on{background:var(--card)!important;color:var(--text)!important;box-shadow:0 1px 3px rgba(20,22,30,.18)!important}
+#bcCard .bc-mode button.on{background:var(--red)!important;color:var(--onac)!important}
+#bcCard .bc-to-chip{background:var(--card)!important;border:1.5px solid var(--line)!important;color:var(--sub)!important}
+#bcCard .bc-to-chip.on{border-color:var(--red)!important;color:var(--text)!important;background:var(--soft2)!important}
+#bcCard .bc-to-chip.wait{opacity:.6}
+#bcCard [hidden]{display:none!important}
