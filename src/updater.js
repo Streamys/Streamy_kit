@@ -85,7 +85,7 @@ async function check(manual) {
   emit({ status: 'checking', error: '', manual: !!manual });
   if (await checkLocal(true)) return state;            // 바탕화면 파일이 있으면 그걸로
   try {
-    const r = await ctx.net.fetch(API, { headers: { 'User-Agent': 'StreamyKit-Updater', Accept: 'application/vnd.github+json' } });
+    const r = await ctx.net.fetch(API + '?t=' + Date.now(), { cache: 'no-store', headers: { 'User-Agent': 'StreamyKit-Updater', Accept: 'application/vnd.github+json' } });
     if (r.status === 404) { emit({ status: 'latest', checkedAt: Date.now() }); return state; }          // 아직 릴리스가 없음
     if (!r.ok) throw new Error('업데이트 서버 응답 ' + r.status);
     const j = await r.json();
