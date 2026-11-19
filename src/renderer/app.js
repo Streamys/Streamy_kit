@@ -776,13 +776,26 @@ for (const k of Object.keys(PLAT_LETTER)) { try { if (require('fs').existsSync(r
 function platMark(p, cls = '') { return `<i class="pm ${p} ${cls}" title="${CHAT_P[p] || p}">${PLAT_IMG[p] ? `<img src="${PLAT_IMG[p]}" alt="">` : (PLAT_LETTER[p] || '?')}</i>`; }
 // 고정 화면(채팅 전환 탭 · 오버레이 플랫폼 고르기)의 색 점도 플랫폼 표시로
 document.querySelectorAll('i.pd.chzzk, i.pd.youtube, i.pd.soop').forEach((el) => { const p = ['chzzk', 'youtube', 'soop'].find((k) => el.classList.contains(k)); el.outerHTML = platMark(p, 'sm'); });
+// 채팅 등급 배지: 스트리머 · 매니저 · 열혈 · 멤버 · 팬 (아이콘 + 글자)
+const BADGE = {
+  '스트리머': ['st', '<path d="M3 8l4 3 5-6 5 6 4-3-2 10H5z"/>'],
+  '매니저': ['mg', '<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>'],
+  '열혈': ['hot', '<path d="M12 3c1 3 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5.3 1.5 1 2.5 2 3 0-3 0-6 1-8.5z"/>'],
+  '멤버': ['mb', '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>'],
+  '팬': ['fan', '<path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/>'],
+};
+function badgeHtml(b) {
+  if (!b) return '';
+  const [cls, path] = BADGE[b] || ['etc', '<circle cx="12" cy="12" r="4"/>'];
+  return `<span class="bd b-${cls}"><svg viewBox="0 0 24 24" aria-hidden="true">${path}</svg>${esc(b)}</span>`;
+}
 const AV_COLORS = ['#F7C6D3', '#C9E8F7', '#D6CCF7', '#C8EED9', '#FBE2B8', '#F9CFC2', '#CDE0FA', '#E2D4F0'];
 function avColor(nick) { let h = 0; for (const c of String(nick)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return AV_COLORS[h % AV_COLORS.length]; }
 function chatHtml(m) {
   const body = (m.parts || []).map((x) => (x.t === 'img' ? `<img src="${esc(x.src)}" alt="${esc(x.alt)}" title="${esc(x.alt)}" loading="lazy" referrerpolicy="no-referrer">` : esc(x.v))).join('');
   const t = new Date(m.ts || Date.now()); const hm = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
   const first = [...String(m.nick || '?').trim()][0] || '?';
-  const badge = m.badge ? `<span class="bd${m.badge === '스트리머' ? ' st' : ''}">${esc(m.badge)}</span>` : '';
+  const badge = badgeHtml(m.badge);
   if (m.kind === 'system') return `<span class="tx">${body}</span>`;
   return `<span class="av" style="background:${avColor(m.nick)}">${esc(first)}${platMark(m.p)}</span>`
     + `<div class="cb"><div class="ch"><span class="nk">${esc(m.nick)}</span>${badge}${m.amount ? `<span class="amt">${esc(m.amount)}</span>` : ''}<span class="tm">${hm}</span></div>`
@@ -1221,12 +1234,14 @@ function demoMode() {
   cfg.channels = { chzzk: 'a'.repeat(32), youtube: '@streamy', soop: 'streamy' };
   chat.status = { chzzk: { p: 'chzzk', state: 'live' }, youtube: { p: 'youtube', state: 'live' }, soop: { p: 'soop', state: 'wait' } };
   addChat([
+    { p: 'chzzk', nick: '스트리미', parts: [{ t: 'text', v: '다들 어서 와요~ 오늘 랭크 갑니다' }], badge: '스트리머' },
     { p: 'chzzk', nick: '치즈냥', parts: [{ t: 'text', v: '오늘 방송 화질 미쳤다 ㄷㄷ' }], badge: '' },
     { p: 'youtube', nick: 'MinJun Kim', parts: [{ t: 'text', v: '유튜브에서 보고 있어요!' }] },
     { p: 'chzzk', nick: '매니저봇', parts: [{ t: 'text', v: '공지: 오늘은 10시까지 방송합니다' }], badge: '매니저' },
     { p: 'chzzk', kind: 'donation', nick: '후원왕', amount: '10,000치즈', parts: [{ t: 'text', v: '방송 잘 보고 있어요 화이팅!!' }] },
     { p: 'youtube', nick: 'streamy_fan', parts: [{ t: 'text', v: '사운드 분리 어떻게 한 거예요?' }], badge: '멤버' },
     { p: 'soop', nick: '숲속주민', parts: [{ t: 'text', v: 'SOOP에서도 같이 봐요 ㅎㅎ' }], badge: '팬' },
+    { p: 'soop', nick: '불꽃시청자', parts: [{ t: 'text', v: '열혈 1년차 출석!' }], badge: '열혈' },
     { p: 'youtube', kind: 'donation', nick: 'Jiwoo', amount: '₩5,000', parts: [{ t: 'text', v: '슈퍼챗 첫 후원!' }] },
     { p: 'soop', kind: 'donation', nick: '별풍요정', amount: '별풍선 100개', parts: [] },
     { p: 'chzzk', kind: 'sub', nick: '정기구독러', amount: '6개월 구독', parts: [{ t: 'text', v: '반년 됐네요' }] },

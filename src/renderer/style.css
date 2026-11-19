@@ -786,3 +786,20 @@ body.theme-dark .tab .chat-switch button.on{background:var(--hover)!important}
 .pm.youtube{background:#FF0000;color:#fff}
 .pm.soop{background:#2F6BF0;color:#fff}
 .pm{font-size:9px;letter-spacing:-.5px}
+/* 채팅 등급 배지 (아이콘 + 글자) */
+.cm .bd{display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 7px 0 5px;border-radius:99px;font-size:10.5px;font-weight:800;letter-spacing:-.2px;vertical-align:1px}
+.cm .bd svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.cm .bd.b-st{background:linear-gradient(135deg,#FFB547,#FF6F61);color:#fff}
+.cm .bd.b-st svg{fill:#fff;stroke:#fff;stroke-width:1.5}
+.cm .bd.b-mg{background:#DDF6EC;color:#0D7A55}
+.cm .bd.b-hot{background:#FFE4D6;color:#C2410C}
+.cm .bd.b-hot svg{fill:currentColor;stroke-width:1.5}
+.cm .bd.b-mb{background:#ECE7FF;color:#5B3FD6}
+.cm .bd.b-mb svg{fill:currentColor;stroke-width:1.5}
+.cm .bd.b-fan{background:#FFE3EC;color:#C42A5A}
+.cm .bd.b-fan svg{fill:currentColor;stroke-width:1.5}
+.cm .bd.b-etc{background:var(--line);color:var(--text)}
+body.theme-dark .cm .bd.b-mg{background:rgba(18,184,134,.18);color:#5FE3B2}
+body.theme-dark .cm .bd.b-hot{background:rgba(249,115,22,.2);color:#FDBA74}
+body.theme-dark .cm .bd.b-mb{background:rgba(124,92,255,.22);color:#C4B5FD}
+body.theme-dark .cm .bd.b-fan{background:rgba(236,72,153,.2);color:#F9A8D4}
