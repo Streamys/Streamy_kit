@@ -1228,3 +1228,5 @@ small.muted{color:var(--sub);font-size:11px}
 #bcCard [hidden]{display:none!important}
 /* v0.24.1 플랫폼 뱃지(색 점 · 치/유/숲) 빼기 — 채팅 메시지 안의 표시만 남김 */
 i.pd,.bc-tabs .pm,.bc-to-chip .pm,.chat-switch .pm,.chat-switch .pd,#miniPlat .pm,#miniPlat .pd,.bc-row .pm,.bc-row .pd{display:none!important}
+/* 숨김은 언제나 숨김 (아이콘 버튼 정렬 규칙이 hidden을 덮어쓰던 문제) */
+[hidden]{display:none!important}
