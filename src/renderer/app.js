@@ -785,7 +785,7 @@ function meterLoop(ts = performance.now()) {
 }
 requestAnimationFrame(meterLoop);
 let tabBeforeSound = 'stream';
-$('soundGear').addEventListener('click', () => { tabBeforeSound = document.querySelector('.tabs button.on')?.dataset.tab || 'stream'; openTab('sound'); });
+$('soundGear').addEventListener('click', () => openTab('sound'));
 $('soundBack').addEventListener('click', () => openTab(tabBeforeSound));
 
 // ================================================================== 사운드 탭: 지금 나오는 소리 → 끌어다 분리

@@ -1231,3 +1231,5 @@ i.pd,.bc-tabs .pm,.bc-to-chip .pm,.chat-switch .pm,.chat-switch .pd,#miniPlat .p
 /* 숨김은 언제나 숨김 (아이콘 버튼 정렬 규칙이 hidden을 덮어쓰던 문제) */
 [hidden]{display:none!important}
 [hidden][hidden][hidden]{display:none!important}
+.tabs{grid-template-columns:repeat(6,1fr)!important}
+.tabs button{font-size:12px!important;padding-left:0!important;padding-right:0!important}
