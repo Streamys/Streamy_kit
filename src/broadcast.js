@@ -1,5 +1,8 @@
 // Streamy Kit — 방송 정보(제목 · 태그 · 설명 · 카테고리) 바꾸기: 치지직 + 유튜브
-// 각 플랫폼 개발자 센터에서 만든 "앱 정보(Client ID/Secret)"는 사용자가 직접 넣어요 (공개 저장소에 비밀값 없음).
+// 기본: Streamy가 등록한 앱으로 로그인 (사용자는 "로그인"만 누름).
+//   비밀키(Secret)는 앱 안에 없고 Streamy 중계 서버(relay/worker.js, Cloudflare)에만 있어요.
+//   앱 → 중계 서버로 로그인 코드를 보내면, 서버가 비밀키를 붙여 토큰을 받아 줘요.
+// 고급: 설정에서 자기 앱 정보(Client ID/Secret)를 넣으면 중계 서버 없이 직접 요청.
 // 로그인 토큰은 윈도우 보안 저장(safeStorage)으로 암호화해서 내 PC에만 저장돼요.
 'use strict';
 const fs = require('fs');
@@ -10,11 +13,21 @@ const CHZZK_REDIRECT = 'http://localhost:17890/oauth/chzzk';
 const GOOGLE_REDIRECT = 'http://127.0.0.1:17890/oauth/google';
 const CHZZK_API = 'https://openapi.chzzk.naver.com';
 const YT_API = 'https://www.googleapis.com/youtube/v3';
+// Streamy 기본 앱 (공개돼도 되는 값만)
+const STREAMY = {
+  relay: '',                                                   // 중계 서버 주소 (예: https://streamy-relay.xxx.workers.dev)
+  chzzkClientId: '5d62b982-08a0-4300-a4df-b9bf7849d92a',
+  googleClientId: '',
+};
 
 let ctx = null;        // { app, net, log, shell, safeStorage, send }
 let file = '';
 let data = { chzzk: { clientId: '', secret: '', token: null, channel: null }, youtube: { clientId: '', secret: '', token: null, channel: null } };
-const waiting = {};    // state → { platform, verifier, resolve, reject, t }
+const waiting = {};
+const custom = (p) => !!(data[p].clientId && data[p].secret);
+const builtin = (p) => !!(STREAMY.relay && (p === 'chzzk' ? STREAMY.chzzkClientId : STREAMY.googleClientId));
+const clientIdOf = (p) => custom(p) ? data[p].clientId : (p === 'chzzk' ? STREAMY.chzzkClientId : STREAMY.googleClientId);
+const relay = (pth) => STREAMY.relay.replace(/\/$/, '') + pth;    // state → { platform, verifier, resolve, reject, t }
 
 // ---------------------------------------------------------------- 저장 (비밀값은 암호화)
 const enc = (o) => { const s = JSON.stringify(o); try { if (ctx.safeStorage.isEncryptionAvailable()) return 'e:' + ctx.safeStorage.encryptString(s).toString('base64'); } catch {} return 'p:' + Buffer.from(s).toString('base64'); };
@@ -35,7 +48,7 @@ function persist() {
 }
 function status() {
   const s = {};
-  for (const p of ['chzzk', 'youtube']) { const d = data[p]; s[p] = { hasApp: !!(d.clientId && d.secret), clientId: d.clientId, connected: !!(d.token && d.token.refresh), channel: d.channel }; }
+  for (const p of ['chzzk', 'youtube']) { const d = data[p]; s[p] = { hasApp: custom(p) || builtin(p), builtin: builtin(p), custom: custom(p), clientId: d.clientId, connected: !!(d.token && d.token.refresh), channel: d.channel }; }
   s.redirect = { chzzk: CHZZK_REDIRECT, youtube: GOOGLE_REDIRECT };
   return s;
 }
@@ -67,7 +80,10 @@ function setApp(platform, { clientId, secret }) {
 function logout(platform) {
   const d = data[platform]; if (!d) return status();
   if (platform === 'chzzk' && d.token && d.token.access) {
-    http(`${CHZZK_API}/auth/v1/token/revoke`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId: d.clientId, clientSecret: d.secret, token: d.token.refresh || d.token.access, tokenTypeHint: d.token.refresh ? 'refresh_token' : 'access_token' }) }).catch(() => {});
+    const t = { token: d.token.refresh || d.token.access, tokenTypeHint: d.token.refresh ? 'refresh_token' : 'access_token' };
+    const req = custom('chzzk') ? http(`${CHZZK_API}/auth/v1/token/revoke`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId: d.clientId, clientSecret: d.secret, ...t }) })
+      : builtin('chzzk') ? http(relay('/chzzk/revoke'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(t) }) : null;
+    if (req) req.catch(() => {});
   }
   if (platform === 'youtube' && d.token && d.token.refresh) http(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(d.token.refresh)}`, { method: 'POST' }).catch(() => {});
   d.token = null; d.channel = null; persist(); emit(); return status();
@@ -75,8 +91,9 @@ function logout(platform) {
 
 // ---------------------------------------------------------------- 로그인 (브라우저 → 내 PC 17890번으로 돌아옴)
 function login(platform) {
-  const d = data[platform]; if (!d) throw new Error('알 수 없는 플랫폼');
-  if (!d.clientId || !d.secret) throw new Error('먼저 앱 정보(Client ID / Secret)를 넣어 주세요.');
+  if (!data[platform]) throw new Error('알 수 없는 플랫폼');
+  if (!custom(platform) && !builtin(platform)) throw new Error(platform === 'youtube' ? '유튜브 로그인은 아직 준비 중이에요.' : '로그인 준비가 안 됐어요.');
+  const d = { clientId: clientIdOf(platform) };
   const state = crypto.randomBytes(16).toString('hex');
   let url, verifier = null;
   if (platform === 'chzzk') {
@@ -104,12 +121,12 @@ async function onCallback(which, q) {
     if (!q.code) throw new Error('로그인 코드가 없어요.');
     const d = data[platform];
     if (platform === 'chzzk') {
-      const r = await http(`${CHZZK_API}/auth/v1/token`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ grantType: 'authorization_code', clientId: d.clientId, clientSecret: d.secret, code: q.code, state: q.state }) });
+      const r = await chzzkToken({ grantType: 'authorization_code', code: q.code, state: q.state });
       const c = r.j && (r.j.content || r.j);
       if (!r.ok || !c || !c.accessToken) throw new Error(`치지직 토큰 받기 실패 (${r.status}) ${(r.j && r.j.message) || ''}`);
       d.token = { access: c.accessToken, refresh: c.refreshToken, exp: Date.now() + (Number(c.expiresIn) || 86400) * 1000 - 60000 };
     } else {
-      const r = await http('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form({ grant_type: 'authorization_code', code: q.code, client_id: d.clientId, client_secret: d.secret, redirect_uri: GOOGLE_REDIRECT, code_verifier: w.verifier }) });
+      const r = await googleToken({ grant_type: 'authorization_code', code: q.code, redirect_uri: GOOGLE_REDIRECT, code_verifier: w.verifier });
       if (!r.ok || !r.j || !r.j.access_token) throw new Error(`구글 토큰 받기 실패 (${r.status}) ${(r.j && (r.j.error_description || r.j.error)) || ''}`);
       d.token = { access: r.j.access_token, refresh: r.j.refresh_token, exp: Date.now() + (Number(r.j.expires_in) || 3600) * 1000 - 60000 };
     }
@@ -121,6 +138,18 @@ async function onCallback(which, q) {
   } catch (e) { w.reject(e); throw e; }
 }
 
+// ---------------------------------------------------------------- 토큰 요청 (내 앱 정보면 직접, 아니면 Streamy 중계 서버)
+function chzzkToken(body) {
+  const d = data.chzzk;
+  if (custom('chzzk')) return http(`${CHZZK_API}/auth/v1/token`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, clientId: d.clientId, clientSecret: d.secret }) });
+  return http(relay('/chzzk/token'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+}
+function googleToken(body) {
+  const d = data.youtube;
+  if (custom('youtube')) return http('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form({ ...body, client_id: d.clientId, client_secret: d.secret }) });
+  return http(relay('/google/token'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+}
+
 // ---------------------------------------------------------------- 토큰 갱신
 async function accessToken(platform) {
   const d = data[platform];
@@ -129,12 +158,12 @@ async function accessToken(platform) {
   if (!d.token.refresh) throw new Error('다시 연결해 주세요.');
   if (platform === 'chzzk') {
     // 치지직 갱신 토큰은 한 번만 쓸 수 있어서, 받자마자 새 걸로 저장
-    const r = await http(`${CHZZK_API}/auth/v1/token`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ grantType: 'refresh_token', refreshToken: d.token.refresh, clientId: d.clientId, clientSecret: d.secret }) });
+    const r = await chzzkToken({ grantType: 'refresh_token', refreshToken: d.token.refresh });
     const c = r.j && (r.j.content || r.j);
     if (!r.ok || !c || !c.accessToken) { d.token = null; persist(); emit(); throw new Error('치지직 연결이 만료됐어요. 다시 연결해 주세요.'); }
     d.token = { access: c.accessToken, refresh: c.refreshToken || d.token.refresh, exp: Date.now() + (Number(c.expiresIn) || 86400) * 1000 - 60000 };
   } else {
-    const r = await http('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form({ grant_type: 'refresh_token', refresh_token: d.token.refresh, client_id: d.clientId, client_secret: d.secret }) });
+    const r = await googleToken({ grant_type: 'refresh_token', refresh_token: d.token.refresh });
     if (!r.ok || !r.j || !r.j.access_token) { if (r.j && r.j.error === 'invalid_grant') { d.token = null; persist(); emit(); } throw new Error('유튜브 연결이 만료됐어요. 다시 연결해 주세요.'); }
     d.token = { ...d.token, access: r.j.access_token, exp: Date.now() + (Number(r.j.expires_in) || 3600) * 1000 - 60000 };
   }
@@ -171,8 +200,10 @@ async function fetchChannel(platform) {
 // ---------------------------------------------------------------- 치지직
 async function chzzkCategories(query) {
   const d = data.chzzk;
-  if (!d.clientId || !d.secret) throw new Error('먼저 치지직 앱 정보를 넣어 주세요.');
-  const r = await http(`${CHZZK_API}/open/v1/categories/search?${form({ query, size: 20 })}`, { headers: { 'Client-Id': d.clientId, 'Client-Secret': d.secret } });
+  let r;
+  if (custom('chzzk')) r = await http(`${CHZZK_API}/open/v1/categories/search?${form({ query, size: 20 })}`, { headers: { 'Client-Id': d.clientId, 'Client-Secret': d.secret } });
+  else if (builtin('chzzk')) r = await http(relay(`/chzzk/categories?${form({ query })}`));
+  else throw new Error('치지직 로그인 준비가 안 됐어요.');
   if (!r.ok) throw new Error(errMsg(r, '치지직 카테고리 검색'));
   return ((r.j.content && r.j.content.data) || []).map((c) => ({ type: c.categoryType, id: c.categoryId, name: c.categoryValue, img: c.posterImageUrl }));
 }

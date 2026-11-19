@@ -1432,11 +1432,11 @@ function bcRenderAcc() {
   const st = bcSt || { chzzk: {}, youtube: {}, redirect: {} };
   $('bcAcc').innerHTML = ['chzzk', 'youtube'].map((p) => {
     const a = st[p] || {};
-    const state = a.connected ? `<span class="ok">연결됨${a.channel ? ' · ' + esc(a.channel.name) : ''}</span>` : a.hasApp ? '<span>로그인 필요</span>' : '<span>앱 정보 필요</span>';
+    const state = a.connected ? `<span class="ok">연결됨${a.channel ? ' · ' + esc(a.channel.name) : ''}</span>` : a.hasApp ? '<span>로그인하면 제목·태그를 바꿀 수 있어요</span>' : '<span>준비 중</span>';
     return `<div class="bc-row" data-p="${p}"><i class="pd ${p}"></i><b>${BC_NAME[p]}</b>${state}
       <span class="sp"></span>
-      ${a.connected ? `<button class="ghost" data-act="logout">해제</button>` : `<button data-act="login" ${a.hasApp ? '' : 'disabled'}>연결</button>`}
-      <button class="ghost" data-act="app" title="앱 정보">⚙</button></div>
+      ${a.connected ? `<button class="ghost" data-act="logout">로그아웃</button>` : `<button class="${a.hasApp ? 'primary-sm' : ''}" data-act="login" ${a.hasApp ? '' : 'disabled'}>로그인</button>`}
+      ${a.builtin && !a.custom ? '' : '<button class="ghost" data-act="app" title="내 앱 정보 직접 넣기 (고급)">⚙</button>'}</div>
       ${bcOpen === p ? `<div class="bc-app" data-p="${p}">${BC_HELP[p]}
         <label class="field">리디렉션 주소 <div class="row"><input readonly value="${esc((st.redirect || {})[p] || '')}"><button class="ghost" data-act="copy">복사</button></div></label>
         <label class="field">Client ID<input data-k="clientId" value="${esc(a.clientId || '')}" spellcheck="false"></label>
@@ -1454,9 +1454,9 @@ $('bcAcc').addEventListener('click', async (ev) => {
     const box = b.closest('.bc-app');
     const r = await bcInvoke('bc:set-app', p, { clientId: box.querySelector('[data-k="clientId"]').value, secret: box.querySelector('[data-k="secret"]').value });
     if (!r.ok) return toast(r.error, true);
-    bcSt = r.data; bcOpen = ''; bcRenderAcc(); toast('앱 정보를 저장했어요. 이제 "연결"을 눌러 로그인하세요.'); return;
+    bcSt = r.data; bcOpen = ''; bcRenderAcc(); toast('앱 정보를 저장했어요. 이제 "로그인"을 누르세요.'); return;
   }
-  if (act === 'logout') { const r = await bcInvoke('bc:logout', p); if (r.ok) { bcSt = r.data; bcRenderAcc(); toast(`${BC_NAME[p]} 연결을 해제했어요.`); } return; }
+  if (act === 'logout') { const r = await bcInvoke('bc:logout', p); if (r.ok) { bcSt = r.data; bcRenderAcc(); toast(`${BC_NAME[p]}에서 로그아웃했어요.`); } return; }
   if (act === 'login') {
     b.disabled = true; bcMsg(`브라우저에서 ${BC_NAME[p]} 로그인 후 <b>허용</b>을 눌러 주세요…`);
     const r = await bcInvoke('bc:login', p);
@@ -1504,7 +1504,7 @@ function bcTargets(only) {
 }
 async function bcApply({ only, quiet } = {}) {
   const targets = bcTargets(only);
-  if (!targets.length) { if (!quiet) bcMsg('연결된 플랫폼이 없어요. 위에서 치지직/유튜브를 먼저 연결해 주세요.', true); return null; }
+  if (!targets.length) { if (!quiet) bcMsg('연결된 플랫폼이 없어요. 위에서 치지직/유튜브에 먼저 로그인해 주세요.', true); return null; }
   if (!cfg.bc.title.trim() && !quiet) { bcMsg('제목을 넣어 주세요.', true); return null; }
   bcMsg('적용하는 중…');
   const r = await bcInvoke('bc:apply', bcInfo(), targets);
