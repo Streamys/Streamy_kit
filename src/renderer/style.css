@@ -1237,3 +1237,9 @@ i.pd,.bc-tabs .pm,.bc-to-chip .pm,.chat-switch .pm,.chat-switch .pd,#miniPlat .p
 .ch .mute .ico{width:14px;height:14px}
 .ch:not(.muted) .mute .ico{color:var(--sub)}
 .ch:not(.muted) .mute:hover .ico{color:var(--red)}
+/* v0.25.3 사운드 칸: 칸이 크면 목록이 남는 공간을 다 씀 */
+.sound{display:flex;flex-direction:column;min-height:0}
+.sound .sound-list{flex:1 1 auto;min-height:0;max-height:none!important;overflow:auto;align-content:start}
+.stage>.sound:not(.lay-sized){flex:none}
+.stage>.sound:not(.lay-sized) .sound-list{max-height:170px!important}
+.rail>.sound .sound-list{grid-template-columns:1fr}
