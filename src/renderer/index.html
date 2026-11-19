@@ -109,6 +109,7 @@
       <button data-tab="stream" class="on">방송</button>
       <button data-tab="chat">채팅<i class="tab-dot" id="chatDot"></i></button>
       <button data-tab="sources">소스</button>
+      <button data-tab="virtual">버추얼</button>
       <button data-tab="settings">설정</button>
     </nav>
     <div class="tab-body">
@@ -177,6 +178,23 @@
         <div class="sec-card props-card" id="propsCard">
           <div id="propsBody"></div>
         </div>
+        <div class="sec-card" id="timerCard">
+          <h4>방송 타이머</h4>
+        <div class="timer-big" id="timerBig">00:00</div>
+        <div class="row"><button class="primary-sm" data-t="start"><span data-ic="play"></span>시작</button><button data-t="pause"><span data-ic="pause"></span>멈춤</button><button data-t="reset"><span data-ic="reset"></span>리셋</button></div>
+        <label class="field">모드<select id="tMode"><option value="stopwatch">경과 시간 (방송 몇 시간째)</option><option value="countdown">카운트다운 (방송 시작까지)</option></select></label>
+        <div class="grid2">
+          <label class="field">분 (카운트다운)<input id="tMin" type="number" min="1" max="600" value="10"></label>
+          <label class="field">스타일<select id="tTheme"><option value="red">블랙·레드</option><option value="white">화이트</option><option value="solid">레드</option></select></label>
+        </div>
+        <label class="field">문구<input id="tLabel" placeholder="방송 시작까지"></label>
+        <button id="tApply">설정 적용</button>
+        
+        </div>
+      </section>
+
+      <!-- 버추얼 -->
+      <section class="tab" id="tab-virtual">
         <div class="sec-card virt-card">
         <h4>버추얼 <small>원클릭 연결 · VTube Studio</small></h4>
         <div class="vt-card" id="vtCard">
@@ -206,19 +224,6 @@
               <div class="row"><button id="vtsCenter">가운데로</button><button class="ghost" id="vtsPosGet">지금 위치 불러오기</button></div></div>
           </div>
         </div>
-        </div>
-        <div class="sec-card" id="timerCard">
-          <h4>방송 타이머</h4>
-        <div class="timer-big" id="timerBig">00:00</div>
-        <div class="row"><button class="primary-sm" data-t="start"><span data-ic="play"></span>시작</button><button data-t="pause"><span data-ic="pause"></span>멈춤</button><button data-t="reset"><span data-ic="reset"></span>리셋</button></div>
-        <label class="field">모드<select id="tMode"><option value="stopwatch">경과 시간 (방송 몇 시간째)</option><option value="countdown">카운트다운 (방송 시작까지)</option></select></label>
-        <div class="grid2">
-          <label class="field">분 (카운트다운)<input id="tMin" type="number" min="1" max="600" value="10"></label>
-          <label class="field">스타일<select id="tTheme"><option value="red">블랙·레드</option><option value="white">화이트</option><option value="solid">레드</option></select></label>
-        </div>
-        <label class="field">문구<input id="tLabel" placeholder="방송 시작까지"></label>
-        <button id="tApply">설정 적용</button>
-        
         </div>
       </section>
 

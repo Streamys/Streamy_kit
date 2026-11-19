@@ -393,6 +393,15 @@ function optionList(items, empty) {
   return items.map((x) => `<option value="${esc(x.value)}">${esc(x.name)}</option>`).join('');
 }
 const PICK_LABEL = { monitor: '모니터', window: '프로그램 창', game: '게임 창', webcam: '웹캠', virtual: '버추얼 프로그램 창' };
+let camList = [];
+async function refreshCams(rerender) {
+  try {
+    let ds = await navigator.mediaDevices.enumerateDevices();
+    if (ds.some((d) => d.kind === 'videoinput' && !d.label)) { try { const st = await navigator.mediaDevices.getUserMedia({ video: true }); st.getTracks().forEach((t) => t.stop()); ds = await navigator.mediaDevices.enumerateDevices(); } catch {} }
+    camList = ds.filter((d) => d.kind === 'videoinput' && d.label).map((d) => ({ label: d.label.replace(/\s*\([0-9a-f]{4}:[0-9a-f]{4}\)\s*$/i, '') }));
+  } catch { camList = []; }
+  if (rerender) for (const pre of ['o', 'p']) { const sel = $(pre + 'Pick'); if (sel && (aoKind === 'webcam' || pre === 'p')) { const k = pre === 'o' ? aoKind : null; if (k === 'webcam') sel.innerHTML = pickOptions('webcam'); } }
+}
 function pickOptions(kind) {
   const first = kind === 'game' ? '<option value="">전체 화면 게임 자동 감지</option>' : '';
   if (kind === 'virtual') return virtualPickOptions('') || '<option value="">찾지 못했어요 — 프로그램을 켜고 다시 찾기</option>';
@@ -400,8 +409,15 @@ function pickOptions(kind) {
     let ds = []; try { ds = ipcRenderer.sendSync('app:displays') || []; } catch {}
     return optionList(ds.map((d) => ({ name: `모니터 ${d.i + 1}${d.primary ? ' (주 모니터)' : ''} · ${d.w}×${d.h}`, value: 'mon:' + d.i })), '찾지 못했어요');
   }
-  crumb('choices ' + kind);
-  let items = []; try { items = engineOk ? engine.choices(kind) : []; } catch (e) { rlog('error', 'choices', e); }
+  // 엔진에 목록을 물어보면(임시 소스) 이 PC에서 엔진이 죽어서, 창은 윈도우 창 목록 · 카메라는 브라우저 장치 목록을 씀
+  let items = [];
+  if (kind === 'window' || kind === 'game') {
+    try { openWins = ipcRenderer.sendSync('windows:get') || openWins; } catch {}
+    items = openWins.filter((w) => !HIDE_EXE.test(w.exe)).map((w) => ({ name: `[${w.exe}] ${w.title}`.slice(0, 80), value: w.value }));
+  } else if (kind === 'webcam') {
+    items = camList.map((c) => ({ name: c.label, value: c.label + ':' }));
+    if (!camList.length) refreshCams(true);
+  }
   return first + optionList(items, kind === 'game' ? '' : '찾지 못했어요');
 }
 function sourceForm(kind, prefix, cur = {}) {
@@ -434,7 +450,7 @@ function readForm(prefix) {
 }
 function bindForm(kind, prefix) {
   const r = $(prefix + 'Refresh');
-  if (r) r.addEventListener('click', guard(() => { $(prefix + 'Pick').innerHTML = pickOptions(kind); }));
+  if (r) r.addEventListener('click', guard(async () => { if (kind === 'webcam') await refreshCams(); $(prefix + 'Pick').innerHTML = pickOptions(kind); }));
   const b = $(prefix + 'Browse');
   if (b) b.addEventListener('click', async () => { const f = await ipcRenderer.invoke('app:pick-image'); if (f) $(prefix + 'File').value = f; });
 }
@@ -1386,6 +1402,7 @@ async function boot() {
     engine.start({ osnDir: info.osnDir, dataDir: info.dataDir, width: q[0], height: q[1], fps: q[2] });
     rlog('info', `engine started in ${Math.round(performance.now() - t0)}ms`, 'encoders:', engine.encoderTypes().join(','));
     engineOk = true;
+    setTimeout(() => { try { for (const it of engine.items()) { const o = engine.itemObj(it.id), st = engine.sourceSettings(it.name); rlog('info', 'source', it.kind, it.name, `${o?.source?.width || 0}x${o?.source?.height || 0}`, it.visible ? 'shown' : 'hidden', JSON.stringify(st?.settings || {}).slice(0, 220)); } } catch (e) { rlog('warn', 'source diag', e); } }, 4000);
   } catch (e) { engineError(e); return; }
   try {
     let saved = null; try { saved = JSON.parse(fs.readFileSync(scenesFile, 'utf8')); } catch {}

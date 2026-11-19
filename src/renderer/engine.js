@@ -274,7 +274,7 @@ class Engine {
     return all.filter((t) => t === base || t.startsWith(base + '_v')).sort().pop() || null;
   }
   available(kind) { try { return !!this.resolveType(kind); } catch { return false; } }
-  choices(kind) { const def = SOURCE_TYPES[kind]; const t = def.prop && this.resolveType(kind); return t ? this.listProp(t, def.prop) : []; }
+  choices() { return []; }   // 엔진 임시 소스로 목록 묻기는 일부 PC에서 엔진이 죽어서 안 씀 (화면 쪽에서 윈도우 목록 사용)
 
   settingsFor(kind, opt) {
     switch (kind) {
