@@ -407,7 +407,7 @@ function pickOptions(kind) {
   if (kind === 'virtual') return virtualPickOptions('') || '<option value="">찾지 못했어요 — 프로그램을 켜고 다시 찾기</option>';
   if (kind === 'monitor') {
     let ds = []; try { ds = ipcRenderer.sendSync('app:displays') || []; } catch {}
-    return optionList(ds.map((d) => ({ name: `모니터 ${d.i + 1}${d.primary ? ' (주 모니터)' : ''} · ${d.w}×${d.h}`, value: 'mon:' + d.i })), '찾지 못했어요');
+    return optionList(ds.map((d) => ({ name: `모니터 ${d.i + 1}${d.primary ? ' (주 모니터)' : ''} · ${d.w}×${d.h}`, value: d.id || 'mon:' + d.i })), '찾지 못했어요');
   }
   // 엔진에 목록을 물어보면(임시 소스) 이 PC에서 엔진이 죽어서, 창은 윈도우 창 목록 · 카메라는 브라우저 장치 목록을 씀
   let items = [];
@@ -1402,6 +1402,21 @@ async function boot() {
     engine.start({ osnDir: info.osnDir, dataDir: info.dataDir, width: q[0], height: q[1], fps: q[2] });
     rlog('info', `engine started in ${Math.round(performance.now() - t0)}ms`, 'encoders:', engine.encoderTypes().join(','));
     engineOk = true;
+    // 0.19.2~0.21.0에서 넣은 모니터(번호로 지정)는 화면이 안 잡혀서, 진짜 모니터 ID로 바꿔 줌
+    setTimeout(function fixMon(n = 0) {
+      try {
+        const ds = ipcRenderer.sendSync('app:displays') || [];
+        if (!ds.some((d) => d.id)) { if (n < 10) setTimeout(() => fixMon(n + 1), 1500); return; }
+        let fixed = 0;
+        for (const sc of engine.scenes) for (const it of engine.items(sc.id)) {
+          const st = engine.sourceSettings(it.name);
+          if (!st || st.kind !== 'monitor' || (st.settings.monitor_id && st.settings.monitor_id !== 'DUMMY')) continue;
+          const d = ds[Number(st.settings.monitor) || 0] || ds.find((x) => x.primary) || ds[0];
+          engine.updateSource(it.name, 'monitor', { value: d.id }); fixed++;
+        }
+        if (fixed) { saveScenes(); rlog('info', 'monitor fix', fixed); toast('모니터 화면을 다시 잡았어요.'); }
+      } catch (e) { rlog('warn', 'monitor fix', e); }
+    }, 1500);
     setTimeout(() => { try { for (const it of engine.items()) { const o = engine.itemObj(it.id), st = engine.sourceSettings(it.name); rlog('info', 'source', it.kind, it.name, `${o?.source?.width || 0}x${o?.source?.height || 0}`, it.visible ? 'shown' : 'hidden', JSON.stringify(st?.settings || {}).slice(0, 220)); } } catch (e) { rlog('warn', 'source diag', e); } }, 4000);
   } catch (e) { engineError(e); return; }
   try {

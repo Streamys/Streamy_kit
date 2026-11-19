@@ -437,12 +437,26 @@ function main() {
     try { const dir = path.join(app.getPath('userData'), 'fonts'); if (file && path.dirname(file) === dir) fs.unlinkSync(file); } catch {}
     return true;
   });
-  // 모니터 목록: 엔진에 물어보면(임시 소스 만들기) 일부 PC에서 엔진이 죽어서, 윈도우가 아는 화면 목록을 씀
+  // 모니터 목록: 엔진에 물어보면(임시 소스 만들기) 일부 PC에서 엔진이 죽어서, 윈도우에서 직접 읽음 (OBS 모니터 캡처 ID 형식 그대로)
+  let monCache = null;
+  function loadMonitors() {
+    if (process.platform !== 'win32') return;
+    try {
+      const cp = require('child_process');
+      cp.execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, 'monitors.ps1')], { windowsHide: true, timeout: 15000 }, (err, out) => {
+        if (err) { log.warn('monitors', String(err.message || err).slice(0, 300)); return; }
+        try { monCache = JSON.parse(String(out).trim()).sort((a, b) => a.x - b.x || a.y - b.y); log.info('monitors', monCache.map((m) => `${m.w}x${m.h}@${m.x},${m.y}${m.primary ? '*' : ''}`).join(' ')); } catch (e) { log.warn('monitors', 'parse', String(out).slice(0, 200)); }
+      });
+    } catch (e) { log.warn('monitors', String(e)); }
+  }
+  loadMonitors();
+  screen.on('display-added', loadMonitors); screen.on('display-removed', loadMonitors);
   ipcMain.on('app:displays', (e) => {
+    if (monCache && monCache.length) { e.returnValue = monCache.map((m, i) => ({ i, id: m.id, name: m.name, primary: m.primary, w: m.w, h: m.h })); return; }
     try {
       const pri = screen.getPrimaryDisplay().id;
       e.returnValue = screen.getAllDisplays().sort((a, b) => a.bounds.x - b.bounds.x || a.bounds.y - b.bounds.y)
-        .map((d, i) => ({ i, primary: d.id === pri, w: Math.round(d.size.width * d.scaleFactor), h: Math.round(d.size.height * d.scaleFactor) }));
+        .map((d, i) => ({ i, id: null, primary: d.id === pri, w: Math.round(d.size.width * d.scaleFactor), h: Math.round(d.size.height * d.scaleFactor) }));
     } catch { e.returnValue = []; }
   });
   ipcMain.handle('app:pick-image', async () => {
