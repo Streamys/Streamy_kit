@@ -33,6 +33,10 @@ if (!gotLock) {
 function main() {
   let win = null;
   let tray = null;
+  function appIcon() {
+    try { const p = path.join(app.getPath('userData'), 'app-icon.png'); if (fs.existsSync(p)) { const i = nativeImage.createFromPath(p); if (!i.isEmpty()) return i; } } catch {}
+    return nativeImage.createFromPath(path.join(__dirname, 'tray.png'));
+  }
   let quitting = false;      // 종료 절차 시작됨
   let rendererBusy = false;  // 응답 없음 상태
   let enginePrepared = null; // 남아 있는 엔진 정리 작업 (Promise)
@@ -67,7 +71,7 @@ function main() {
     win = new BrowserWindow({
       width: 1440, height: 880, minWidth: 1180, minHeight: 720,
       title: 'Streamy Kit', backgroundColor: '#0B0B0D', show: false,
-      icon: path.join(__dirname, 'tray.png'),
+      icon: appIcon(),
       autoHideMenuBar: true,
       frame: false,                    // 창 버튼(최소화/최대화/닫기)은 화면에서 직접 그림
       thickFrame: true,                // 가장자리 끌어서 크기 조절 + 윈도우 스냅 유지
@@ -217,7 +221,7 @@ function main() {
   function stopWinWatch() { if (winProc) { const p = winProc; winProc = null; winRetry = 99; try { p.kill(); } catch {} } }
 
   function createTray() {
-    tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'tray.png')));
+    tray = new Tray(appIcon().resize({ width: 32, height: 32 }));
     tray.setToolTip('Streamy Kit');
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: 'Streamy Kit 열기', click: showWindow },
@@ -363,6 +367,15 @@ function main() {
   });
 
   // ---------------------------------------------------------------- IPC
+  // 포인트 색에 맞춘 아이콘 (화면에서 그려서 보내 줌, 다음 실행 때도 그 색으로 시작)
+  ipcMain.on('app:icon', (_e, dataUrl) => {
+    try {
+      const img = nativeImage.createFromDataURL(String(dataUrl)); if (img.isEmpty()) return;
+      if (win && !win.isDestroyed()) win.setIcon(img);
+      if (tray) tray.setImage(img.resize({ width: 32, height: 32 }));
+      fs.writeFileSync(path.join(app.getPath('userData'), 'app-icon.png'), img.toPNG());
+    } catch {}
+  });
   ipcMain.on('app:info', (e) => {
     e.returnValue = {
       osnDir: osnDir(),

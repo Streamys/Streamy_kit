@@ -1406,11 +1406,33 @@ function applyAccent() {
   st.setProperty('--soft', rgba(a, dark ? 0.18 : 0.12));
   st.setProperty('--soft2', rgba(a, dark ? 0.08 : 0.06));
   st.setProperty('--link', dark ? mixHex(a, 'w', 0.42) : mixHex(a, 'k', 0.28));
+  applyAppIcon(a);
   const row = $('accentRow');
   if (row) {
     row.innerHTML = ACCENTS.map(([h, n]) => `<button class="accent-sw${h.toLowerCase() === a.toLowerCase() ? ' on' : ''}" data-c="${h}" title="${n}" aria-label="${n}" style="--c:${h}"><i></i><span>${n}</span></button>`).join('')
       + `<label class="accent-sw custom${ACCENTS.some(([h]) => h.toLowerCase() === a.toLowerCase()) ? '' : ' on'}" title="직접 고르기" style="--c:${a}"><i></i><span>직접</span><input type="color" id="accentPick" value="${a}"></label>`;
   }
+}
+// 앱 아이콘도 포인트 색 따라가기 (제목줄 로고 · 작업 표시줄 · 트레이)
+function logoSvg(c) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect x="8" y="8" width="496" height="496" rx="104" fill="#0E0E10"/><rect x="34" y="34" width="444" height="444" rx="82" fill="none" stroke="${c}" stroke-width="18"/><text x="250" y="338" text-anchor="middle" font-family="Segoe UI Black,Segoe UI,Arial Black,Arial,sans-serif" font-weight="900" font-size="300" fill="#fff">S</text><circle cx="404" cy="108" r="40" fill="${c}"/></svg>`;
+}
+let iconFor = '', iconT = 0;
+function applyAppIcon(c) {
+  const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(logoSvg(c));
+  const img = document.querySelector('.brand img'); if (img) img.src = url;
+  if (iconFor === c) return; iconFor = c;
+  clearTimeout(iconT); iconT = setTimeout(() => {      // 색 고르는 중엔 너무 자주 안 바꾸게
+    const im = new Image();
+    im.onload = () => {
+      try {
+        const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+        cv.getContext('2d').drawImage(im, 0, 0, 256, 256);
+        ipcRenderer.send('app:icon', cv.toDataURL('image/png'));
+      } catch (e) { rlog('warn', 'icon', e); }
+    };
+    im.src = url;
+  }, 250);
 }
 // 화면 모드: 밝게 · 어둡게 · 윈도우 따라가기
 const darkMQ = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
