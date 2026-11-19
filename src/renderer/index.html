@@ -50,6 +50,7 @@
             <button id="srcDel" title="선택한 소스 삭제">🗑</button>
           </div>
         </div>
+        <div class="add-menu" id="addMenu" hidden></div>
         <ul class="list src-list" id="sourceList"></ul>
         <p class="hint tiny">더블클릭: 이름·이모지 바꾸기 · Ctrl+클릭: 여러 개 고르기 · Shift+클릭: 범위 고르기</p>
     </section>
@@ -167,7 +168,7 @@
       <!-- 소스 -->
       <section class="tab" id="tab-sources">
         <div class="add-box sec-card" id="addBox" hidden>
-          <h4>＋ 소스 추가 <small>무엇을 넣을까요?</small></h4>
+          <h4 id="addTitle">소스 추가</h4>
           <div class="type-grid" id="typeGrid"></div>
           <div class="add-form" id="addForm"></div>
         </div>

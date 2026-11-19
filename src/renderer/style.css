@@ -854,3 +854,19 @@ body.theme-dark .cm .bd.b-fan{background:rgba(236,72,153,.2);color:#F9A8D4}
 .props-h{display:flex;align-items:center;gap:8px}
 .props-h .ic{width:28px;height:28px;border-radius:9px;background:var(--card2);padding:4px;box-sizing:border-box;display:flex}
 .tab .virt-card .vt-go span{padding:7px;box-sizing:border-box}
+/* ＋ 추가 → 소스 종류 목록 (왼쪽) */
+.add-menu{display:flex;flex-direction:column;gap:4px;flex:1;min-height:0;overflow-y:auto;margin:0 -4px;padding:0 4px}
+.add-menu[hidden]{display:none}
+.src-rail.adding .src-list,.src-rail.adding>.hint{display:none}
+.am-item{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:none;border-radius:12px;background:transparent;text-align:left;color:var(--text);cursor:pointer}
+.am-item:hover{background:var(--card2)}
+.am-item.on{background:var(--soft)}
+.am-item:disabled{opacity:.4;cursor:not-allowed}
+.am-ic{flex:none;width:34px;height:34px;border-radius:10px;background:var(--card2);padding:5px;box-sizing:border-box;display:flex}
+.am-item:hover .am-ic{background:var(--card)}
+.am-ic.sm{display:inline-flex;width:24px;height:24px;padding:3px;margin-right:8px;vertical-align:-6px;border-radius:7px}
+.am-tx{display:flex;flex-direction:column;min-width:0}
+.am-tx b{font-size:13px}
+.am-tx small{font-size:11px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#addBox .type-grid{display:none!important}
+#addTitle{display:flex;align-items:center}

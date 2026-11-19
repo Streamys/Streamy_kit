@@ -228,14 +228,41 @@ async function removeSelected() {
 
 // ================================================================== 소스 추가 (소스 탭 안에서)
 let addKind = null;
+// ＋ 추가 → 왼쪽에 소스 종류 목록이 쭉 펼쳐짐 → 고르면 오른쪽에서 세부 설정
+const ADD_DESC = {
+  monitor: '모니터 전체를 그대로', window: '켜져 있는 프로그램 하나만', game: '게임 화면 (전체 화면 게임도)',
+  webcam: '카메라 · 캡처보드', image: '사진 · 로고 · 배경 그림', text: '화면에 글자 넣기',
+  web: '투네이션 · 트윕 같은 알림창 주소', timer: '방송 시간 · 카운트다운', virtual: 'VTube Studio 같은 버추얼 프로그램', color: '한 가지 색으로 채운 배경',
+};
+function renderAddMenu() {
+  const m = $('addMenu');
+  m.innerHTML = Object.entries(SOURCE_TYPES).map(([k, t]) => {
+    const off = engineOk && !engine.available(k);
+    return `<button class="am-item${addKind === k ? ' on' : ''}" data-k="${k}"${off ? ' disabled title="이 PC에서는 쓸 수 없어요"' : ''}><span class="am-ic">${FLAT_ICONS[k] || t.icon}</span><span class="am-tx"><b>${esc(t.label)}</b><small>${esc(ADD_DESC[k] || '')}</small></span></button>`;
+  }).join('');
+}
+function setAddMenu(open) {
+  $('addMenu').hidden = !open;
+  $('srcAdd').classList.toggle('open', open);
+  $('srcAdd').textContent = open ? '✕ 닫기' : '＋ 추가';
+  document.querySelector('.src-rail').classList.toggle('adding', open);
+  if (open) renderAddMenu();
+}
 $('srcAdd').addEventListener('click', () => {
-  const box = $('addBox'); box.hidden = !box.hidden;
-  if (!box.hidden) { openTab('sources'); document.querySelector('.tab-body').scrollTop = 0; }
-  $('srcAdd').classList.toggle('open', !box.hidden);
-  $('srcAdd').textContent = box.hidden ? '＋ 추가' : '✕ 닫기';
-  if (!box.hidden) { addKind = null; renderTypes(); renderAddForm(); }
+  const open = $('addMenu').hidden;
+  setAddMenu(open);
+  if (!open) closeAdd();
 });
-function closeAdd() { $('addBox').hidden = true; $('srcAdd').classList.remove('open'); $('srcAdd').textContent = '＋ 추가'; }
+$('addMenu').addEventListener('click', (e) => {
+  const b = e.target.closest('.am-item'); if (!b || b.disabled) return;
+  addKind = b.dataset.k;
+  setAddMenu(false);
+  const t = SOURCE_TYPES[addKind];
+  $('addTitle').innerHTML = `<span class="am-ic sm">${FLAT_ICONS[addKind] || ''}</span>${esc(t.label)} 추가`;
+  $('addBox').hidden = false; openTab('sources'); document.querySelector('.tab-body').scrollTop = 0;
+  renderAddForm();
+});
+function closeAdd() { $('addBox').hidden = true; addKind = null; setAddMenu(false); }
 function renderTypes() {
   const g = $('typeGrid'); g.innerHTML = '';
   for (const [k, t] of Object.entries(SOURCE_TYPES)) {
