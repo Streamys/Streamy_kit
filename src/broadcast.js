@@ -17,7 +17,7 @@ const YT_API = 'https://www.googleapis.com/youtube/v3';
 const STREAMY = {
   relay: 'https://streamy-relay.tiredblack07782.workers.dev',                                                   // 중계 서버 주소 (예: https://streamy-relay.xxx.workers.dev)
   chzzkClientId: '5d62b982-08a0-4300-a4df-b9bf7849d92a',
-  googleClientId: '',
+  googleClientId: '317824846180-cl31dfapp2s7nneciukph980cbhl7pb1.apps.googleusercontent.com',
 };
 
 let ctx = null;        // { app, net, log, shell, safeStorage, send }
