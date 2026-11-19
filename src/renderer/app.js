@@ -300,17 +300,30 @@ function renderAddMenu() {
   }).join('');
   if (addKind) { const it = m.querySelector(`.am-item[data-k="${addKind}"]`); if (it) { it.after($('addForm')); renderAddForm(); } }
 }
-function setAddMenu(open) {
-  $('addMenu').hidden = !open;
-  $('srcAdd').classList.toggle('open', open);
-  document.querySelector('.src-rail').classList.toggle('adding', open);
-  if (open) renderAddMenu();
+// ＋ 추가 → 오버레이: 왼쪽에서 종류 고르고 오른쪽에서 바로 설정 → 넣기
+let aoKind = null;
+function renderAddOv() {
+  const sc = DEMO ? '게임 방송' : (engineOk && engine.currentScene ? engine.currentScene.name : '장면');
+  $('aoScene').textContent = `'${sc}' 장면에 넣어요`;
+  $('aoList').innerHTML = Object.entries(SOURCE_TYPES).map(([k, t]) => `<button class="ao-item${aoKind === k ? ' on' : ''}" data-k="${k}"><span class="ic">${srcIcon(k)}</span><span class="ao-tx"><b>${esc(t.label)}</b><small>${esc(ADD_DESC[k] || '')}</small></span></button>`).join('');
+  $('aoEmpty').hidden = !!aoKind; $('aoPane').hidden = !aoKind;
+  if (!aoKind) return;
+  const t = SOURCE_TYPES[aoKind];
+  $('aoIc').innerHTML = srcIcon(aoKind); $('aoName').textContent = t.label; $('aoDesc').textContent = ADD_DESC[aoKind] || '';
+  $('aoForm').innerHTML = sourceForm(aoKind, 'o') || '<p class="hint">따로 정할 건 없어요. 바로 넣으면 돼요.</p>';
+  bindForm(aoKind, 'o');
 }
-$('srcAdd').addEventListener('click', () => {
-  const open = $('addMenu').hidden;
-  setAddMenu(open);
-  if (!open) closeAdd();
-});
+function setAddMenu(open) {
+  $('addOv').hidden = !open; $('srcAdd').classList.toggle('open', open);
+  hidePreview('addov', open);
+  if (open) { aoKind = null; renderAddOv(); }
+}
+$('srcAdd').addEventListener('click', () => setAddMenu($('addOv').hidden));
+$('aoClose').addEventListener('click', () => setAddMenu(false));
+$('addOv').addEventListener('click', (e) => { if (e.target.id === 'addOv') setAddMenu(false); });
+$('aoList').addEventListener('click', (e) => { const b = e.target.closest('.ao-item'); if (!b) return; aoKind = b.dataset.k; renderAddOv(); });
+$('aoGo').addEventListener('click', guard(() => { if (aoKind) addSourceFrom(aoKind, 'o', () => { if ($('aoMore').checked) renderAddOv(); else setAddMenu(false); }); }));
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('addOv').hidden) { e.stopPropagation(); setAddMenu(false); } }, true);
 $('addMenu').addEventListener('click', (e) => {
   const b = e.target.closest('.am-item'); if (!b || b.disabled) return;
   addKind = addKind === b.dataset.k ? null : b.dataset.k;   // 같은 걸 다시 누르면 접기

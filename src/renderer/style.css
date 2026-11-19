@@ -1070,3 +1070,35 @@ body.scene-dragging #sceneDel,body.src-dragging-list #srcDel{box-shadow:0 0 0 2p
 .scene-row .tile.drop-a{box-shadow:inset 0 -2px 0 var(--red)}
 /* v0.19.3 소스 탭: 고른 소스가 있을 때만 그 설정 칸 */
 #propsCard:has(#propsBody:empty){display:none}
+
+/* v0.20 소스 추가 오버레이 */
+.add-box2{width:min(880px,94vw);height:min(600px,86vh)}
+.ao-body{flex:1;min-height:0;display:grid;grid-template-columns:300px 1fr;gap:16px;padding:6px 22px 22px}
+.ao-list{display:flex;flex-direction:column;gap:4px;overflow:auto;padding-right:4px}
+.ao-item{display:flex;align-items:center;gap:12px;width:100%;padding:9px 10px;border:1.5px solid transparent;border-radius:13px;background:transparent;text-align:left;color:var(--text)}
+.ao-item:hover{background:var(--card2)}
+.ao-item.on{background:var(--soft2);border-color:var(--red)}
+.ao-item .ic,.ao-title .ic{width:36px;height:36px;flex:none;border-radius:11px;background:var(--card2);padding:7px;box-sizing:border-box;display:flex}
+.ao-item.on .ic{background:var(--card)}
+.ao-tx{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ao-tx b{font-size:13px}.ao-tx small{font-size:11px;color:var(--sub)}
+.ao-right{min-height:0;display:flex;flex-direction:column;background:var(--sec);border:1px solid var(--line);border-radius:16px;padding:16px;overflow:auto}
+.ao-empty{margin:auto;text-align:center;display:flex;flex-direction:column;gap:6px;color:var(--sub)}
+.ao-empty b{color:var(--text);font-size:14px}
+.ao-pane{display:flex;flex-direction:column;gap:12px;flex:1}
+.ao-pane[hidden]{display:none}
+.ao-title{display:flex;align-items:center;gap:12px}
+.ao-title .ic{width:44px;height:44px;background:var(--card)}
+.ao-title b{font-size:16px;display:block}.ao-title small{color:var(--sub);font-size:12px}
+.ao-form{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.ao-form .field{display:block;margin-bottom:12px;font-size:12px;font-weight:700}
+.ao-form .field:last-child{margin-bottom:0}
+.ao-form .row{display:flex;gap:6px}
+.ao-form .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ao-form .key-row{display:flex;gap:6px;margin-top:6px}
+.ao-form .hint{font-size:12px;color:var(--sub);margin:8px 0 0}
+.ao-form button.ghost{border:1px solid var(--line);background:var(--card2);border-radius:8px;padding:0 10px}
+.ao-foot{margin-top:auto;display:flex;align-items:center;gap:14px}
+.ao-go{flex:1;padding:12px!important;font-size:14px!important;border:none;border-radius:12px;background:var(--red);color:var(--onac);font-weight:800}
+.ao-empty[hidden]{display:none}
+.ao-form input[type=color]{padding:3px;height:38px;width:100%}
