@@ -82,6 +82,7 @@ function openTab(name) {
   document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x.dataset.tab === name));
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + name));
   if (name === 'sound') soundTabOpened(); else soundTabClosed();
+  if (name === 'sources') tabAddMaybe();
 }
 document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => openTab(b.dataset.tab)));
 
@@ -401,14 +402,17 @@ function bindForm(kind, prefix) {
   if (b) b.addEventListener('click', async () => { const f = await ipcRenderer.invoke('app:pick-image'); if (f) $(prefix + 'File').value = f; });
 }
 // 소스 탭: 콤보박스로 고르고 바로 넣기 · 선택한 소스 빼기
+// 엔진에 목록(모니터·창·카메라)을 물어보는 건 무거워서, 소스 탭을 처음 열 때만 그림 (시작 직후에 물어보면 엔진이 죽음)
+var tabAddReady = false;
+var engineReadyAt = 0;
+function tabAddMaybe() { if (tabAddReady || !(engineOk || DEMO)) return; tabAddReady = true; const wait = Math.max(250, 2500 - (Date.now() - engineReadyAt)); setTimeout(() => { try { renderTabAdd(); } catch (e) { rlog('warn', 'tabAdd', e); } }, wait); }
 function renderTabAdd() {
   const sel = $('tKind'); if (!sel) return;
   const cur = sel.value || cfg.tabAddKind || 'monitor';
-  sel.innerHTML = Object.entries(SOURCE_TYPES).map(([k, t]) => { const off = engineOk && !engine.available(k); return `<option value="${k}"${off ? ' disabled' : ''}>${esc(t.label)} — ${esc(ADD_DESC[k] || '')}</option>`; }).join('');
+  sel.innerHTML = Object.entries(SOURCE_TYPES).map(([k, t]) => { return `<option value="${k}">${esc(t.label)} — ${esc(ADD_DESC[k] || '')}</option>`; }).join('');
   sel.value = SOURCE_TYPES[cur] ? cur : 'monitor';
   $('tForm').innerHTML = sourceForm(sel.value, 't'); bindForm(sel.value, 't');
 }
-setTimeout(() => { try { renderTabAdd(); } catch (e) { rlog('warn', 'tabAdd', e); } }, 0);
 $('tKind').addEventListener('change', () => { cfg.tabAddKind = $('tKind').value; save(); renderTabAdd(); });
 $('tAdd').addEventListener('click', guard(() => addSourceFrom($('tKind').value, 't', () => renderTabAdd())));
 $('tDel').addEventListener('click', guard(() => removeSelected()));
@@ -1359,8 +1363,8 @@ async function boot() {
   try {
     engine.start({ osnDir: info.osnDir, dataDir: info.dataDir, width: q[0], height: q[1], fps: q[2] });
     rlog('info', `engine started in ${Math.round(performance.now() - t0)}ms`, 'encoders:', engine.encoderTypes().join(','));
-    engineOk = true;
-    setTimeout(() => { try { renderTabAdd(); } catch {} }, 0);
+    engineOk = true; engineReadyAt = Date.now();
+    setTimeout(() => { if ($('tab-sources').classList.contains('on')) tabAddMaybe(); }, 2000);
   } catch (e) { engineError(e); return; }
   try {
     let saved = null; try { saved = JSON.parse(fs.readFileSync(scenesFile, 'utf8')); } catch {}
