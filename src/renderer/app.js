@@ -169,6 +169,28 @@ function renderSources() {
       }));
       li.addEventListener('dblclick', guard(() => { if (DEMO) return; editingItem = it.id; renderSources(); }));
       li.querySelector('.eye').addEventListener('click', guard((e) => { e.stopPropagation(); if (DEMO) return; engine.setVisible(it.id, !it.visible); saveScenes(); }));
+      // 끌어서 순서 바꾸기 (위 = 화면 앞)
+      li.draggable = !DEMO; li.dataset.id = it.id;
+      li.addEventListener('dragstart', (e) => { e.dataTransfer.setData('application/x-streamy-src', String(it.id)); e.dataTransfer.effectAllowed = 'move'; li.classList.add('dragging'); });
+      li.addEventListener('dragend', () => { li.classList.remove('dragging'); ul.querySelectorAll('.drop-a,.drop-b').forEach((x) => x.classList.remove('drop-a', 'drop-b')); });
+      li.addEventListener('dragover', (e) => {
+        if (!e.dataTransfer.types.includes('application/x-streamy-src')) return;
+        e.preventDefault(); e.stopPropagation();
+        const r = li.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2;
+        ul.querySelectorAll('.drop-a,.drop-b').forEach((x) => x.classList.remove('drop-a', 'drop-b'));
+        li.classList.add(after ? 'drop-a' : 'drop-b');
+      });
+      li.addEventListener('drop', guard((e) => {
+        const from = e.dataTransfer.getData('application/x-streamy-src'); if (!from) return;
+        e.preventDefault(); e.stopPropagation();
+        const order = items.map((x) => String(x.id)); const fi = order.indexOf(from); if (fi < 0) return;
+        const r = li.getBoundingClientRect(); let ti = order.indexOf(String(it.id)) + (e.clientY > r.top + r.height / 2 ? 1 : 0);
+        if (ti > fi) ti -= 1;
+        const id = items[fi].id;
+        for (let k = fi; k < ti; k++) engine.moveItem(id, -1);
+        for (let k = fi; k > ti; k--) engine.moveItem(id, 1);
+        if (ti !== fi) saveScenes();
+      }));
     }
     ul.appendChild(li);
   }
@@ -182,7 +204,7 @@ function renderEditBar() {
   const ids = selIds();
   bar.classList.toggle('has-sel', ids.length === 1);
   if (!ids.length) { name.innerHTML = '미리보기에서 소스를 클릭하면 선택돼요 · ' + hint; size.textContent = ''; return; }
-  if (ids.length > 1) { name.innerHTML = `<b>${ids.length}개</b> 선택됨 · 🗑 또는 Delete로 한 번에 삭제`; size.textContent = ''; return; }
+  if (ids.length > 1) { name.innerHTML = `<b>${ids.length}개</b> 선택됨 · [삭제] 또는 Delete로 한 번에 삭제`; size.textContent = ''; return; }
   const it = engine.items().find((x) => x.id === ids[0]);
   name.innerHTML = it ? `선택: <b>${esc(it.icon)} ${esc(it.name)}</b> · ${hint}` : hint;
   updateSizeLabel();
@@ -210,8 +232,6 @@ engine.on('items', () => {
   clearTimeout(countT); countT = setTimeout(renderScenes, 150);
 });
 let countT = 0;
-$('srcUp').addEventListener('click', guard(() => { for (const id of selIds()) engine.moveItem(id, 1); saveScenes(); }));
-$('srcDown').addEventListener('click', guard(() => { for (const id of selIds().reverse()) engine.moveItem(id, -1); saveScenes(); }));
 $('srcDel').addEventListener('click', guard(() => removeSelected()));
 document.querySelectorAll('[data-fit]').forEach((b) => b.addEventListener('click', guard(() => {
   const id = engine.primary; if (id == null) return;
@@ -246,7 +266,6 @@ function renderAddMenu() {
 function setAddMenu(open) {
   $('addMenu').hidden = !open;
   $('srcAdd').classList.toggle('open', open);
-  $('srcAdd').textContent = open ? '✕ 닫기' : '＋ 추가';
   document.querySelector('.src-rail').classList.toggle('adding', open);
   if (open) renderAddMenu();
 }
@@ -574,6 +593,7 @@ window.addEventListener('keydown', (e) => {
   if (n >= 0 && engine.scenes[n]) { e.preventDefault(); engine.switchScene(engine.scenes[n].id); saveScenes(); return; }
   if (mode === 'air') return;     // ON AIR 화면에서는 소스 이동/삭제 단축키 막기
   if (e.key === 'Delete' && engine.sel.size) { removeSelected(); return; }
+  if (e.key === 'Escape' && !$('addMenu').hidden) { closeAdd(); return; }
   if (e.key === 'Escape') { engine.clearSelection(); engine.emit('items'); return; }
   const id = engine.sel.size === 1 ? engine.primary : null; if (id == null) return;
   const step = e.shiftKey ? 10 : 1, mv = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
