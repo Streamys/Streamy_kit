@@ -1460,7 +1460,7 @@ const BLOCKS = {
   sound: { label: '사운드', el: () => document.querySelector('.sound') },
   panel: { label: '방송 · 채팅 · 소스 · 설정', el: () => $('panel') },
 };
-const LAY_DEF = { cols: { l: ['scenes', 'sources'], c: ['preview', 'edit', 'sound'], r: ['panel'] }, wl: 248, wr: 380, zoom: 100, font: '' };
+const LAY_DEF = { cols: { l: ['scenes', 'sources'], c: ['preview', 'edit', 'sound'], r: ['panel'] }, wl: 248, wr: 380, zoom: 100, font: '', h: {} };
 function lay() {
   const L = { ...LAY_DEF, ...(cfg.layout2 || {}) };
   const cols = { l: [...(L.cols?.l || [])], c: [...(L.cols?.c || [])], r: [...(L.cols?.r || [])] };
@@ -1476,6 +1476,16 @@ function applyLayout() {
   const host = { l: $('rail'), c: document.querySelector('.stage'), r: railR };
   for (const [k, list] of Object.entries(L.cols)) for (const id of list) { const el = BLOCKS[id].el(); if (el) host[k].appendChild(el); }
   host.l.style.width = L.wl + 'px'; host.r.style.width = L.wr + 'px';
+  for (const [k, list] of Object.entries(L.cols)) {
+    const fill = colFiller(list);
+    for (const id of list) {
+      const el = BLOCKS[id].el(); if (!el) continue;
+      const h = (L.h || {})[id];
+      if (id === fill) { el.style.flex = '1 1 0'; el.style.height = ''; el.style.minHeight = '0'; }
+      else if (h) { el.style.flex = `0 0 ${h}px`; el.style.height = h + 'px'; el.style.minHeight = '0'; el.classList.add('lay-sized'); }
+      else { el.style.flex = ''; el.style.height = ''; el.style.minHeight = ''; el.classList.remove('lay-sized'); }
+    }
+  }
   host.l.hidden = !L.cols.l.length; host.r.hidden = !L.cols.r.length;
   const pc = $('phoneCol'); if (pc && pc.parentElement !== document.querySelector('.stage-top')) document.querySelector('.stage-top').appendChild(pc);
   try { webFrame.setZoomFactor((L.zoom || 100) / 100); } catch {}
@@ -1484,6 +1494,8 @@ function applyLayout() {
   layoutDisplay(); setTimeout(layoutDisplay, 60);
   if (!$('layOv').hidden) renderLayMap();
 }
+// 기둥마다 남는 높이를 채우는 칸 하나 (나머지는 끌어서 높이 정함)
+function colFiller(list) { return ['preview', 'panel', 'sources', 'scenes', 'sound', 'edit'].find((x) => list.includes(x)) || list[list.length - 1]; }
 function setLay(patch) { cfg.layout2 = { ...lay(), ...patch }; save(); applyLayout(); }
 // 글꼴: 이 PC에 깔린 것만 보여 줌
 const FONT_CHOICES = [['', '기본 (Pretendard)'], ['Malgun Gothic', '맑은 고딕'], ['NanumGothic', '나눔고딕'], ['NanumSquareRound', '나눔스퀘어 라운드'], ['NanumSquare', '나눔스퀘어'], ['Noto Sans KR', 'Noto Sans KR'], ['Spoqa Han Sans Neo', '스포카 한 산스'], ['SUIT', 'SUIT'], ['Gmarket Sans', 'G마켓 산스'], ['IBM Plex Sans KR', 'IBM Plex Sans KR'], ['Gulim', '굴림'], ['Dotum', '돋움']];
@@ -1504,10 +1516,15 @@ $('layZoom').addEventListener('change', (e) => setLay({ zoom: +e.target.value })
 function renderLayMap() {
   const L = lay(), m = $('layMap');
   const col = (k) => `<div class="lm-col lm-${k}${L.cols[k].length ? '' : ' empty'}" data-col="${k}" ${k !== 'c' ? `style="flex:0 0 ${Math.round((k === 'l' ? L.wl : L.wr) / 2.6)}px"` : ''}>
-      ${L.cols[k].map((id) => `<div class="lm-blk lm-${id}${BLOCKS[id].fixed ? ' fixed' : ''}" data-id="${id}" ${BLOCKS[id].fixed ? '' : 'draggable="true"'}>${BLOCKS[id].fixed ? '' : '<i>⠿</i>'}<span>${BLOCKS[id].label}</span></div>`).join('')}
+      ${L.cols[k].map((id, i, arr) => {
+        const fill = colFiller(arr), rel = BLOCKS[id].el(), h = (L.h || {})[id] || (rel && rel.offsetHeight) || 0, st = id === fill ? 'flex:1 1 0' : h ? `flex:0 0 ${Math.max(26, Math.round(h * lmScale()))}px` : '';
+        return (i ? `<div class="lm-hs" data-a="${arr[i - 1]}" data-b="${id}" title="끌어서 위아래 높이 바꾸기"></div>` : '')
+          + `<div class="lm-blk lm-${id}${BLOCKS[id].fixed ? ' fixed' : ''}${id === fill ? ' fill' : ''}" data-id="${id}" ${BLOCKS[id].fixed ? '' : 'draggable="true"'} style="${st}">${BLOCKS[id].fixed ? '' : '<i>⠿</i>'}<span>${BLOCKS[id].label}</span></div>`;
+      }).join('')}
       <div class="lm-drop-end">여기에 놓기</div></div>`;
   m.innerHTML = col('l') + '<div class="lm-split" data-s="l"></div>' + col('c') + '<div class="lm-split" data-s="r"></div>' + col('r');
 }
+function lmScale() { const lay0 = document.querySelector('.layout'); const real = lay0 ? lay0.clientHeight : 800; return 396 / Math.max(300, real); }
 let lmDrag = null;
 $('layMap').addEventListener('dragstart', (e) => { const b = e.target.closest('.lm-blk'); if (!b || b.classList.contains('fixed')) return e.preventDefault(); lmDrag = b.dataset.id; e.dataTransfer.setData('text/x-lay', lmDrag); e.dataTransfer.effectAllowed = 'move'; setTimeout(() => b.classList.add('dragging'), 0); });
 $('layMap').addEventListener('dragend', () => { lmDrag = null; renderLayMap(); });
@@ -1535,6 +1552,20 @@ $('layMap').addEventListener('drop', (e) => {
   lmDrag = null; setLay({ cols });
 });
 $('layMap').addEventListener('pointerdown', (e) => {
+  const hs = e.target.closest('.lm-hs');
+  if (hs) {
+    const L = lay(), colEl = hs.closest('.lm-col'), list = L.cols[colEl.dataset.col], fill = colFiller(list);
+    const a = hs.dataset.a, b = hs.dataset.b, target = a !== fill ? a : b, sign = target === a ? 1 : -1;
+    const tEl = colEl.querySelector(`.lm-blk[data-id="${target}"]`), real = BLOCKS[target].el();
+    const sc = lmScale(), y0 = e.clientY, h0 = (L.h || {})[target] || Math.round(real ? real.getBoundingClientRect().height : tEl.offsetHeight / sc);
+    const maxH = Math.round((document.querySelector('.layout')?.clientHeight || 800) - 160);
+    let h = h0;
+    hs.setPointerCapture(e.pointerId); hs.classList.add('on'); tEl.style.flex = `0 0 ${Math.round(h0 * sc)}px`;
+    const mv = (ev) => { h = Math.max(48, Math.min(maxH, Math.round(h0 + (ev.clientY - y0) * sign / sc))); tEl.style.flex = `0 0 ${Math.round(h * sc)}px`; };
+    const up = () => { hs.removeEventListener('pointermove', mv); hs.classList.remove('on'); setLay({ h: { ...(L.h || {}), [target]: h } }); };
+    hs.addEventListener('pointermove', mv); hs.addEventListener('pointerup', up, { once: true });
+    return;
+  }
   const sp = e.target.closest('.lm-split'); if (!sp) return;
   const side = sp.dataset.s, L = lay(), x0 = e.clientX, w0 = side === 'l' ? L.wl : L.wr;
   sp.setPointerCapture(e.pointerId); sp.classList.add('on');

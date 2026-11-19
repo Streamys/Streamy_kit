@@ -1031,3 +1031,14 @@ body.custom-font,body.custom-font input,body.custom-font select,body.custom-font
 .lm-split{flex:0 0 12px;cursor:col-resize;position:relative}
 .lm-split::after{content:'';position:absolute;left:5px;top:20%;bottom:20%;width:2px;border-radius:2px;background:var(--line2)}
 .lm-split:hover::after,.lm-split.on::after{background:var(--red)}
+/* v0.18.2 칸 높이 조절 */
+.lm-col{gap:0}
+.lm-blk{min-height:26px;flex:0 0 auto}
+.lm-blk.fill{flex:1 1 0}
+.lm-hs{flex:0 0 10px;cursor:row-resize;position:relative}
+.lm-hs::after{content:'';position:absolute;left:30%;right:30%;top:4px;height:2px;border-radius:2px;background:var(--line2)}
+.lm-hs:hover::after,.lm-hs.on::after{background:var(--red);left:15%;right:15%}
+.lm-mark{margin:3px 0}
+.lay-sized{overflow:auto}
+.scene-row.lay-sized,.src-rail.lay-sized,.sound.lay-sized{overflow:hidden;display:flex;flex-direction:column}
+.scene-row.lay-sized .scene-tiles,.src-rail.lay-sized .src-list,.sound.lay-sized .sound-list{flex:1;min-height:0;overflow:auto}
