@@ -934,3 +934,11 @@ button.on .ico,.mode-tile.on .ico,.src-rail .src-tools .ico{color:currentColor}
 .gear .ico{width:16px;height:16px}
 .tag .ico{width:12px;height:12px;margin-right:3px;color:currentColor}
 .v-eye .ico,.vt-go>span .ico{color:var(--red)!important}
+
+/* v0.16.1 밝게 모드: 칸 나눔이 잘 보이게 (큰 칸 = 회색 + 테두리, 안쪽 칸 = 흰색 + 테두리 + 그림자) */
+body:not(.theme-dark) .tab .sec-card{background:#ECEEF3;border:1px solid #DFE2E9}
+body:not(.theme-dark) .sec-card>:not(h4):not(.hint):not(.bc-card):not(.key-guess):not(.toast):not(.row):not(.grid2):not(.key-list),
+body:not(.theme-dark) .sec-card .bc-card>:not(.hint):not(.bc-msg):not(.chips):not(.row){border:1px solid #E1E4EB;box-shadow:0 1px 3px rgba(25,31,40,.06)}
+body:not(.theme-dark) .virt-card>.vt-card,body:not(.theme-dark) .sec-card .vts-card{border:1px solid #E1E4EB!important;box-shadow:0 1px 3px rgba(25,31,40,.06)}
+body:not(.theme-dark) .sec-card input,body:not(.theme-dark) .sec-card select,body:not(.theme-dark) .sec-card textarea{border:1px solid #DCE0E8!important}
+body:not(.theme-dark) .rail>section,body:not(.theme-dark) .panel{border:1px solid #E4E7ED}
