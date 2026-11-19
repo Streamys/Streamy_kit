@@ -403,7 +403,7 @@ function guideData() {
 }
 function guideDraw() {
   if (guideRaf) return;
-  guideRaf = requestAnimationFrame(() => { guideRaf = 0; try { ipcRenderer.send('ov:draw', { ...guideData(), color: cfg.themeDark ? ['#F2739A', '#FFA3BF', 'rgba(242,115,154,.12)'] : ['#E5577E', '#F08AA6', 'rgba(229,87,126,.10)'] }); } catch (e) { rlog('warn', 'guide', e); } });
+  guideRaf = requestAnimationFrame(() => { guideRaf = 0; try { ipcRenderer.send('ov:draw', { ...guideData(), color: guideColors() }); } catch (e) { rlog('warn', 'guide', e); } });
 }
 function guideShow() {
   const on = engineOk && mode !== 'air' && cfg.guide !== false;
@@ -1255,7 +1255,31 @@ for (const id of ['tab-stream', 'tab-settings', 'tab-sound']) {
   }
 }
 // 화면 테마: 기본 = 밝은 카드, 설정에서 예전 검정·빨강
-function applyTheme() { document.body.classList.toggle('theme-dark', !!cfg.themeDark); $('themeDark').checked = !!cfg.themeDark; if (typeof guideDraw === 'function') guideDraw(); }
+// 포인트 색: 사용자가 고름 (기본 핑크). 밝게/다크에 맞춰 글자용 · 옅은 배경색을 계산
+const ACCENTS = [['#E5577E', '핑크'], ['#0F9F74', '민트'], ['#6B5CE7', '보라'], ['#3D7BEA', '블루'], ['#F08A24', '오렌지']];
+const hexRgb = (h) => { const n = parseInt(String(h).replace('#', '').padEnd(6, '0').slice(0, 6), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+const mixHex = (h, to, t) => { const a = hexRgb(h), b = to === 'w' ? [255, 255, 255] : [0, 0, 0]; return '#' + a.map((v, i) => Math.round(v + (b[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
+const rgba = (h, a) => { const [r, g, b] = hexRgb(h); return `rgba(${r},${g},${b},${a})`; };
+function accentNow() { const a = String(cfg.accent || ACCENTS[0][0]); return /^#[0-9a-f]{6}$/i.test(a) ? a : ACCENTS[0][0]; }
+function guideColors() { const a = accentNow(); return [cfg.themeDark ? mixHex(a, 'w', 0.12) : a, mixHex(a, 'w', 0.35), rgba(a, 0.11)]; }
+function applyAccent() {
+  const a = accentNow(), dark = !!cfg.themeDark, st = document.body.style;
+  st.setProperty('--red', a);
+  st.setProperty('--red2', mixHex(a, 'w', 0.12));
+  st.setProperty('--red-dark', mixHex(a, 'k', 0.28));
+  st.setProperty('--soft', rgba(a, dark ? 0.18 : 0.12));
+  st.setProperty('--soft2', rgba(a, dark ? 0.08 : 0.06));
+  st.setProperty('--link', dark ? mixHex(a, 'w', 0.42) : mixHex(a, 'k', 0.28));
+  const row = $('accentRow');
+  if (row) {
+    row.innerHTML = ACCENTS.map(([h, n]) => `<button class="accent-sw${h.toLowerCase() === a.toLowerCase() ? ' on' : ''}" data-c="${h}" title="${n}" aria-label="${n}" style="--c:${h}"><i></i><span>${n}</span></button>`).join('')
+      + `<label class="accent-sw custom${ACCENTS.some(([h]) => h.toLowerCase() === a.toLowerCase()) ? '' : ' on'}" title="직접 고르기" style="--c:${a}"><i></i><span>직접</span><input type="color" id="accentPick" value="${a}"></label>`;
+  }
+}
+function applyTheme() { document.body.classList.toggle('theme-dark', !!cfg.themeDark); $('themeDark').checked = !!cfg.themeDark; applyAccent(); if (typeof guideDraw === 'function') guideDraw(); }
+$('accentRow').addEventListener('click', (e) => { const b = e.target.closest('button.accent-sw'); if (!b) return; cfg.accent = b.dataset.c; save(); applyTheme(); });
+$('accentRow').addEventListener('input', (e) => { if (e.target.id !== 'accentPick') return; cfg.accent = e.target.value; applyAccent(); if (typeof guideDraw === 'function') guideDraw(); });
+$('accentRow').addEventListener('change', (e) => { if (e.target.id !== 'accentPick') return; cfg.accent = e.target.value; save(); applyTheme(); });
 $('themeDark').addEventListener('change', () => { cfg.themeDark = $('themeDark').checked; save(); applyTheme(); });
 applyTheme();
 $('airOnLive').checked = cfg.airOnLive !== false;

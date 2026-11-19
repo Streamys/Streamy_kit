@@ -702,3 +702,11 @@ body.theme-dark .sec-card>:not(h4):not(.hint):not(.bc-card):not(.key-guess):not(
 /* 베이스 색: 글자로 쓸 때는 더 진한(다크는 더 밝은) 민트로 읽기 쉽게 */
 .brand span,.rail .tile.on kbd,.hint button.link{color:var(--link)}
 .rail .tile.on kbd{border-color:var(--red)}
+/* 포인트 색 고르기 */
+.accent-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.tab .accent-row .accent-sw{display:flex;flex-direction:column;align-items:center;gap:6px;width:56px;padding:8px 0!important;border-radius:14px!important;border:1.5px solid transparent!important;background:var(--card2)!important;font-size:11px;font-weight:600;color:var(--sub);cursor:pointer;position:relative}
+.accent-sw i{width:24px;height:24px;border-radius:50%;background:var(--c);box-shadow:inset 0 0 0 2px rgba(255,255,255,.35)}
+.tab .accent-row .accent-sw.on{border-color:var(--c)!important;color:var(--text)}
+.accent-sw.custom i{background:conic-gradient(#E5577E,#F08A24,#F5C04A,#0F9F74,#3D7BEA,#6B5CE7,#E5577E)}
+.accent-sw.custom.on i{background:var(--c)}
+.accent-sw input[type=color]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;padding:0;border:none}
