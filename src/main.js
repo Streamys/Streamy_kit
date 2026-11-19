@@ -1,11 +1,12 @@
 // Streamy Kit — 메인 프로세스
 // 화면(렌더러)이 방송 엔진을 불러오고, 여기서는 창 관리 · 경로 · 로그 · 충돌 복구 · 종료 처리를 맡습니다.
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, dialog, net, screen, crashReporter } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, dialog, net, screen, crashReporter, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
 const log = require('./log');
 const server = require('./server');
+const vts = require('./vts');
 
 app.setName('Streamy Kit');
 app.setAppUserModelId('com.streamy.kit');
@@ -197,7 +198,14 @@ function main() {
       while ((i = winBuf.indexOf('\n')) >= 0) {
         const line = winBuf.slice(0, i).trim(); winBuf = winBuf.slice(i + 1);
         if (!line) continue;
-        try { const data = JSON.parse(line); if (Array.isArray(data)) { winLast = data; winRetry = 0; } if (win && !win.isDestroyed()) win.webContents.send('windows', data); } catch {}
+        try {
+          const data = JSON.parse(line);
+          if (Array.isArray(data)) {
+            winLast = data; winRetry = 0;
+            const v = data.find((w) => /^vtube studio\.exe$/i.test(w.exe)); if (v && v.path) vts.rememberExe(v.path);
+          }
+          if (win && !win.isDestroyed()) win.webContents.send('windows', data);
+        } catch {}
       }
     });
     winProc.stderr.on('data', (d) => log.warn('windows', String(d).slice(0, 500)));
@@ -306,6 +314,39 @@ function main() {
       wc.setWindowOpenHandler(({ url }) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return { action: 'deny' }; });
     }
   });
+
+  // ---------------------------------------------------------------- VTube Studio
+  vts.init({ app, log, shell, getWindows: () => winLast || [], send: (ch, d) => { try { if (win && !win.isDestroyed()) win.webContents.send(ch, d); } catch {} } });
+  const vtsCall = (fn) => async (_e, ...a) => { try { return { ok: true, data: await fn(...a) }; } catch (e) { return { ok: false, error: e.message }; } };
+  ipcMain.handle('vts:status', () => vts.status());
+  ipcMain.handle('vts:connect', vtsCall(() => vts.connect()));
+  ipcMain.handle('vts:disconnect', vtsCall(() => vts.disconnect()));
+  ipcMain.handle('vts:launch', vtsCall(() => vts.launch()));
+  ipcMain.handle('vts:running', () => vts.isRunning());
+  ipcMain.handle('vts:models', vtsCall(() => vts.models()));
+  ipcMain.handle('vts:load', vtsCall((id) => vts.loadModel(id)));
+  ipcMain.handle('vts:hotkeys', vtsCall(() => vts.hotkeys()));
+  ipcMain.handle('vts:trigger', vtsCall((id) => vts.trigger(id)));
+  ipcMain.handle('vts:expressions', vtsCall(() => vts.expressions()));
+  ipcMain.handle('vts:expression', vtsCall((f, on) => vts.setExpression(f, on)));
+  ipcMain.handle('vts:move', vtsCall((p) => vts.move(p)));
+  ipcMain.handle('vts:model', vtsCall(() => vts.refreshModel()));
+  ipcMain.handle('vts:port', vtsCall((p) => vts.setPort(p)));
+  ipcMain.handle('vts:forget', vtsCall(() => vts.forget()));
+
+  // ---------------------------------------------------------------- 방송 정보 (치지직 · 유튜브 제목/태그/설명/카테고리)
+  const bc = require('./broadcast');
+  bc.init({ app, net, log, shell, safeStorage, send: (ch, d) => { try { if (win && !win.isDestroyed()) win.webContents.send(ch, d); } catch {} } });
+  server.onOAuth((which, q) => bc.onCallback(which, q));
+  ipcMain.handle('bc:status', () => bc.status());
+  ipcMain.handle('bc:set-app', vtsCall((p, a) => bc.setApp(p, a)));
+  ipcMain.handle('bc:login', vtsCall((p) => bc.login(p)));
+  ipcMain.handle('bc:logout', vtsCall((p) => bc.logout(p)));
+  ipcMain.handle('bc:chzzk-categories', vtsCall((q) => bc.chzzkCategories(q)));
+  ipcMain.handle('bc:chzzk-get', vtsCall(() => bc.chzzkGet()));
+  ipcMain.handle('bc:youtube-get', vtsCall(() => bc.youtubeGet()));
+  ipcMain.handle('bc:apply', vtsCall((info, targets) => bc.apply(info, targets)));
+  ipcMain.handle('bc:focus', () => { if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.focus(); } });
 
   const updater = require('./updater');
   updater.init({ app, log, net, send: (ch, d) => { try { if (win && !win.isDestroyed()) win.webContents.send(ch, d); } catch {} } });

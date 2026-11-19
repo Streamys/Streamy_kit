@@ -48,7 +48,8 @@ const VIRTUAL_SPOTS = {
   'bottom-left': { label: '왼쪽 아래', ax: 0, ay: 1 }, 'bottom-center': { label: '가운데 아래', ax: 0.5, ay: 1 },
   'bottom-right': { label: '오른쪽 아래', ax: 1, ay: 1 }, center: { label: '가운데', ax: 0.5, ay: 0.5 }, full: { label: '꽉 차게', ax: 0.5, ay: 0.5 },
 };
-const VIRTUAL_DEFAULT = { spot: 'bottom-right', size: 75, flip: false, bg: 'transparent', color: '#00FF00', method: 'game', crop: { left: 0, top: 0, right: 0, bottom: 0 } };
+const VIRTUAL_DEFAULT = { spot: 'bottom-right', size: 75, flip: false, bg: 'transparent', color: '#00FF00', method: 'game', sender: '', composite: 3, exe: '', crop: { left: 0, top: 0, right: 0, bottom: 0 } };
+const VTS_SENDER = 'VTubeStudioSpout';
 const exeOf = (v) => String(v || '').split(':').pop().toLowerCase();
 const appOfExe = (exe) => VIRTUAL_APPS.find((a) => a.exe.includes(String(exe).toLowerCase())) || null;
 
@@ -288,7 +289,8 @@ class Engine {
       case 'timer': return { url: opt.timerUrl, width: 600, height: 200, css: '', reroute_audio: false };
       case 'virtual': {
         const v = { ...VIRTUAL_DEFAULT, ...(opt.virt || {}) };
-        if (v.method === 'spout') return {};
+        // Spout2: 보내는 쪽 이름(VTube Studio = VTubeStudioSpout). 합성 3=기본, 4=미리 곱한 알파
+        if (v.method === 'spout') return { spoutsenders: v.sender || 'usefirstavailablesender', compositemode: Number(v.composite) || 3 };
         return { capture_mode: 'window', window: opt.value, priority: 2, capture_cursor: false, allow_transparency: v.bg === 'transparent', anti_cheat_hook: true, hook_rate: 1 };
       }
       case 'color': return { color: abgr(opt.color || '#0E0E10'), width: this.width, height: this.height };
@@ -438,6 +440,32 @@ class Engine {
     it.scale = { x: flip ? -k : k, y: k };
     it.position = { x: flip ? x + sw * k : x, y };
   }
+  // ---- 자르기 (원본 픽셀 기준). 화면에 보이는 반대쪽 변은 그대로 두고 자름
+  getCrop(itemId) {
+    const it = this.itemObj(itemId); if (!it) return null;
+    try { const c = it.crop; return { left: c.left | 0, top: c.top | 0, right: c.right | 0, bottom: c.bottom | 0 }; } catch { return { left: 0, top: 0, right: 0, bottom: 0 }; }
+  }
+  srcSize(itemId) { const it = this.itemObj(itemId); return it ? { w: it.source.width || 0, h: it.source.height || 0 } : { w: 0, h: 0 }; }
+  setCropPlace(itemId, crop, x, y, k) {
+    const it = this.itemObj(itemId); if (!it) return;
+    const flip = it.scale.x < 0;
+    it.crop = { left: Math.round(crop.left), top: Math.round(crop.top), right: Math.round(crop.right), bottom: Math.round(crop.bottom) };
+    this.place(it, x, y, k, flip);
+    this.syncVirtualCrop(it);
+  }
+  resetCrop(itemId) {
+    const it = this.itemObj(itemId); if (!it) return;
+    const r = this.normalize(itemId); if (!r || !r.sw) return;
+    const c = this.getCrop(itemId), k = r.w / r.sw, flip = it.scale.x < 0;
+    it.crop = { left: 0, top: 0, right: 0, bottom: 0 };
+    this.place(it, r.x - (flip ? c.right : c.left) * k, r.y - c.top * k, k, flip);
+    this.syncVirtualCrop(it);
+  }
+  // 버추얼 소스면 설정 칸의 "가장자리 자르기" 숫자도 같이 맞춤
+  syncVirtualCrop(it) {
+    const s = this.sources[it.source.name];
+    if (s && s.kind === 'virtual' && s.virt) { const c = it.crop; s.virt.crop = { left: c.left | 0, top: c.top | 0, right: c.right | 0, bottom: c.bottom | 0 }; }
+  }
   setItemRect(itemId, x, y, w) {
     const it = this.itemObj(itemId); if (!it) return;
     const r = this.itemRect(it);
@@ -465,7 +493,7 @@ class Engine {
     return out;
   }
   virtualSources() {
-    return Object.entries(this.sources).filter(([, s]) => s.kind === 'virtual').map(([name, s]) => ({ name, virt: s.virt || { ...VIRTUAL_DEFAULT }, exe: exeOf(s.input.settings?.window) }));
+    return Object.entries(this.sources).filter(([, s]) => s.kind === 'virtual').map(([name, s]) => ({ name, virt: s.virt || { ...VIRTUAL_DEFAULT }, exe: (s.virt && s.virt.exe) || exeOf(s.input.settings?.window) }));
   }
   getVirtual(name) { const s = this.sources[name]; return s && s.kind === 'virtual' ? (s.virt ||= { ...VIRTUAL_DEFAULT, crop: { ...VIRTUAL_DEFAULT.crop } }) : null; }
   // 버추얼 설정을 엔진에 반영: 배경(투명/크로마키) · 자르기 · 위치/크기 · 반전 (모든 장면의 해당 항목)
@@ -767,4 +795,4 @@ function streamError(sig) {
   return (msg || '방송 오류') + (sig.error ? ' (' + sig.error + ')' : '');
 }
 
-module.exports = { Engine, SOURCE_TYPES, PLATFORMS, ENCODERS, VIRTUAL_APPS, VIRTUAL_SPOTS, VIRTUAL_DEFAULT, appOfExe, exeOf };
+module.exports = { Engine, SOURCE_TYPES, PLATFORMS, ENCODERS, VIRTUAL_APPS, VIRTUAL_SPOTS, VIRTUAL_DEFAULT, VTS_SENDER, appOfExe, exeOf };

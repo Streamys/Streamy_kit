@@ -19,6 +19,7 @@
     <span class="v-detail" id="viewerDetail"></span>
     <button class="v-eye" id="viewerEye" title="시청자 수 보이기/숨기기">👁</button>
   </div>
+  <button class="upd-check" id="updCheckTop" title="업데이트 확인 (GitHub 릴리즈 · 바탕화면 폴더)"><span>↻</span><em>업데이트 확인</em></button>
   <button class="upd-btn" id="updBtn" hidden><span class="upd-ic">⬆</span><span id="updText">업데이트</span><i class="upd-bar" id="updBar"></i></button>
   <div class="stats">
     <span>CPU <b id="sCpu">-</b></span>
@@ -68,7 +69,7 @@
       <span class="sel-name" id="selName"></span>
       <span class="sel-size" id="selSize"></span>
       <div class="edit-actions">
-        <button data-fit="fit">화면 맞춤</button><button data-fit="center">가운데</button><button data-fit="reset">원래 크기</button>
+        <button data-fit="fit">화면 맞춤</button><button data-fit="center">가운데</button><button data-fit="reset">원래 크기</button><button data-fit="uncrop">자르기 초기화</button>
       </div>
     </div>
 
@@ -105,6 +106,28 @@
         </div>
         <div class="key-list" id="keyList"></div>
         <p class="hint">저장된 키가 있는 플랫폼으로 <b>동시에</b> 송출돼요. 키 확인: <button class="link inline" data-help="chzzk">치지직</button> · <button class="link inline" data-help="youtube">유튜브</button> · <button class="link inline" data-help="soop">SOOP</button></p>
+
+        <h4>방송 정보 <small>치지직 · 유튜브에 제목·태그를 한 번에</small></h4>
+        <div class="bc-card" id="bcCard">
+          <div class="bc-acc" id="bcAcc"></div>
+          <label class="field">제목 <small id="bcTitleN">0/100</small><input id="bcTitle" maxlength="100" placeholder="오늘 방송 제목"></label>
+          <label class="field">태그 <small>쉼표(,)로 나눠요 · 치지직은 5개까지, 띄어쓰기·특수문자 빠져요</small><input id="bcTags" placeholder="예: 저챗, 롤, 버튜버"></label>
+          <div class="chips bc-tagprev" id="bcTagPrev"></div>
+          <label class="field">설명 <small>유튜브만</small><textarea id="bcDesc" rows="3" placeholder="방송 설명 (유튜브)"></textarea></label>
+          <div class="bc-cat">
+            <label class="field">치지직 카테고리
+              <div class="row"><input id="bcCzQ" placeholder="검색 (예: 리그 오브 레전드, talk)"><button class="ghost" id="bcCzSearch">검색</button></div>
+              <div class="bc-czres" id="bcCzRes"></div>
+              <div class="bc-czcur" id="bcCzCur"></div></label>
+            <label class="field">유튜브 카테고리<select id="bcYtCat">
+              <option value="">그대로 두기</option><option value="20">게임</option><option value="22">인물/블로그</option><option value="24">엔터테인먼트</option><option value="10">음악</option><option value="17">스포츠</option><option value="23">코미디</option><option value="27">교육</option><option value="28">과학기술</option><option value="26">노하우/스타일</option><option value="19">여행/이벤트</option><option value="15">동물</option></select></label>
+          </div>
+          <div class="bc-to"><span>적용할 곳</span><label class="check tiny"><input type="checkbox" id="bcToCz" checked> 치지직</label><label class="check tiny"><input type="checkbox" id="bcToYt" checked> 유튜브</label></div>
+          <div class="row"><button class="primary-sm" id="bcApply">지금 적용</button><button class="ghost" id="bcLoad" title="치지직/유튜브에 지금 설정된 제목·태그를 가져와요">불러오기</button></div>
+          <label class="check tiny"><input type="checkbox" id="bcAuto"> 방송을 시작하면 자동으로 적용</label>
+          <p class="bc-msg" id="bcMsg"></p>
+          <p class="hint tiny">SOOP은 공식 기능이 없어서 바꿀 수 없어요. 유튜브는 방송이 시작된 뒤(또는 예약된 방송이 있을 때)만 바뀌어요.</p>
+        </div>
 
         <h4>인코더</h4>
         <div class="enc-row"><select id="encSel"></select><button class="ghost" id="encAuto" title="이 PC에서 가장 좋은 인코더 고르기">자동</button></div>
@@ -143,6 +166,28 @@
           <button class="vt-go" id="vtGo"><span>🧸</span><b>버추얼 원클릭 연결</b><small>켜져 있는 버추얼 프로그램을 찾아서 화면에 띄워요</small></button>
           <div class="vt-row"><label class="check tiny"><input type="checkbox" id="vtAuto"> 버추얼 프로그램을 켜면 자동으로 띄우기</label></div>
           <div class="vt-found" id="vtFound"></div>
+        </div>
+        <div class="vts-card" id="vtsCard">
+          <div class="vts-head"><b>VTube Studio 조종</b><span class="vts-st" id="vtsSt"><i></i><em>꺼짐</em></span></div>
+          <div class="vts-row">
+            <button id="vtsLaunch">▶ 켜기</button>
+            <button id="vtsConnect">🔗 연결</button>
+            <button class="primary-sm" id="vtsSpout" title="VTube Studio 화면을 Spout2로 받아서 지금 장면에 넣어요">Spout2 넣기</button>
+          </div>
+          <label class="check tiny"><input type="checkbox" id="vtsAuto"> Streamy Kit을 켜면 VTube Studio도 뒤에서 자동으로 켜고 연결하기</label>
+          <p class="vts-msg" id="vtsMsg"></p>
+          <div class="vts-body" id="vtsBody" hidden>
+            <div class="vts-sec"><b>모델</b>
+              <div class="row"><select id="vtsModel"></select><button id="vtsModelLoad">바꾸기</button><button class="ghost" id="vtsRefresh" title="목록 새로고침">↻</button></div></div>
+            <div class="vts-sec"><b>표정</b> <small class="hint">누르면 켜고 · 다시 누르면 꺼요</small><div class="chips" id="vtsExpr"></div></div>
+            <div class="vts-sec"><b>단축키</b> <small class="hint">VTube Studio에 만들어 둔 동작</small><div class="chips" id="vtsKeys"></div></div>
+            <div class="vts-sec"><b>위치</b> <small class="hint">VTube Studio 안에서의 모델 위치</small>
+              <label class="vts-sl">좌우 <input type="range" id="vtsX" min="-1.5" max="1.5" step="0.01" value="0"><em id="vtsXV">0</em></label>
+              <label class="vts-sl">위아래 <input type="range" id="vtsY" min="-1.5" max="1.5" step="0.01" value="0"><em id="vtsYV">0</em></label>
+              <label class="vts-sl">크기 <input type="range" id="vtsS" min="-100" max="100" step="1" value="0"><em id="vtsSV">0</em></label>
+              <label class="vts-sl">회전 <input type="range" id="vtsR" min="-180" max="180" step="1" value="0"><em id="vtsRV">0</em></label>
+              <div class="row"><button id="vtsCenter">가운데로</button><button class="ghost" id="vtsPosGet">지금 위치 불러오기</button></div></div>
+          </div>
         </div>
         <div class="add-box" id="addBox" hidden>
           <div class="type-grid" id="typeGrid"></div>

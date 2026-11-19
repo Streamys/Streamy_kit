@@ -45,7 +45,7 @@ namespace StreamyWin {
       IntPtr h = OpenProcess(0x1000, false, pid);   // PROCESS_QUERY_LIMITED_INFORMATION
       if (h != IntPtr.Zero) {
         var sb = new StringBuilder(1024); int n = sb.Capacity;
-        if (QueryFullProcessImageName(h, 0, sb, ref n)) e = Path.GetFileName(sb.ToString());
+        if (QueryFullProcessImageName(h, 0, sb, ref n)) e = sb.ToString();
         CloseHandle(h);
       }
       exeCache[pid] = e;
@@ -68,10 +68,11 @@ namespace StreamyWin {
         var c = new StringBuilder(256); GetClassName(h, c, c.Capacity);
         uint pid; GetWindowThreadProcessId(h, out pid);
         if (pid == selfPid) return true;
-        string exe = ExeOf(pid);
-        if (exe.Length == 0) return true;
+        string full = ExeOf(pid);
+        if (full.Length == 0) return true;
+        string exe = Path.GetFileName(full);
         string value = Obs(title) + ":" + Obs(c.ToString()) + ":" + Obs(exe);
-        items.Add("{\"exe\":\"" + Esc(exe) + "\",\"title\":\"" + Esc(title) + "\",\"cls\":\"" + Esc(c.ToString()) + "\",\"pid\":" + pid + ",\"value\":\"" + Esc(value) + "\"}");
+        items.Add("{\"exe\":\"" + Esc(exe) + "\",\"title\":\"" + Esc(title) + "\",\"cls\":\"" + Esc(c.ToString()) + "\",\"path\":\"" + Esc(full) + "\",\"pid\":" + pid + ",\"value\":\"" + Esc(value) + "\"}");
         return true;
       }, IntPtr.Zero);
       if (exeCache.Count > 2000) exeCache.Clear();

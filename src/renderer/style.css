@@ -33,7 +33,7 @@ input[type=checkbox]{accent-color:var(--red);width:auto}
 .preview-empty p{margin:0;text-align:center;line-height:1.6;max-width:70%}
 .preview-empty.err p{color:#ff8a94}
 .preview.has-engine .preview-empty{display:none}
-.preview.c-move{cursor:move}.preview.c-nwse{cursor:nwse-resize}.preview.c-nesw{cursor:nesw-resize}
+.preview.c-move{cursor:move}.preview.c-nwse{cursor:nwse-resize}.preview.c-nesw{cursor:nesw-resize}.preview.c-ew{cursor:ew-resize}.preview.c-ns{cursor:ns-resize}
 .demo-shot{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .demo-sel{position:absolute;border:2px solid var(--red);pointer-events:none}
 .demo-sel i{position:absolute;width:10px;height:10px;background:#fff;border:2px solid var(--red)}
@@ -447,3 +447,50 @@ body.mode-air .ph-toggle{display:block}
 .splitter i{width:4px;height:64px;border-radius:4px;background:var(--line2);transition:background .12s,height .12s}
 .splitter:hover i,.splitter.on i{background:var(--red);height:120px}
 body.splitting,body.splitting *{cursor:col-resize!important;user-select:none}
+
+/* 상단: 업데이트 확인 버튼 */
+.upd-check{display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:99px;padding:4px 11px 4px 9px;color:var(--sub);font-size:12px;font-weight:700;-webkit-app-region:no-drag}
+.upd-check span{display:inline-block;font-size:14px;line-height:1}
+.upd-check em{font-style:normal}
+.upd-check:hover{border-color:var(--red);color:#fff}
+.upd-check.busy span{animation:spin .8s linear infinite}
+.upd-check.ok{border-color:#22C55E;color:#86EFAC}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* VTube Studio 조종 */
+.vts-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:12px}
+.vts-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.vts-st{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--sub)}
+.vts-st i{width:8px;height:8px;border-radius:50%;background:#55555c}
+.vts-st em{font-style:normal}
+.vts-st.on i{background:#2ecc71;box-shadow:0 0 6px #2ecc71}.vts-st.on{color:#fff}
+.vts-st.wait i{background:#f1c40f;animation:vtsBlink 1s infinite}.vts-st.err i{background:var(--red)}
+@keyframes vtsBlink{50%{opacity:.3}}
+.vts-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.vts-row button{flex:1;padding:8px 10px!important;font-size:12px}
+.vts-msg{font-size:11px;color:var(--sub);line-height:1.6;margin:6px 0 0}
+.vts-msg:empty{display:none}
+.vts-body{margin-top:8px;border-top:1px solid var(--line);padding-top:8px}
+.vts-sec{margin-bottom:10px}
+.vts-sec>b{font-size:12px}
+.vts-sec .row{margin-top:6px}
+.vts-sec .chips{margin:6px 0 0}
+.vts-sec .chip{padding:6px 10px;font-size:11px}
+.vts-sec .chips:empty::after{content:'없어요';font-size:11px;color:var(--sub)}
+.vts-sl{display:grid;grid-template-columns:44px 1fr 40px;align-items:center;gap:6px;font-size:11px;color:var(--sub);margin-top:6px}
+.vts-sl em{font-style:normal;text-align:right;color:#fff;font-variant-numeric:tabular-nums}
+/* 방송 정보 */
+.bc-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:12px}
+.bc-acc{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+.bc-row{display:flex;align-items:center;gap:8px;font-size:12px}
+.bc-row>span{color:var(--sub);font-size:11px}.bc-row>span.ok{color:#2ecc71}
+.bc-row .sp{flex:1}
+.bc-row button{padding:6px 10px!important;font-size:11px}
+.bc-app{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:11px;line-height:1.6;color:var(--sub)}
+.bc-app b{color:#fff}.bc-app ol{margin:4px 0 8px 18px;padding:0}.bc-app a{color:var(--red)}
+.bc-card textarea{width:100%;resize:vertical;background:var(--card2);border:1px solid var(--line2);border-radius:8px;color:#fff;padding:8px;font:inherit;font-size:12px}
+.bc-tagprev{margin:-4px 0 8px}.bc-tagprev .chip{padding:4px 9px;font-size:11px}.bc-tagprev .chip.dim{opacity:.4;text-decoration:line-through}
+.bc-czres{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}.bc-czres .chip{padding:5px 9px;font-size:11px}.bc-czres small{color:var(--sub)}
+.bc-czcur{display:flex;align-items:center;gap:8px;margin-top:6px}.bc-czcur .chip{padding:4px 9px;font-size:11px}
+.bc-to{display:flex;align-items:center;gap:12px;font-size:12px;margin:4px 0 8px}.bc-to>span{color:var(--sub);font-size:11px}
+.bc-msg{font-size:11px;line-height:1.7;margin:6px 0 0;color:#ccc}.bc-msg:empty{display:none}.bc-msg.err{color:#ff8a8a}
+.hint.err{color:#ff8a8a}

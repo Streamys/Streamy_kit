@@ -82,6 +82,18 @@ function start() {
       });
       return;
     }
+    // 로그인 돌아오는 곳 (치지직 / 구글) → 메인 프로세스가 토큰으로 바꿈
+    const m = /^\/oauth\/(chzzk|google)$/.exec(url.pathname);
+    if (m) {
+      const done = (ok, msg) => {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(`<!doctype html><meta charset="utf-8"><title>Streamy Kit</title><body style="background:#0e0e10;color:#fff;font-family:'Malgun Gothic',sans-serif;display:grid;place-items:center;height:100vh;margin:0"><div style="text-align:center"><div style="font-size:42px">${ok ? '✅' : '⚠️'}</div><h2>${ok ? '연결됐어요!' : '연결하지 못했어요'}</h2><p style="color:#aaa">${String(msg || '').replace(/[<>&]/g, '')}</p><p style="color:#aaa">이 창은 닫아도 돼요. Streamy Kit으로 돌아가세요.</p></div></body>`);
+      };
+      const q = Object.fromEntries(url.searchParams);
+      if (!oauthHandler) return done(false, '준비가 안 됐어요');
+      Promise.resolve(oauthHandler(m[1], q)).then((r) => done(true, r || ''), (e) => done(false, e.message));
+      return;
+    }
     const file = PAGES[url.pathname];
     if (file) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -95,4 +107,5 @@ function start() {
   return server;
 }
 
-module.exports = { start, applyAction, PORT, url: (p) => `http://127.0.0.1:${PORT}${p}` };
+let oauthHandler = null;
+module.exports = { start, applyAction, PORT, onOAuth: (fn) => { oauthHandler = fn; }, url: (p) => `http://127.0.0.1:${PORT}${p}` };

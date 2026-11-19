@@ -3,7 +3,7 @@
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const path = require('path');
-const { Engine, SOURCE_TYPES, PLATFORMS, ENCODERS, VIRTUAL_APPS, VIRTUAL_SPOTS, VIRTUAL_DEFAULT, appOfExe, exeOf } = require('./engine.js');
+const { Engine, SOURCE_TYPES, PLATFORMS, ENCODERS, VIRTUAL_APPS, VIRTUAL_SPOTS, VIRTUAL_DEFAULT, VTS_SENDER, appOfExe, exeOf } = require('./engine.js');
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -203,7 +203,11 @@ let countT = 0;
 $('srcUp').addEventListener('click', guard(() => { for (const id of selIds()) engine.moveItem(id, 1); saveScenes(); }));
 $('srcDown').addEventListener('click', guard(() => { for (const id of selIds().reverse()) engine.moveItem(id, -1); saveScenes(); }));
 $('srcDel').addEventListener('click', guard(() => removeSelected()));
-document.querySelectorAll('[data-fit]').forEach((b) => b.addEventListener('click', guard(() => { const id = engine.primary; if (id != null) { engine.fitItem(id, b.dataset.fit); updateSizeLabel(); saveScenes(); } })));
+document.querySelectorAll('[data-fit]').forEach((b) => b.addEventListener('click', guard(() => {
+  const id = engine.primary; if (id == null) return;
+  if (b.dataset.fit === 'uncrop') { engine.resetCrop(id); geomChanged(); } else engine.fitItem(id, b.dataset.fit);
+  updateSizeLabel(); saveScenes();
+})));
 async function removeSelected() {
   const ids = selIds(); if (!ids.length) return toast('삭제할 소스를 먼저 골라 주세요.');
   const names = engine.items().filter((x) => ids.includes(x.id)).map((x) => x.name);
@@ -329,6 +333,13 @@ function cornerAt(rect, p) {
   for (const [k, [x, y]] of Object.entries(cs)) if (Math.abs(p.x - x) <= tol && Math.abs(p.y - y) <= tol) return k;
   return null;
 }
+// 변 가운데 손잡이 (자르기): l · r · t · b
+function edgeAt(rect, p) {
+  const tol = 13 * p.px;
+  const es = { l: [rect.x, rect.y + rect.h / 2], r: [rect.x + rect.w, rect.y + rect.h / 2], t: [rect.x + rect.w / 2, rect.y], b: [rect.x + rect.w / 2, rect.y + rect.h] };
+  for (const [k, [x, y]] of Object.entries(es)) if (Math.abs(p.x - x) <= tol * (k === 't' || k === 'b' ? 1.6 : 1) && Math.abs(p.y - y) <= tol * (k === 'l' || k === 'r' ? 1.6 : 1)) return k;
+  return null;
+}
 function snap(v, size, total, tol, out, axis) {
   const ts = [[0, 0], [total / 2 - size / 2, total / 2], [total - size, total]];
   for (const [t, line] of ts) if (Math.abs(v - t) < tol) { if (out) out.push({ axis, at: line }); return t; }
@@ -374,8 +385,8 @@ function guideData() {
   let size = '', hint = '';
   const sr = selId != null ? rects.find((r) => r.id === selId) : null;
   if (sr) size = `${Math.round(sr.w)} × ${Math.round(sr.h)} · ${Math.round((sr.w / engine.width) * 100)}%`;
-  if (drag) hint = drag.mode === 'move' ? '놓으면 그 자리에 저장돼요 · Alt = 자석 끄기' : '비율을 유지하면서 크기 조절 중 · Alt = 자석 끄기';
-  else if (selId != null) hint = '안쪽을 끌면 이동 · 모서리 □를 끌면 크기 조절 · 방향키로 1px씩 (Shift = 10px)';
+  if (drag) hint = drag.mode === 'move' ? '놓으면 그 자리에 저장돼요 · Alt = 자석 끄기' : drag.mode === 'crop' ? '화면 자르는 중 · 되돌리려면 아래 "자르기 초기화"' : '비율을 유지하면서 크기 조절 중 · Alt = 자석 끄기';
+  else if (selId != null) hint = '안쪽 = 이동 · 모서리 □ = 크기 · 변 가운데 ▬ = 자르기 · 방향키 1px (Shift 10px)';
   else if (items.length) hint = '소스를 클릭하면 옮기고 크기를 바꿀 수 있어요';
   const guides = snapLines.map((l) => (l.axis === 'x'
     ? { x1: m.ox + l.at * m.s, y1: m.oy, x2: m.ox + l.at * m.s, y2: m.oy + engine.height * m.s }
@@ -406,8 +417,16 @@ prev.addEventListener('mousedown', (e) => {
     if (selId != null) {
       const it = engine.itemObj(selId);
       if (it) {
-        const c = cornerAt(engine.itemRect(it), p);
+        const ir = engine.itemRect(it);
+        const c = cornerAt(ir, p);
         if (c) { const r = engine.normalize(selId); if (!r || r.w <= 0) return; crumb('drag resize start'); drag = { mode: 'resize', id: selId, corner: c, start: r, p0: p }; e.preventDefault(); return; }
+        const ed = edgeAt(ir, p);
+        if (ed) {
+          const r = engine.normalize(selId); if (!r || r.w <= 0 || !r.sw) return;
+          crumb('drag crop start ' + ed);
+          drag = { mode: 'crop', id: selId, side: ed, start: r, p0: p, crop0: engine.getCrop(selId), full: engine.srcSize(selId), k: r.w / r.sw, flip: engine.itemObj(selId).scale.x < 0 };
+          e.preventDefault(); return;
+        }
       }
     }
     const hit = engine.hitTest(p.x, p.y);
@@ -430,7 +449,9 @@ window.addEventListener('mousemove', (e) => {
         const p = toCanvas(e);
         const sr = selId != null ? rects.find((r) => r.id === selId) : null;
         const c = sr ? cornerAt(sr, p) : null;
+        const ed = sr && !c ? edgeAt(sr, p) : null;
         if (c) cls = c === 'tl' || c === 'br' ? 'c-nwse' : 'c-nesw';
+        else if (ed) cls = ed === 'l' || ed === 'r' ? 'c-ew' : 'c-ns';
         else { const h = cachedHit(p.x, p.y); if (h) { cls = 'c-move'; hov = h.id; } }
       } catch {}
     }
@@ -442,7 +463,20 @@ window.addEventListener('mousemove', (e) => {
   const dx = p.x - drag.p0.x, dy = p.y - drag.p0.y, s = drag.start, tol = 12 * p.px;
   if (!s) return;
   snapLines = [];
-  if (drag.mode === 'move') {
+  if (drag.mode === 'crop') {
+    // 안쪽으로 끈 만큼(원본 픽셀) 그 변을 자름. 좌우 반전이면 화면 왼쪽 = 원본 오른쪽
+    const { side, crop0, full, k, flip } = drag;
+    const d = side === 'l' ? dx : side === 'r' ? -dx : side === 't' ? dy : -dy;
+    const field = side === 'l' ? (flip ? 'right' : 'left') : side === 'r' ? (flip ? 'left' : 'right') : side === 't' ? 'top' : 'bottom';
+    const opp = { left: 'right', right: 'left', top: 'bottom', bottom: 'top' }[field];
+    const max = (field === 'left' || field === 'right' ? full.w : full.h) - crop0[opp] - 8;
+    const v = Math.max(0, Math.min(max, crop0[field] + d / k));
+    const moved = (v - crop0[field]) * k;                          // 화면에서 그 변이 움직인 거리
+    const crop = { ...crop0, [field]: v };
+    pending = { id: drag.id, crop, x: side === 'l' ? s.x + moved : s.x, y: side === 't' ? s.y + moved : s.y, k };
+    const w = s.w - (side === 'l' || side === 'r' ? moved : 0), h = s.h - (side === 't' || side === 'b' ? moved : 0);
+    $('selSize').textContent = `${Math.round(w)} × ${Math.round(h)} · 자르는 중`;
+  } else if (drag.mode === 'move') {
     let x = s.x + dx, y = s.y + dy;
     if (!e.altKey) { x = snap(x, s.w, engine.width, tol, snapLines, 'x'); y = snap(y, s.h, engine.height, tol, snapLines, 'y'); }
     pending = { id: drag.id, x, y, w: null };
@@ -456,13 +490,18 @@ window.addEventListener('mousemove', (e) => {
     pending = { id: drag.id, x: left ? ax - w : ax, y: top ? ay - h : ay, w };
     $('selSize').textContent = `${Math.round(w)} × ${Math.round(h)} · ${Math.round((w / engine.width) * 100)}%`;
   }
-  if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (pending) { const id = pending.id; try { engine.setItemRect(id, pending.x, pending.y, pending.w); } catch {} pending = null; updateRect(id); guideDraw(); } });
+  if (!raf) raf = requestAnimationFrame(() => {
+    raf = 0; if (!pending) return;
+    const id = pending.id;
+    try { if (pending.crop) engine.setCropPlace(id, pending.crop, pending.x, pending.y, pending.k); else engine.setItemRect(id, pending.x, pending.y, pending.w); } catch {}
+    pending = null; updateRect(id); guideDraw();
+  });
 });
 window.addEventListener('mouseup', () => { if (drag) { crumb(`drag end ${drag.mode}`); drag = null; snapLines = []; updateSizeLabel(); saveScenes(); refreshRects(); guideDraw(); } });
 // 미리보기 · 소스 목록 · 소스 설정 말고 아무 데나 누르면 선택 풀기 (빨간 테두리 없어짐)
 document.addEventListener('mousedown', (e) => {
   if (!engineOk || e.button !== 0 || !engine.sel.size || drag) return;
-  if (e.target.closest('#preview, #sourceList, #propsBody, #editBar, .src-tools, #addBox, .vt-card')) return;
+  if (e.target.closest('#preview, #sourceList, #propsBody, #editBar, .src-tools, #addBox, .vt-card, .vts-card')) return;
   crumb('click outside → deselect'); engine.clearSelection(); engine.emit('items');
 }, true);
 prev.addEventListener('mouseleave', () => { if (!drag && hoverId != null) { hoverId = null; guideDraw(); } });
@@ -1034,6 +1073,17 @@ $('updAuto').addEventListener('change', () => { cfg.autoUpdate = $('updAuto').ch
 // 방송·녹화가 끝나면 미뤄 둔 업데이트 적용
 setInterval(() => { if (updPending && !DEMO && !engine.streaming && !engine.recording && ['available', 'ready'].includes(upd.status)) doUpdate(true); }, 3000);
 $('updBtn').addEventListener('click', () => doUpdate(false));
+// 상단 ↻ 업데이트 확인: 누르면 바로 확인 → 새 버전이면 (자동 적용 켜져 있으면) 바로 적용
+$('updCheckTop').addEventListener('click', async () => {
+  const b = $('updCheckTop'); if (b.classList.contains('busy')) return;
+  if (['available', 'ready'].includes(upd.status)) return doUpdate(false);
+  b.classList.add('busy'); b.querySelector('em').textContent = '확인 중…';
+  try { await ipcRenderer.invoke('update:check'); } catch (e) { toast('업데이트 확인 실패: ' + (e.message || e), true); }
+  b.classList.remove('busy');
+  const latest = upd.status === 'latest';
+  b.querySelector('em').textContent = latest ? '최신이에요' : '업데이트 확인';
+  if (latest) { b.classList.add('ok'); setTimeout(() => { b.classList.remove('ok'); b.querySelector('em').textContent = '업데이트 확인'; }, 2500); }
+});
 $('updFolder').addEventListener('click', () => ipcRenderer.invoke('update:folder'));
 $('updCheck').addEventListener('click', async () => {
   if (upd.status === 'available' || upd.status === 'ready') return doUpdate(false);
@@ -1255,10 +1305,14 @@ function connectVirtual(found, { auto = false } = {}) {
     if (!auto) toast(`${found.app.name}을(를) 다시 연결했어요.`);
     return;
   }
-  const r = engine.addSource('virtual', { value: found.value, name: found.app.name, virt: { ...VIRTUAL_DEFAULT, ...(cfg.virtualLast || {}), crop: { ...VIRTUAL_DEFAULT.crop } } });
+  // VTube Studio는 Spout2로 받기 (설정에서 끌 수 있음)
+  const spout = found.app.id === 'vts' && cfg.vtsSpout !== false && engine.types().some((t) => t.startsWith('spout_capture'));
+  const virt = { ...VIRTUAL_DEFAULT, ...(cfg.virtualLast || {}), crop: { ...VIRTUAL_DEFAULT.crop } };
+  if (spout) Object.assign(virt, { method: 'spout', sender: VTS_SENDER, exe: exe, composite: cfg.vtsComposite || 3 });
+  const r = engine.addSource('virtual', { value: found.value, name: found.app.name, virt });
   saveScenes();
   if (mode !== 'air') openTab('sources');
-  toast(`${auto ? '자동으로 ' : ''}${found.app.name}을(를) 화면에 띄웠어요. 위치·크기·배경은 소스 탭에서 바꿀 수 있어요.`);
+  toast(`${auto ? '자동으로 ' : ''}${found.app.name}을(를) 화면에 띄웠어요.` + (spout ? ' (Spout2) 화면이 비어 있으면 VTube Studio 설정에서 Spout2 출력을 켜 주세요.' : ' 위치·크기·배경은 소스 탭에서 바꿀 수 있어요.'));
   return r;
 }
 function renderVtFound(list, note) {
@@ -1318,7 +1372,10 @@ function renderVirtualProps(name, v, curWindow, method) {
   const seg = (id, items, val) => `<div class="seg" id="${id}">${items.map(([k, l]) => `<button data-v="${k}" class="${k === val ? 'on' : ''}">${l}</button>`).join('')}</div>`;
   const c = v.crop || {};
   body.innerHTML = `<div class="vprops"><h4>🧸 ${esc(name)} <small>버추얼 설정 · 바꾸면 바로 적용돼요</small></h4>
-    ${method === 'spout' ? '<div class="vsec"><b>연결</b><p class="hint" style="margin:4px 0 0">Spout2로 받는 중이에요. 버추얼 프로그램에서 Spout2 출력을 켜 주세요.</p></div>'
+    ${method === 'spout' ? `<div class="vsec"><b>연결 · Spout2</b>
+        <div class="row" style="margin:6px 0 0"><select id="vSender">${[[v.sender || 'usefirstavailablesender'], [VTS_SENDER], ['usefirstavailablesender']].filter((x, i, a) => a.findIndex((y) => y[0] === x[0]) === i).map(([k]) => `<option value="${esc(k)}"${k === (v.sender || 'usefirstavailablesender') ? ' selected' : ''}>${k === 'usefirstavailablesender' ? '처음 보이는 Spout2 화면' : k === VTS_SENDER ? 'VTube Studio (VTubeStudioSpout)' : esc(k)}</option>`).join('')}</select>
+        <select id="vComposite" title="가장자리가 검게/하얗게 보이면 바꿔 보세요"><option value="3"${(v.composite || 3) == 3 ? ' selected' : ''}>투명도: 기본</option><option value="4"${v.composite == 4 ? ' selected' : ''}>투명도: 미리 곱한 알파</option><option value="1"${v.composite == 1 ? ' selected' : ''}>투명도: 끔</option></select></div>
+        <p class="hint" style="margin:6px 0 0">VTube Studio 설정(⚙) → 카메라 설정에서 <b>Spout2 출력</b>을 켜고, 배경을 <b>투명</b>으로 두세요. 가장자리가 검게 나오면 투명도 방식을 바꿔 보세요.</p></div>`
       : `<div class="vsec"><b>연결할 창</b><div class="row" style="margin:6px 0 0"><select id="vPick">${virtualPickOptions(curWindow)}</select><button class="ghost" id="vRefresh" title="다시 찾기">↻</button></div></div>`}
     <div class="vsec"><b>위치</b>${seg('vSpot', Object.entries(VIRTUAL_SPOTS).map(([k, x]) => [k, x.label]), v.spot)}
       <label class="field" style="margin-top:8px">크기 <b id="vSizeV">${v.size}%</b> <small>(화면 높이 기준)</small><input type="range" id="vSize" min="20" max="120" step="5" value="${v.size}"></label>
@@ -1343,12 +1400,277 @@ function renderVirtualProps(name, v, curWindow, method) {
   $('vFlip').addEventListener('change', () => set({ flip: $('vFlip').checked }, { layout: false }));
   $('vColor')?.addEventListener('change', () => set({ color: $('vColor').value }, { layout: false }));
   body.querySelectorAll('[data-crop]').forEach((inp) => inp.addEventListener('change', () => set({ crop: { [inp.dataset.crop]: Math.max(0, Number(inp.value) || 0) } }, { layout: false })));
+  const spoutSet = guard(() => { if (DEMO) return; const vv = engine.getVirtual(name); vv.sender = $('vSender').value; vv.composite = Number($('vComposite').value); cfg.vtsComposite = vv.composite; save(); engine.updateSource(name, 'virtual', { virt: vv }); saveScenes(); });
+  $('vSender')?.addEventListener('change', spoutSet); $('vComposite')?.addEventListener('change', spoutSet);
   $('vPick')?.addEventListener('change', guard(() => { if (DEMO) return; engine.updateSource(name, 'virtual', { value: $('vPick').value, virt: engine.getVirtual(name) }); saveScenes(); }));
   $('vRefresh')?.addEventListener('click', () => { openWins = ipcRenderer.sendSync('windows:get') || openWins; $('vPick').innerHTML = virtualPickOptions($('vPick').value); });
   $('vAll').addEventListener('click', guard(() => { if (DEMO) return; const n = engine.virtualToAllScenes(name); saveScenes(); toast(n ? `${n}개 장면에 더 넣었어요.` : '이미 모든 장면에 있어요.'); }));
   $('vRehook').addEventListener('click', guard(() => { if (DEMO) return; engine.rehookVirtual(name); toast('창을 다시 잡았어요.'); }));
   $('vSaveDef').addEventListener('click', () => { const cur = DEMO ? v : engine.getVirtual(name); cfg.virtualLast = { spot: cur.spot, size: cur.size, flip: cur.flip, bg: cur.bg, color: cur.color }; save(); toast('다음 버추얼부터 이 설정으로 띄울게요.'); });
 }
+
+
+// ================================================================== 방송 정보: 치지직 · 유튜브 제목/태그/설명/카테고리
+const BC_NAME = { chzzk: '치지직', youtube: '유튜브' };
+const BC_HELP = {
+  chzzk: `<b>치지직 앱 만들기 (한 번만)</b><ol>
+    <li><a href="#" data-url="https://developers.chzzk.naver.com/">치지직 개발자 센터</a>에 로그인 → <b>애플리케이션 등록</b></li>
+    <li><b>로그인 리디렉션 URL</b>에 아래 주소를 그대로 넣기</li>
+    <li>API 권한에서 <b>방송 설정 조회</b> · <b>방송 설정 변경</b> · <b>유저 정보 조회</b> 체크</li>
+    <li>만들어진 <b>Client ID</b> · <b>Client Secret</b>을 아래 칸에 붙여 넣기</li></ol>`,
+  youtube: `<b>유튜브(구글) 앱 만들기 (한 번만)</b><ol>
+    <li><a href="#" data-url="https://console.cloud.google.com/projectcreate">구글 클라우드 콘솔</a>에서 새 프로젝트 만들기</li>
+    <li><a href="#" data-url="https://console.cloud.google.com/apis/library/youtube.googleapis.com">YouTube Data API v3</a> → <b>사용</b></li>
+    <li><a href="#" data-url="https://console.cloud.google.com/auth/overview">OAuth 동의 화면</a> 만들기 (외부, 테스트 사용자에 내 구글 계정 추가)</li>
+    <li><a href="#" data-url="https://console.cloud.google.com/apis/credentials">사용자 인증 정보</a> → OAuth 클라이언트 ID → 유형 <b>데스크톱 앱</b></li>
+    <li>만들어진 <b>클라이언트 ID</b> · <b>보안 비밀번호</b>를 아래 칸에 붙여 넣기</li></ol>`,
+};
+let bcSt = null, bcOpen = '';
+const bcInvoke = async (ch, ...a) => { if (DEMO) return { ok: false, error: '데모 화면이에요.' }; try { return await ipcRenderer.invoke(ch, ...a); } catch (e) { return { ok: false, error: e.message }; } };
+function bcMsg(t, err) { $('bcMsg').innerHTML = t || ''; $('bcMsg').classList.toggle('err', !!err); }
+function bcRenderAcc() {
+  const st = bcSt || { chzzk: {}, youtube: {}, redirect: {} };
+  $('bcAcc').innerHTML = ['chzzk', 'youtube'].map((p) => {
+    const a = st[p] || {};
+    const state = a.connected ? `<span class="ok">연결됨${a.channel ? ' · ' + esc(a.channel.name) : ''}</span>` : a.hasApp ? '<span>로그인 필요</span>' : '<span>앱 정보 필요</span>';
+    return `<div class="bc-row" data-p="${p}"><i class="pd ${p}"></i><b>${BC_NAME[p]}</b>${state}
+      <span class="sp"></span>
+      ${a.connected ? `<button class="ghost" data-act="logout">해제</button>` : `<button data-act="login" ${a.hasApp ? '' : 'disabled'}>연결</button>`}
+      <button class="ghost" data-act="app" title="앱 정보">⚙</button></div>
+      ${bcOpen === p ? `<div class="bc-app" data-p="${p}">${BC_HELP[p]}
+        <label class="field">리디렉션 주소 <div class="row"><input readonly value="${esc((st.redirect || {})[p] || '')}"><button class="ghost" data-act="copy">복사</button></div></label>
+        <label class="field">Client ID<input data-k="clientId" value="${esc(a.clientId || '')}" spellcheck="false"></label>
+        <label class="field">Client Secret<input data-k="secret" type="password" placeholder="${a.hasApp ? '저장돼 있어요 (바꿀 때만 입력)' : ''}" spellcheck="false"></label>
+        <div class="row"><button class="primary-sm" data-act="save">저장</button></div></div>` : ''}`;
+  }).join('');
+}
+$('bcAcc').addEventListener('click', async (ev) => {
+  const link = ev.target.closest('a[data-url]'); if (link) { ev.preventDefault(); ipcRenderer.invoke('app:open-url', link.dataset.url); return; }
+  const b = ev.target.closest('button[data-act]'); if (!b) return;
+  const p = b.closest('[data-p]').dataset.p, act = b.dataset.act;
+  if (act === 'app') { bcOpen = bcOpen === p ? '' : p; return bcRenderAcc(); }
+  if (act === 'copy') { const inp = b.parentElement.querySelector('input'); require('electron').clipboard.writeText(inp.value); return toast('복사했어요.'); }
+  if (act === 'save') {
+    const box = b.closest('.bc-app');
+    const r = await bcInvoke('bc:set-app', p, { clientId: box.querySelector('[data-k="clientId"]').value, secret: box.querySelector('[data-k="secret"]').value });
+    if (!r.ok) return toast(r.error, true);
+    bcSt = r.data; bcOpen = ''; bcRenderAcc(); toast('앱 정보를 저장했어요. 이제 "연결"을 눌러 로그인하세요.'); return;
+  }
+  if (act === 'logout') { const r = await bcInvoke('bc:logout', p); if (r.ok) { bcSt = r.data; bcRenderAcc(); toast(`${BC_NAME[p]} 연결을 해제했어요.`); } return; }
+  if (act === 'login') {
+    b.disabled = true; bcMsg(`브라우저에서 ${BC_NAME[p]} 로그인 후 <b>허용</b>을 눌러 주세요…`);
+    const r = await bcInvoke('bc:login', p);
+    b.disabled = false;
+    if (!r.ok) { bcMsg(esc(r.error), true); return; }
+    bcSt = r.data; bcRenderAcc(); bcMsg(''); toast(`${BC_NAME[p]} 계정을 연결했어요!`); ipcRenderer.invoke('bc:focus');
+  }
+});
+ipcRenderer.on('bc:status', (_e, st) => { bcSt = st; bcRenderAcc(); });
+// 입력값 → cfg.bc 에 저장 (껐다 켜도 그대로)
+cfg.bc = { title: '', tags: '', desc: '', czCat: null, ytCat: '', toCz: true, toYt: true, auto: false, ...(cfg.bc || {}) };
+const bcTags = () => String($('bcTags').value).split(/[,，#\n]/).map((t) => t.trim()).filter(Boolean);
+function bcTagPreview() {
+  const czOk = (t) => t.replace(/[^0-9A-Za-z가-힣ㄱ-ㅎㅏ-ㅣぁ-ゟ゠-ヿ一-龯]/g, '').slice(0, 15);
+  const tags = bcTags();
+  $('bcTagPrev').innerHTML = tags.map((t, i) => { const c = czOk(t); const off = i >= 5 || !c; return `<span class="chip ${off ? 'dim' : ''}" title="${off ? '치지직에는 안 들어가요' : c !== t ? '치지직: ' + esc(c) : ''}">#${esc(t)}</span>`; }).join('');
+}
+function bcRenderCzCur() {
+  const c = cfg.bc.czCat;
+  $('bcCzCur').innerHTML = c ? `<span class="chip on">${esc(c.name)}</span><button class="link inline" id="bcCzClear">지우기</button>` : '<small class="hint">카테고리: 그대로 두기</small>';
+  $('bcCzClear')?.addEventListener('click', () => { cfg.bc.czCat = null; save(); bcRenderCzCur(); });
+}
+function bcFill() {
+  $('bcTitle').value = cfg.bc.title; $('bcTags').value = cfg.bc.tags; $('bcDesc').value = cfg.bc.desc; $('bcYtCat').value = cfg.bc.ytCat || '';
+  $('bcToCz').checked = cfg.bc.toCz; $('bcToYt').checked = cfg.bc.toYt; $('bcAuto').checked = cfg.bc.auto;
+  $('bcTitleN').textContent = `${$('bcTitle').value.length}/100`; bcTagPreview(); bcRenderCzCur();
+}
+const bcSave = () => { Object.assign(cfg.bc, { title: $('bcTitle').value, tags: $('bcTags').value, desc: $('bcDesc').value, ytCat: $('bcYtCat').value, toCz: $('bcToCz').checked, toYt: $('bcToYt').checked, auto: $('bcAuto').checked }); save(); };
+for (const id of ['bcTitle', 'bcTags', 'bcDesc', 'bcYtCat', 'bcToCz', 'bcToYt', 'bcAuto']) $(id).addEventListener(/^bc(To|Auto|YtCat)/.test(id) ? 'change' : 'input', () => { bcSave(); if (id === 'bcTitle') $('bcTitleN').textContent = `${$('bcTitle').value.length}/100`; if (id === 'bcTags') bcTagPreview(); });
+async function bcCzSearch() {
+  const q = $('bcCzQ').value.trim(); if (!q) return;
+  $('bcCzRes').innerHTML = '<small class="hint">찾는 중…</small>';
+  const r = await bcInvoke('bc:chzzk-categories', q);
+  if (!r.ok) { $('bcCzRes').innerHTML = `<small class="hint err">${esc(r.error)}</small>`; return; }
+  const TY = { GAME: '게임', SPORTS: '스포츠', ETC: '기타' };
+  $('bcCzRes').innerHTML = r.data.length ? r.data.map((c, i) => `<button class="chip" data-i="${i}">${esc(c.name)} <small>${TY[c.type] || ''}</small></button>`).join('') : '<small class="hint">결과가 없어요</small>';
+  $('bcCzRes').querySelectorAll('.chip').forEach((b) => b.addEventListener('click', () => { const c = r.data[Number(b.dataset.i)]; cfg.bc.czCat = { type: c.type, id: c.id, name: c.name }; save(); $('bcCzRes').innerHTML = ''; bcRenderCzCur(); }));
+}
+$('bcCzSearch').addEventListener('click', bcCzSearch);
+$('bcCzQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); bcCzSearch(); } });
+function bcInfo() { return { title: cfg.bc.title.trim(), tags: bcTags(), description: cfg.bc.desc, chzzkCategory: cfg.bc.czCat || undefined, youtubeCategory: cfg.bc.ytCat || undefined }; }
+function bcTargets(only) {
+  const st = bcSt || {};
+  return ['chzzk', 'youtube'].filter((p) => (p === 'chzzk' ? cfg.bc.toCz : cfg.bc.toYt) && st[p] && st[p].connected && (!only || only.includes(p)));
+}
+async function bcApply({ only, quiet } = {}) {
+  const targets = bcTargets(only);
+  if (!targets.length) { if (!quiet) bcMsg('연결된 플랫폼이 없어요. 위에서 치지직/유튜브를 먼저 연결해 주세요.', true); return null; }
+  if (!cfg.bc.title.trim() && !quiet) { bcMsg('제목을 넣어 주세요.', true); return null; }
+  bcMsg('적용하는 중…');
+  const r = await bcInvoke('bc:apply', bcInfo(), targets);
+  if (!r.ok) { bcMsg(esc(r.error), true); return null; }
+  const lines = Object.entries(r.data).map(([p, x]) => x.ok ? `✅ ${BC_NAME[p]} 적용됨${x.warn && x.warn.length ? ` <small>(${esc(x.warn.join(' / '))})</small>` : ''}` : `⚠️ ${BC_NAME[p]}: ${esc(x.error)}`);
+  const bad = Object.values(r.data).some((x) => !x.ok);
+  bcMsg(lines.join('<br>'), bad);
+  if (!bad) toast('방송 정보를 바꿨어요.');
+  return r.data;
+}
+$('bcApply').addEventListener('click', () => bcApply());
+$('bcLoad').addEventListener('click', async () => {
+  const st = bcSt || {}; const got = [];
+  if (st.chzzk && st.chzzk.connected) {
+    const r = await bcInvoke('bc:chzzk-get');
+    if (r.ok) { cfg.bc.title = r.data.title || cfg.bc.title; if (r.data.tags.length) cfg.bc.tags = r.data.tags.join(', '); cfg.bc.czCat = r.data.category; got.push('치지직'); } else bcMsg(esc(r.error), true);
+  }
+  if (st.youtube && st.youtube.connected) {
+    const r = await bcInvoke('bc:youtube-get');
+    if (r.ok && r.data) { if (!got.length) { cfg.bc.title = r.data.title; if (r.data.tags.length) cfg.bc.tags = r.data.tags.join(', '); } cfg.bc.desc = r.data.description; if (r.data.categoryId) cfg.bc.ytCat = r.data.categoryId; got.push('유튜브'); }
+  }
+  save(); bcFill();
+  if (got.length) bcMsg(`${got.join(' · ')}에서 불러왔어요.`); else if (!$('bcMsg').classList.contains('err')) bcMsg('불러올 곳이 없어요. 먼저 연결해 주세요.', true);
+});
+// 방송 시작 → 자동 적용 (치지직은 바로, 유튜브는 방송이 잡힐 때까지 몇 번 다시 시도)
+async function bcAutoOnLive(platform) {
+  if (!cfg.bc.auto || !cfg.bc.title.trim()) return;
+  if (!bcTargets([platform]).length) return;
+  for (let i = 0; i < (platform === 'youtube' ? 6 : 2); i++) {
+    await new Promise((res) => setTimeout(res, platform === 'youtube' ? 15000 : 3000));
+    if (!engine.streaming) return;
+    const r = await bcApply({ only: [platform], quiet: true });
+    if (r && r[platform] && r[platform].ok) return;
+  }
+}
+let bcPrevLive = {};
+engine.on('stream', (states) => { for (const [k, s] of Object.entries(states)) if (s.state === 'live' && (bcPrevLive[k] !== 'live') && (k === 'chzzk' || k === 'youtube')) bcAutoOnLive(k); bcPrevLive = Object.fromEntries(Object.entries(states).map(([k, s]) => [k, s.state])); });
+(async () => {
+  bcFill();
+  if (DEMO) { bcSt = { chzzk: { hasApp: true, connected: true, channel: { name: '스트리미' } }, youtube: { hasApp: true, connected: false }, redirect: {} };
+    cfg.bc.title = '오늘은 롤 랭크 올립니다 🔥'; cfg.bc.tags = '롤, 랭크, 저챗, 버튜버'; cfg.bc.czCat = { type: 'GAME', id: 'League_of_Legends', name: '리그 오브 레전드' }; bcFill(); bcRenderAcc(); return; }
+  bcSt = await ipcRenderer.invoke('bc:status').catch(() => null); bcRenderAcc();
+})();
+
+
+// ================================================================== VTube Studio: 자동 실행 · Spout2 · 모델/표정/위치 조종
+const VTS_EXE = 'vtube studio.exe';
+const vtsInvoke = async (ch, ...a) => { if (DEMO) return { ok: false, error: '데모 화면이에요.' }; try { return await ipcRenderer.invoke(ch, ...a); } catch (e) { return { ok: false, error: e.message }; } };
+let vtsState = { status: 'off' };
+function vtsMsg(t) { $('vtsMsg').innerHTML = t || ''; }
+function vtsRender(st) {
+  vtsState = st || vtsState;
+  const s = vtsState.status;
+  const label = { off: '꺼짐', connecting: '연결 중…', 'waiting-allow': '허용 기다리는 중', connected: '연결됨', error: '오류' }[s] || s;
+  $('vtsSt').className = 'vts-st ' + (s === 'connected' ? 'on' : s === 'connecting' || s === 'waiting-allow' ? 'wait' : s === 'error' ? 'err' : '');
+  $('vtsSt').querySelector('em').textContent = label + (s === 'connected' && vtsState.model ? ` · ${vtsState.model.name}` : '');
+  $('vtsConnect').textContent = s === 'connected' ? '연결 끊기' : '🔗 연결';
+  $('vtsBody').hidden = s !== 'connected';
+  if (s === 'waiting-allow') vtsMsg('VTube Studio 화면에 <b>Streamy Kit 허용</b> 창이 떴어요. <b>허용</b>을 눌러 주세요. (한 번만 하면 돼요)');
+  else if (s === 'off' && vtsState.detail && cfg.vtsUse) vtsMsg(`${esc(vtsState.detail)} · 켜지면 자동으로 다시 붙어요.<br>처음이면 VTube Studio 설정(⚙) → <b>VTube Studio 플러그인 API 켜기</b>(포트 8001)를 켜 주세요.`);
+  else if (s === 'error') vtsMsg(esc(vtsState.detail || ''));
+  else if (s === 'connected') vtsMsg('');
+  if (s === 'connected' && vtsState.model) vtsFillPos(vtsState.model.pos);
+}
+ipcRenderer.on('vts:status', (_e, st) => { const was = vtsState.status; vtsRender(st); if (st.status === 'connected' && was !== 'connected') vtsLoadLists(); });
+async function vtsLoadLists() {
+  const [m, e, k] = await Promise.all([vtsInvoke('vts:models'), vtsInvoke('vts:expressions'), vtsInvoke('vts:hotkeys')]);
+  if (m.ok) {
+    const cur = vtsState.model && vtsState.model.id;
+    $('vtsModel').innerHTML = m.data.map((x) => `<option value="${esc(x.modelID)}"${x.modelID === cur || x.modelLoaded ? ' selected' : ''}>${esc(x.modelName)}${x.modelLoaded ? ' (지금)' : ''}</option>`).join('') || '<option value="">모델이 없어요</option>';
+  }
+  if (e.ok) {
+    $('vtsExpr').innerHTML = e.data.map((x) => `<button class="chip ${x.active ? 'on' : ''}" data-f="${esc(x.file)}">${esc(String(x.name || x.file).replace(/\.exp3\.json$/i, ''))}</button>`).join('');
+  }
+  if (k.ok) {
+    const TYPE = { ToggleExpression: '표정', TriggerAnimation: '동작', ChangeIdleAnimation: '대기 동작', ChangeBackground: '배경', MoveModel: '이동', RemoveAllExpressions: '표정 끄기', ToggleItemScene: '아이템' };
+    $('vtsKeys').innerHTML = k.data.map((x) => `<button class="chip" data-id="${esc(x.hotkeyID)}" title="${esc(TYPE[x.type] || x.type || '')}">${esc(x.name || TYPE[x.type] || '단축키')}</button>`).join('');
+  }
+}
+$('vtsExpr').addEventListener('click', async (ev) => {
+  const b = ev.target.closest('.chip'); if (!b) return;
+  const on = !b.classList.contains('on');
+  const r = await vtsInvoke('vts:expression', b.dataset.f, on);
+  if (r.ok) b.classList.toggle('on', on); else toast(r.error, true);
+});
+$('vtsKeys').addEventListener('click', async (ev) => {
+  const b = ev.target.closest('.chip'); if (!b) return;
+  const r = await vtsInvoke('vts:trigger', b.dataset.id);
+  if (!r.ok) toast(r.error, true); else { b.classList.add('on'); setTimeout(() => b.classList.remove('on'), 300); setTimeout(vtsLoadLists, 600); }
+});
+$('vtsModelLoad').addEventListener('click', async () => {
+  const id = $('vtsModel').value; if (!id) return;
+  $('vtsModelLoad').disabled = true; vtsMsg('모델을 바꾸는 중…');
+  const r = await vtsInvoke('vts:load', id);
+  $('vtsModelLoad').disabled = false;
+  if (!r.ok) { vtsMsg(''); return toast(r.error.includes('cooldown') || r.error.includes('2 seconds') ? '모델은 2초에 한 번만 바꿀 수 있어요. 잠깐 뒤에 다시 눌러 주세요.' : r.error, true); }
+  vtsMsg(''); toast('모델을 바꿨어요.'); vtsLoadLists();
+});
+$('vtsRefresh').addEventListener('click', () => { vtsInvoke('vts:model'); vtsLoadLists(); });
+// 위치 슬라이더 → 0.08초에 한 번씩 보내기
+const VTS_POS = [['vtsX', 'positionX', 2], ['vtsY', 'positionY', 2], ['vtsS', 'size', 0], ['vtsR', 'rotation', 0]];
+function vtsFillPos(p) {
+  if (!p) return;
+  for (const [id, k, d] of VTS_POS) if (Number.isFinite(p[k]) && document.activeElement !== $(id)) { $(id).value = p[k]; $(id + 'V').textContent = Number(p[k]).toFixed(d); }
+}
+let vtsMoveT = 0, vtsMoveP = null;
+function vtsMoveSend(p) {
+  vtsMoveP = { ...(vtsMoveP || {}), ...p };
+  if (vtsMoveT) return;
+  vtsMoveT = setTimeout(async () => { const q = vtsMoveP; vtsMoveP = null; vtsMoveT = 0; const r = await vtsInvoke('vts:move', q); if (!r.ok) rlog('warn', 'vts move', r.error); }, 80);
+}
+for (const [id, k, d] of VTS_POS) $(id).addEventListener('input', () => { const v = Number($(id).value); $(id + 'V').textContent = v.toFixed(d); vtsMoveSend({ [k]: v }); });
+$('vtsCenter').addEventListener('click', () => { vtsFillPos({ positionX: 0, positionY: 0, rotation: 0, size: Number($('vtsS').value) }); vtsMoveSend({ positionX: 0, positionY: 0, rotation: 0 }); });
+$('vtsPosGet').addEventListener('click', async () => { const r = await vtsInvoke('vts:model'); if (r.ok && r.data.modelPosition) vtsFillPos(r.data.modelPosition); });
+// 켜기 / 연결
+async function vtsLaunch(quiet) {
+  const r = await vtsInvoke('vts:launch');
+  if (!r.ok) { if (!quiet) toast(r.error, true); return false; }
+  const d = r.data || {};
+  if (!d.ok) { if (!quiet) toast(d.error || 'VTube Studio를 켜지 못했어요.', true); vtsMsg(esc(d.error || '')); return false; }
+  if (!quiet) toast(d.already ? 'VTube Studio가 이미 켜져 있어요.' : 'VTube Studio를 켜는 중이에요. 켜지면 자동으로 연결돼요.');
+  return true;
+}
+$('vtsLaunch').addEventListener('click', async () => { await vtsLaunch(false); cfg.vtsUse = true; save(); vtsInvoke('vts:connect'); });
+$('vtsConnect').addEventListener('click', async () => {
+  if (vtsState.status === 'connected' || vtsState.status === 'connecting' || vtsState.status === 'waiting-allow') { cfg.vtsUse = false; save(); await vtsInvoke('vts:disconnect'); vtsMsg(''); return; }
+  cfg.vtsUse = true; save();
+  vtsMsg('VTube Studio에 연결하는 중…');
+  await vtsInvoke('vts:connect');
+});
+$('vtsAuto').checked = !!cfg.vtsAuto;
+$('vtsAuto').addEventListener('change', () => { cfg.vtsAuto = $('vtsAuto').checked; if (cfg.vtsAuto) cfg.vtsUse = true; save(); if (cfg.vtsAuto) { vtsLaunch(true); vtsInvoke('vts:connect'); } });
+// Spout2로 화면 넣기: VTube Studio 전용 Spout2 소스를 지금 장면에 (창 캡처로 넣어 둔 게 있으면 숨김)
+$('vtsSpout').addEventListener('click', guard(() => {
+  if (DEMO) return toast('데모 화면이에요.');
+  if (!engineOk) return toast('엔진이 아직 준비되지 않았어요.', true);
+  if (!engine.types().some((t) => t.startsWith('spout_capture'))) return toast('이 PC에서는 Spout2를 쓸 수 없어요.', true);
+  const all = engine.virtualSources().filter((v) => v.exe === VTS_EXE);
+  const spoutSrc = all.find((v) => v.virt.method === 'spout');
+  let hidden = 0;
+  for (const it of engine.items()) {
+    const v = all.find((x) => x.name === it.name);
+    if (v && v.virt.method !== 'spout' && it.visible) { engine.setVisible(it.id, false); hidden++; }
+  }
+  if (spoutSrc) {
+    let it = engine.items().find((x) => x.name === spoutSrc.name);
+    if (!it) { engine.currentScene.scene.add(engine.sources[spoutSrc.name].input); engine.applyVirtual(spoutSrc.name); it = engine.items().find((x) => x.name === spoutSrc.name); }
+    else if (!it.visible) engine.setVisible(it.id, true);
+    if (it) engine.select(it.id, 'single');
+  } else {
+    engine.addSource('virtual', { name: 'VTube Studio', value: '', virt: { ...VIRTUAL_DEFAULT, ...(cfg.virtualLast || {}), crop: { ...VIRTUAL_DEFAULT.crop }, method: 'spout', sender: VTS_SENDER, exe: VTS_EXE, composite: cfg.vtsComposite || 3 } });
+  }
+  cfg.virtualAutoDone = [...new Set([...(cfg.virtualAutoDone || []), VTS_EXE])]; save();
+  saveScenes(); renderVtFound();
+  toast('VTube Studio를 Spout2로 넣었어요.' + (hidden ? ` 창 캡처로 넣어 둔 ${hidden}개는 숨겼어요.` : '') + ' 화면이 비어 있으면 VTube Studio 설정에서 Spout2 출력을 켜 주세요.');
+}));
+// 시작할 때
+(async () => {
+  if (DEMO) { vtsRender({ status: 'connected', model: { name: '데모 모델', pos: { positionX: 0.2, positionY: -0.4, size: -20, rotation: 0 } } });
+    $('vtsModel').innerHTML = '<option>데모 모델 (지금)</option><option>두 번째 모델</option>';
+    $('vtsExpr').innerHTML = '<button class="chip on">웃음</button><button class="chip">화남</button><button class="chip">눈물</button><button class="chip">하트 눈</button>';
+    $('vtsKeys').innerHTML = '<button class="chip">손 흔들기</button><button class="chip">배경 바꾸기</button><button class="chip">모자 쓰기</button>'; return; }
+  vtsRender(await ipcRenderer.invoke('vts:status').catch(() => ({ status: 'off' })));
+  if (cfg.vtsAuto) await vtsLaunch(true);
+  if (cfg.vtsAuto || cfg.vtsUse) vtsInvoke('vts:connect');
+})();
 
 
 // ================================================================== ON AIR: 스마트폰으로 볼 때

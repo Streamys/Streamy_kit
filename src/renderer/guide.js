@@ -28,6 +28,11 @@ function handle(x, y, big) {
   g.fillStyle = '#fff'; g.strokeStyle = RED; g.lineWidth = 2.5;
   g.beginPath(); g.roundRect(x - s / 2, y - s / 2, s, s, 3); g.fill(); g.stroke();
 }
+function edgeHandle(x, y, horizontal) {
+  const w = horizontal ? 22 : 8, h = horizontal ? 8 : 22;
+  g.fillStyle = '#fff'; g.strokeStyle = RED; g.lineWidth = 2.5;
+  g.beginPath(); g.roundRect(x - w / 2, y - h / 2, w, h, 4); g.fill(); g.stroke();
+}
 function draw() {
   fit();
   g.clearRect(0, 0, innerWidth, innerHeight);
@@ -56,6 +61,8 @@ function draw() {
   for (const it of items) {
     if (it.state !== 'sel') continue;
     g.lineWidth = 2.5; g.strokeStyle = RED; g.strokeRect(it.x + 1, it.y + 1, it.w - 2, it.h - 2);
+    // 변 가운데: 자르기 손잡이 (가로 막대 / 세로 막대)
+    for (const [hx, hy, hor] of [[it.x + it.w / 2, it.y, true], [it.x + it.w / 2, it.y + it.h, true], [it.x, it.y + it.h / 2, false], [it.x + it.w, it.y + it.h / 2, false]]) edgeHandle(hx, hy, hor);
     for (const [hx, hy] of [[it.x, it.y], [it.x + it.w, it.y], [it.x, it.y + it.h], [it.x + it.w, it.y + it.h]]) handle(hx, hy, true);
     // 이름 + 크기 (위에 공간이 없으면 안쪽 위에)
     const above = it.y > 30, ty = above ? it.y - 5 : it.y + 6;
@@ -79,7 +86,7 @@ if (process.env.STREAMY_DEMO_GUIDE) {
       { x: innerWidth * 0.05, y: innerHeight * 0.58, w: innerWidth * 0.3, h: innerHeight * 0.36, name: '📷 웹캠', state: 'sel' },
     ],
     guides: [{ x1: innerWidth * 0.05, y1: 0, x2: innerWidth * 0.05, y2: innerHeight }],
-    size: '576 × 324 · 30%', hint: '안쪽을 끌면 이동 · 모서리 □를 끌면 크기 조절 · Alt = 자석 끄기',
+    size: '576 × 324 · 30%', hint: '안쪽 = 이동 · 모서리 □ = 크기 · 변 가운데 ▬ = 자르기 · 방향키 1px (Shift 10px)',
   };
   setTimeout(draw, 50);
 }
