@@ -768,12 +768,20 @@ $('chatState').addEventListener('click', (e) => {
   document.querySelectorAll('#chatFeed .cm').forEach((x) => { x.hidden = chat.hidden.has(x.dataset.p); });
   renderChatState();
 });
+// 채팅 한 줄: 프로필(첫 글자 + 플랫폼 점) · 이름 · 배지 · 시간 / 내용. 같은 사람이 연달아 치면 이름 줄 생략
+const AV_COLORS = ['#F7C6D3', '#C9E8F7', '#D6CCF7', '#C8EED9', '#FBE2B8', '#F9CFC2', '#CDE0FA', '#E2D4F0'];
+function avColor(nick) { let h = 0; for (const c of String(nick)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return AV_COLORS[h % AV_COLORS.length]; }
 function chatHtml(m) {
   const body = (m.parts || []).map((x) => (x.t === 'img' ? `<img src="${esc(x.src)}" alt="${esc(x.alt)}" title="${esc(x.alt)}" loading="lazy" referrerpolicy="no-referrer">` : esc(x.v))).join('');
   const t = new Date(m.ts || Date.now()); const hm = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
-  return `<i class="pd ${m.p}" title="${CHAT_P[m.p]} · ${hm}"></i>${m.badge ? `<span class="bd${m.badge === '스트리머' ? ' st' : ''}">${esc(m.badge)}</span>` : ''}`
-    + `${m.amount ? `<span class="amt">${esc(m.amount)}</span>` : ''}<span class="nk">${esc(m.nick)}</span><span class="tx">${body}</span>`;
+  const first = [...String(m.nick || '?').trim()][0] || '?';
+  const badge = m.badge ? `<span class="bd${m.badge === '스트리머' ? ' st' : ''}">${esc(m.badge)}</span>` : '';
+  if (m.kind === 'system') return `<span class="tx">${body}</span>`;
+  return `<span class="av" style="background:${avColor(m.nick)}">${esc(first)}<i class="pd ${m.p}" title="${CHAT_P[m.p]}"></i></span>`
+    + `<div class="cb"><div class="ch"><span class="nk">${esc(m.nick)}</span>${badge}${m.amount ? `<span class="amt">${esc(m.amount)}</span>` : ''}<span class="tm">${hm}</span></div>`
+    + `<div class="tx">${body}</div></div>`;
 }
+let lastChat = null;   // 연달아 친 채팅 묶기
 function addChat(list) {
   try { phoneChat(list); } catch {}
   const feed = $('chatFeed');
@@ -782,7 +790,9 @@ function addChat(list) {
   const frag = document.createDocumentFragment();
   for (const m of list) {
     const d = document.createElement('div');
-    d.className = `cm p-${m.p} ${m.kind || 'chat'}${m.recent ? ' recent' : ''}`;
+    const cont = (m.kind || 'chat') === 'chat' && lastChat && lastChat.p === m.p && lastChat.nick === m.nick && (m.ts || Date.now()) - lastChat.ts < 60000;
+    lastChat = { p: m.p, nick: m.nick, ts: m.ts || Date.now() };
+    d.className = `cm p-${m.p} ${m.kind || 'chat'}${m.recent ? ' recent' : ''}${cont ? ' cont' : ''}`;
     d.dataset.p = m.p; d.hidden = chat.hidden.has(m.p);
     d.innerHTML = chatHtml(m);
     frag.appendChild(d);
@@ -1305,6 +1315,10 @@ async function setChatLog(on, quiet) {
   if (!quiet) toast(cfg.chatLog ? '채팅 기록을 시작했어요. 문서 › Streamy Kit › 채팅 로그에 날짜별로 저장돼요.' : '채팅 기록을 껐어요.');
 }
 $('chatLog').addEventListener('click', () => setChatLog(!cfg.chatLog));
+// 채팅 보기 방식: 말풍선(기본) / 한 줄
+function applyChatCompact() { $('chatFeed').classList.toggle('compact', !!cfg.chatCompact); $('chatCompact').classList.toggle('on', !!cfg.chatCompact); $('chatCompact').textContent = cfg.chatCompact ? '크게' : '한 줄'; }
+$('chatCompact').addEventListener('click', () => { cfg.chatCompact = !cfg.chatCompact; save(); applyChatCompact(); const f = $('chatFeed'); if (chat.stick) f.scrollTop = f.scrollHeight; });
+applyChatCompact();
 $('chatLogOn').addEventListener('change', () => setChatLog($('chatLogOn').checked));
 $('chatLogDir').addEventListener('click', () => ipcRenderer.invoke('chat:log-open'));
 $('chatLogDir2').addEventListener('click', () => ipcRenderer.invoke('chat:log-open'));

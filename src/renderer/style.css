@@ -721,3 +721,54 @@ body.theme-dark .sec-card>:not(h4):not(.hint):not(.bc-card):not(.key-guess):not(
 .mt-prev.dark{background:#0E0F13}.mt-prev.dark i,.mt-prev.dark b{background:#24262F}
 .mt-prev.auto{background:linear-gradient(135deg,#F3F4F8 50%,#0E0F13 50%)}.mt-prev.auto i{background:#fff}.mt-prev.auto b{background:#24262F}
 .mt-prev b::after{content:'';position:absolute;left:10%;top:30%;width:40%;height:40%;border-radius:3px;background:var(--red)}
+
+/* ================================================================== 채팅 (v0.13) */
+.tab .chat-switch{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:4px;background:var(--card2);border-radius:14px;margin-bottom:12px}
+.tab .chat-switch button{border:none!important;border-radius:10px!important;padding:8px 4px!important;background:transparent!important;color:var(--sub)!important;font-size:12px;box-shadow:none}
+.tab .chat-switch button.on{background:var(--card)!important;color:var(--text)!important;box-shadow:0 1px 3px rgba(25,31,40,.12)}
+body.theme-dark .tab .chat-switch button.on{background:var(--hover)!important}
+.chat-top{align-items:center;margin-bottom:10px}
+.chat-state{margin-bottom:0}
+.chat-state .cs{border:none;background:var(--card2);padding:5px 10px 5px 8px;font-weight:600}
+.chat-state .cs.live{color:var(--text)}
+.tab .chat-tools button{border:none!important;background:var(--card2)!important;border-radius:99px!important;padding:5px 11px!important;font-size:11px;font-weight:700;color:var(--sub)}
+.tab .chat-tools button.on{background:var(--soft)!important;color:var(--link)!important}
+.chat-feed{background:var(--card2);border:none;border-radius:18px;padding:10px 8px;font-size:13.5px;line-height:1.5}
+/* 말풍선 보기 */
+.cm{display:flex;gap:10px;align-items:flex-start;padding:6px 8px;border-radius:12px;margin-top:4px}
+.cm:hover{background:var(--hover)}
+.cm .av{position:relative;flex:none;width:30px;height:30px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#2B2F3A}
+.cm .av .pd{position:absolute;right:-3px;bottom:-3px;width:11px;height:11px;margin:0;border-radius:50%;border:2px solid var(--card2)}
+.cm .cb{flex:1;min-width:0}
+.cm .ch{display:flex;align-items:center;gap:6px;margin-bottom:1px;flex-wrap:wrap}
+.cm .nk{margin:0;font-size:13px}
+.cm .tm{margin-left:auto;font-size:10.5px;color:var(--sub);opacity:0;transition:opacity .12s}
+.cm:hover .tm{opacity:1}
+.cm .bd{margin:0;padding:1px 6px;border-radius:6px;font-size:10px;background:var(--line)}
+.cm .bd.st{background:var(--red);color:#fff}
+.cm .tx{color:var(--text);word-break:break-word}
+.cm img{height:24px}
+.cm.cont{margin-top:0;padding-top:1px;padding-bottom:3px}
+.cm.cont .av{visibility:hidden;height:0}
+.cm.cont .ch{display:none}
+.cm.recent{opacity:.6}
+/* 후원 · 구독: 눈에 띄는 카드 */
+.cm.donation,.cm.sub{margin:8px 0;padding:10px 12px;border-left:none;border-radius:16px;background:var(--soft);box-shadow:inset 0 0 0 1.5px var(--red)}
+.cm.sub{background:rgba(245,184,61,.16);box-shadow:inset 0 0 0 1.5px #F5B83D}
+.cm .amt{order:-1;margin:0;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:800;background:var(--red);color:#fff}
+.cm.sub .amt{background:#F5B83D;color:#3A2A00}
+.cm.donation .tx,.cm.sub .tx{font-weight:600}
+.cm.donation .tm,.cm.sub .tm{opacity:1}
+.cm.system{display:block;text-align:center;color:var(--sub);font-size:12px;font-style:normal;padding:6px}
+.cm.system .tx{color:var(--sub)}
+.chat-more{background:var(--red);border-radius:99px;box-shadow:var(--shadow)}
+/* 한 줄 보기 */
+.chat-feed.compact .cm{display:block;padding:3px 8px;margin-top:0;border-radius:8px}
+.chat-feed.compact .cm .av{display:inline-flex;width:auto;height:auto;background:none!important;font-size:0;vertical-align:1px;margin-right:6px}
+.chat-feed.compact .cm .av .pd{position:static;border:none;width:7px;height:7px}
+.chat-feed.compact .cm .cb,.chat-feed.compact .cm .ch,.chat-feed.compact .cm .tx{display:inline}
+.chat-feed.compact .cm .ch{margin-right:6px}
+.chat-feed.compact .cm .tm{display:none}
+.chat-feed.compact .cm.cont .av{visibility:visible;height:auto}
+.chat-feed.compact .cm.cont .ch{display:inline}
+.chat-feed.compact .cm.donation,.chat-feed.compact .cm.sub{padding:6px 10px;margin:4px 0}
