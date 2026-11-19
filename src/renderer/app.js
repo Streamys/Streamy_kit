@@ -1276,11 +1276,22 @@ function applyAccent() {
       + `<label class="accent-sw custom${ACCENTS.some(([h]) => h.toLowerCase() === a.toLowerCase()) ? '' : ' on'}" title="직접 고르기" style="--c:${a}"><i></i><span>직접</span><input type="color" id="accentPick" value="${a}"></label>`;
   }
 }
-function applyTheme() { document.body.classList.toggle('theme-dark', !!cfg.themeDark); $('themeDark').checked = !!cfg.themeDark; applyAccent(); if (typeof guideDraw === 'function') guideDraw(); }
+// 화면 모드: 밝게 · 어둡게 · 윈도우 따라가기
+const darkMQ = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+function themeMode() { return ['light', 'dark', 'auto'].includes(cfg.themeMode) ? cfg.themeMode : (cfg.themeDark ? 'dark' : 'light'); }
+function applyTheme() {
+  const m = themeMode();
+  cfg.themeDark = m === 'auto' ? !!(darkMQ && darkMQ.matches) : m === 'dark';
+  document.body.classList.toggle('theme-dark', cfg.themeDark);
+  document.querySelectorAll('#modeRow .mode-tile').forEach((b) => b.classList.toggle('on', b.dataset.m === m));
+  applyAccent();
+  if (typeof guideDraw === 'function') guideDraw();
+}
+$('modeRow').addEventListener('click', (e) => { const b = e.target.closest('.mode-tile'); if (!b) return; cfg.themeMode = b.dataset.m; save(); applyTheme(); });
+if (darkMQ) darkMQ.addEventListener('change', () => { if (themeMode() === 'auto') applyTheme(); });
 $('accentRow').addEventListener('click', (e) => { const b = e.target.closest('button.accent-sw'); if (!b) return; cfg.accent = b.dataset.c; save(); applyTheme(); });
 $('accentRow').addEventListener('input', (e) => { if (e.target.id !== 'accentPick') return; cfg.accent = e.target.value; applyAccent(); if (typeof guideDraw === 'function') guideDraw(); });
 $('accentRow').addEventListener('change', (e) => { if (e.target.id !== 'accentPick') return; cfg.accent = e.target.value; save(); applyTheme(); });
-$('themeDark').addEventListener('change', () => { cfg.themeDark = $('themeDark').checked; save(); applyTheme(); });
 applyTheme();
 $('airOnLive').checked = cfg.airOnLive !== false;
 $('airOnLive').addEventListener('change', () => { cfg.airOnLive = $('airOnLive').checked; save(); });
