@@ -618,3 +618,41 @@ body.theme-dark .vt-card{border-color:rgba(139,124,246,.35)}
 .sec-card{background:var(--card2);border-radius:14px;padding:14px;margin-top:14px}
 .sec-card h4{margin-top:0}
 .sec-card .timer-big{font-size:38px;padding:4px 0 10px}
+
+/* 여백 넓히기 (v0.10.2): 붙어 있으면 답답해 보여서 전체적으로 숨 쉴 공간 */
+.titlebar{height:60px;padding:0 0 0 20px;gap:16px}
+.layout{height:calc(100% - 60px);padding:0 16px 16px;gap:16px}
+.rail{width:248px;gap:16px}
+.stage{gap:16px}
+.rail .scene-row,.src-rail{padding:16px}
+.rail .row-head{margin-bottom:10px}
+.rail .scene-tiles{gap:6px}
+.src-rail .src-head{margin-bottom:12px;gap:10px}
+.src-rail .src-tools{gap:6px}
+.src-rail .src-list li{margin-bottom:4px;padding:10px}
+.preview-wrap{padding:16px}
+.edit-bar{padding:8px 10px;gap:12px}
+.edit-actions{gap:6px}
+.stage .sound{padding:16px 20px 18px}
+.sound .row-head{margin-bottom:12px}
+.sound-list{gap:14px 28px}
+.tabs{margin:16px 16px 0}
+.tab-body{padding:20px}
+h4{margin:26px 0 10px}
+.field{margin-bottom:16px}
+.field input,.field select,.field textarea,.field .key-row{margin-top:8px}
+.row{gap:8px;margin-bottom:14px}
+.hint{margin:8px 0 16px}
+.chips{gap:8px}
+.key-list{gap:10px;margin-top:14px}
+.key-item{padding:12px 12px 12px 14px}
+.bc-card,.vts-card,.vt-card,.sec-card{padding:16px}
+.bc-acc{gap:10px;margin-bottom:14px}
+.vts-row{gap:8px;margin-bottom:12px}
+.actions{padding:12px 20px 20px;gap:10px}
+.chat-switch{gap:6px}
+.titlebar{gap:12px}
+.titlebar>*,.titlebar button,.titlebar span,.titlebar b{white-space:nowrap}
+.titlebar>*:not(.stats){flex:none}
+.stats{gap:12px;min-width:0;overflow:hidden}
+.stats span{display:inline-flex;gap:4px}
