@@ -772,3 +772,12 @@ body.theme-dark .tab .chat-switch button.on{background:var(--hover)!important}
 .chat-feed.compact .cm.cont .av{visibility:visible;height:auto}
 .chat-feed.compact .cm.cont .ch{display:inline}
 .chat-feed.compact .cm.donation,.chat-feed.compact .cm.sub{padding:6px 10px;margin:4px 0}
+/* 플랫폼 표시 (로고 파일 있으면 로고, 없으면 색 + 글자) */
+.pm{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:5px;font-style:normal;font-size:9.5px;font-weight:900;line-height:1;color:#fff;flex:none;overflow:hidden}
+.pm img{width:100%;height:100%;object-fit:contain;display:block}
+.pm.chzzk{background:#00C98A;color:#00281C}.pm.youtube{background:#FF0033}.pm.soop{background:#2F6BF0}
+.pm:has(img){background:#fff!important}
+.cm .av .pm{position:absolute;right:-5px;bottom:-5px;box-shadow:0 0 0 2px var(--card2)}
+.chat-feed.compact .cm .av{font-size:0}
+.chat-feed.compact .cm .av .pm{position:static;box-shadow:none;width:15px;height:15px;font-size:9px;vertical-align:-3px}
+.pm.sm{width:15px;height:15px;font-size:9px}

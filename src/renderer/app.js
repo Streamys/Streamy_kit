@@ -769,6 +769,13 @@ $('chatState').addEventListener('click', (e) => {
   renderChatState();
 });
 // 채팅 한 줄: 프로필(첫 글자 + 플랫폼 점) · 이름 · 배지 · 시간 / 내용. 같은 사람이 연달아 치면 이름 줄 생략
+// 플랫폼 표시: platform/<이름>.png 공식 로고가 있으면 로고, 없으면 색 + 글자 배지
+const PLAT_LETTER = { chzzk: '치', youtube: 'Y', soop: 'S' };
+const PLAT_IMG = {};
+for (const k of Object.keys(PLAT_LETTER)) { try { if (require('fs').existsSync(require('path').join(__dirname, 'platform', `${k}.png`))) PLAT_IMG[k] = `platform/${k}.png`; } catch {} }
+function platMark(p, cls = '') { return `<i class="pm ${p} ${cls}" title="${CHAT_P[p] || p}">${PLAT_IMG[p] ? `<img src="${PLAT_IMG[p]}" alt="">` : (PLAT_LETTER[p] || '?')}</i>`; }
+// 고정 화면(채팅 전환 탭 · 오버레이 플랫폼 고르기)의 색 점도 플랫폼 표시로
+document.querySelectorAll('i.pd.chzzk, i.pd.youtube, i.pd.soop').forEach((el) => { const p = ['chzzk', 'youtube', 'soop'].find((k) => el.classList.contains(k)); el.outerHTML = platMark(p, 'sm'); });
 const AV_COLORS = ['#F7C6D3', '#C9E8F7', '#D6CCF7', '#C8EED9', '#FBE2B8', '#F9CFC2', '#CDE0FA', '#E2D4F0'];
 function avColor(nick) { let h = 0; for (const c of String(nick)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return AV_COLORS[h % AV_COLORS.length]; }
 function chatHtml(m) {
@@ -777,7 +784,7 @@ function chatHtml(m) {
   const first = [...String(m.nick || '?').trim()][0] || '?';
   const badge = m.badge ? `<span class="bd${m.badge === '스트리머' ? ' st' : ''}">${esc(m.badge)}</span>` : '';
   if (m.kind === 'system') return `<span class="tx">${body}</span>`;
-  return `<span class="av" style="background:${avColor(m.nick)}">${esc(first)}<i class="pd ${m.p}" title="${CHAT_P[m.p]}"></i></span>`
+  return `<span class="av" style="background:${avColor(m.nick)}">${esc(first)}${platMark(m.p)}</span>`
     + `<div class="cb"><div class="ch"><span class="nk">${esc(m.nick)}</span>${badge}${m.amount ? `<span class="amt">${esc(m.amount)}</span>` : ''}<span class="tm">${hm}</span></div>`
     + `<div class="tx">${body}</div></div>`;
 }
