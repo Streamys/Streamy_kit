@@ -1450,34 +1450,110 @@ function applyAppIcon(c) {
     im.src = url;
   }, 250);
 }
-// 레이아웃: 좌우 바꾸기 · 설정 칸 너비 · 칸 보이기/숨기기
-const LAY_DEF = { side: 'left', width: 'm', rail: true, sound: true, edit: true };
-function lay() { return { ...LAY_DEF, ...(cfg.layout || {}) }; }
+// ================================================================== 화면 꾸미기 (글자 크기 · 글꼴 · 끌어서 배치)
+const { webFrame } = require('electron');
+const BLOCKS = {
+  scenes: { label: '장면', el: () => document.querySelector('.scene-row') },
+  sources: { label: '소스 목록', el: () => document.querySelector('.src-rail') },
+  preview: { label: '미리보기', el: () => document.querySelector('.stage-top'), fixed: true },
+  edit: { label: '정렬 버튼', el: () => $('editBar') },
+  sound: { label: '사운드', el: () => document.querySelector('.sound') },
+  panel: { label: '방송 · 채팅 · 소스 · 설정', el: () => $('panel') },
+};
+const LAY_DEF = { cols: { l: ['scenes', 'sources'], c: ['preview', 'edit', 'sound'], r: ['panel'] }, wl: 248, wr: 380, zoom: 100, font: '' };
+function lay() {
+  const L = { ...LAY_DEF, ...(cfg.layout2 || {}) };
+  const cols = { l: [...(L.cols?.l || [])], c: [...(L.cols?.c || [])], r: [...(L.cols?.r || [])] };
+  const seen = new Set(Object.values(cols).flat());
+  for (const k of Object.keys(BLOCKS)) if (!seen.has(k)) cols[k === 'panel' ? 'r' : k === 'preview' ? 'c' : 'l'].push(k);   // 빠진 칸은 기본 자리로
+  if (!cols.c.includes('preview')) { for (const k of ['l', 'r']) cols[k] = cols[k].filter((x) => x !== 'preview'); cols.c.unshift('preview'); }
+  return { ...L, cols };
+}
+let railR = null;
 function applyLayout() {
-  const L = lay(), b = document.body.classList;
-  b.toggle('lay-swap', L.side === 'right');
-  b.remove('lay-w-s', 'lay-w-l'); if (L.width !== 'm') b.add('lay-w-' + L.width);
-  b.toggle('lay-norail', !L.rail); b.toggle('lay-nosound', !L.sound); b.toggle('lay-noedit', !L.edit);
-  document.querySelectorAll('#laySide button').forEach((x) => x.classList.toggle('on', x.dataset.v === L.side));
-  document.querySelectorAll('#layWidth button').forEach((x) => x.classList.toggle('on', x.dataset.v === L.width));
-  $('layRail').checked = L.rail; $('laySound').checked = L.sound; $('layEdit').checked = L.edit;
-  layoutDisplay();
+  const L = lay();
+  if (!railR) { railR = document.createElement('aside'); railR.className = 'rail rail-r'; railR.id = 'railR'; document.querySelector('.layout').appendChild(railR); }
+  const host = { l: $('rail'), c: document.querySelector('.stage'), r: railR };
+  for (const [k, list] of Object.entries(L.cols)) for (const id of list) { const el = BLOCKS[id].el(); if (el) host[k].appendChild(el); }
+  host.l.style.width = L.wl + 'px'; host.r.style.width = L.wr + 'px';
+  host.l.hidden = !L.cols.l.length; host.r.hidden = !L.cols.r.length;
+  const pc = $('phoneCol'); if (pc && pc.parentElement !== document.querySelector('.stage-top')) document.querySelector('.stage-top').appendChild(pc);
+  try { webFrame.setZoomFactor((L.zoom || 100) / 100); } catch {}
+  document.body.style.setProperty('--font', L.font ? `'${L.font}','Pretendard','Malgun Gothic',system-ui,sans-serif` : '');
+  document.body.classList.toggle('custom-font', !!L.font);
+  layoutDisplay(); setTimeout(layoutDisplay, 60);
+  if (!$('layOv').hidden) renderLayMap();
 }
-function setLay(k, v) { cfg.layout = { ...lay(), [k]: v }; save(); applyLayout(); }
+function setLay(patch) { cfg.layout2 = { ...lay(), ...patch }; save(); applyLayout(); }
+// 글꼴: 이 PC에 깔린 것만 보여 줌
+const FONT_CHOICES = [['', '기본 (Pretendard)'], ['Malgun Gothic', '맑은 고딕'], ['NanumGothic', '나눔고딕'], ['NanumSquareRound', '나눔스퀘어 라운드'], ['NanumSquare', '나눔스퀘어'], ['Noto Sans KR', 'Noto Sans KR'], ['Spoqa Han Sans Neo', '스포카 한 산스'], ['SUIT', 'SUIT'], ['Gmarket Sans', 'G마켓 산스'], ['IBM Plex Sans KR', 'IBM Plex Sans KR'], ['Gulim', '굴림'], ['Dotum', '돋움']];
+function fontInstalled(f) {
+  if (!f) return true;
+  const c = document.createElement('canvas').getContext('2d'), t = '가나다라ABCabc123';
+  return ['monospace', 'serif'].some((base) => { c.font = `20px ${base}`; const w0 = c.measureText(t).width; c.font = `20px '${f}',${base}`; return c.measureText(t).width !== w0; });
+}
+function renderLayFonts() {
+  const cur = lay().font;
+  $('layFonts').innerHTML = FONT_CHOICES.filter(([f]) => fontInstalled(f) || f === cur)
+    .map(([f, n]) => `<button class="${f === cur ? 'on' : ''}" data-f="${esc(f)}" style="font-family:${f ? `'${esc(f)}',` : ''}'Pretendard',sans-serif">${esc(n)}<small>가나다 ABC 123</small></button>`).join('');
+}
+$('layFonts').addEventListener('click', (e) => { const x = e.target.closest('button'); if (!x) return; setLay({ font: x.dataset.f }); renderLayFonts(); });
+$('layZoom').addEventListener('input', (e) => { $('layZoomV').textContent = e.target.value + '%'; });
+$('layZoom').addEventListener('change', (e) => setLay({ zoom: +e.target.value }));
+// 배치 지도: 칸 끌어 옮기기 + 기둥 너비 끌기
+function renderLayMap() {
+  const L = lay(), m = $('layMap');
+  const col = (k) => `<div class="lm-col lm-${k}${L.cols[k].length ? '' : ' empty'}" data-col="${k}" ${k !== 'c' ? `style="flex:0 0 ${Math.round((k === 'l' ? L.wl : L.wr) / 2.6)}px"` : ''}>
+      ${L.cols[k].map((id) => `<div class="lm-blk lm-${id}${BLOCKS[id].fixed ? ' fixed' : ''}" data-id="${id}" ${BLOCKS[id].fixed ? '' : 'draggable="true"'}>${BLOCKS[id].fixed ? '' : '<i>⠿</i>'}<span>${BLOCKS[id].label}</span></div>`).join('')}
+      <div class="lm-drop-end">여기에 놓기</div></div>`;
+  m.innerHTML = col('l') + '<div class="lm-split" data-s="l"></div>' + col('c') + '<div class="lm-split" data-s="r"></div>' + col('r');
+}
+let lmDrag = null;
+$('layMap').addEventListener('dragstart', (e) => { const b = e.target.closest('.lm-blk'); if (!b || b.classList.contains('fixed')) return e.preventDefault(); lmDrag = b.dataset.id; e.dataTransfer.setData('text/x-lay', lmDrag); e.dataTransfer.effectAllowed = 'move'; setTimeout(() => b.classList.add('dragging'), 0); });
+$('layMap').addEventListener('dragend', () => { lmDrag = null; renderLayMap(); });
+function lmTarget(e) {
+  const colEl = e.target.closest('.lm-col'); if (!colEl) return null;
+  const blks = [...colEl.querySelectorAll('.lm-blk:not(.dragging)')];
+  let idx = blks.length;
+  for (let i = 0; i < blks.length; i++) { const r = blks[i].getBoundingClientRect(); if (e.clientY < r.top + r.height / 2) { idx = i; break; } }
+  return { col: colEl.dataset.col, idx, colEl, blks };
+}
+$('layMap').addEventListener('dragover', (e) => {
+  if (!lmDrag) return; const t = lmTarget(e); if (!t) return;
+  if (lmDrag === 'panel' && t.col === 'c') return;          // 큰 설정 칸은 양옆 기둥에만
+  e.preventDefault();
+  $('layMap').querySelectorAll('.lm-mark').forEach((x) => x.remove());
+  const mk = document.createElement('div'); mk.className = 'lm-mark';
+  t.idx < t.blks.length ? t.blks[t.idx].before(mk) : t.colEl.querySelector('.lm-drop-end').before(mk);
+});
+$('layMap').addEventListener('drop', (e) => {
+  if (!lmDrag) return; const t = lmTarget(e); if (!t) return; e.preventDefault();
+  const L = lay(); const cols = { l: L.cols.l.filter((x) => x !== lmDrag), c: L.cols.c.filter((x) => x !== lmDrag), r: L.cols.r.filter((x) => x !== lmDrag) };
+  const ids = t.blks.map((b) => b.dataset.id).filter((x) => x !== lmDrag);
+  const before = ids[t.idx]; const arr = cols[t.col];
+  arr.splice(before ? arr.indexOf(before) : arr.length, 0, lmDrag);
+  lmDrag = null; setLay({ cols });
+});
+$('layMap').addEventListener('pointerdown', (e) => {
+  const sp = e.target.closest('.lm-split'); if (!sp) return;
+  const side = sp.dataset.s, L = lay(), x0 = e.clientX, w0 = side === 'l' ? L.wl : L.wr;
+  sp.setPointerCapture(e.pointerId); sp.classList.add('on');
+  const colEl = $('layMap').querySelector(`.lm-${side}`);
+  let w = w0;
+  const mv = (ev) => { const d = (ev.clientX - x0) * 2.6 * (side === 'l' ? 1 : -1); w = Math.max(200, Math.min(620, Math.round(w0 + d))); colEl.style.flex = `0 0 ${Math.round(w / 2.6)}px`; colEl.dataset.w = w; };
+  const up = () => { sp.removeEventListener('pointermove', mv); sp.classList.remove('on'); setLay(side === 'l' ? { wl: w } : { wr: w }); };
+  sp.addEventListener('pointermove', mv); sp.addEventListener('pointerup', up, { once: true });
+});
 function layOpen(on) {
-  $('layPop').hidden = !on; $('layBtn').classList.toggle('on', on);
+  $('layOv').hidden = !on; $('layBtn').classList.toggle('on', on);
   hidePreview('layout', on);
+  if (on) { const L = lay(); $('layZoom').value = L.zoom; $('layZoomV').textContent = L.zoom + '%'; renderLayFonts(); renderLayMap(); }
 }
-$('layBtn').addEventListener('click', (e) => { e.stopPropagation(); layOpen($('layPop').hidden); });
-$('layPop').addEventListener('click', (e) => e.stopPropagation());
-document.addEventListener('click', () => { if (!$('layPop').hidden) layOpen(false); });
-window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('layPop').hidden) layOpen(false); }, true);
-$('laySide').addEventListener('click', (e) => { const x = e.target.closest('button'); if (x) setLay('side', x.dataset.v); });
-$('layWidth').addEventListener('click', (e) => { const x = e.target.closest('button'); if (x) setLay('width', x.dataset.v); });
-$('layRail').addEventListener('change', (e) => setLay('rail', e.target.checked));
-$('laySound').addEventListener('change', (e) => setLay('sound', e.target.checked));
-$('layEdit').addEventListener('change', (e) => setLay('edit', e.target.checked));
-$('layReset').addEventListener('click', () => { cfg.layout = { ...LAY_DEF }; save(); applyLayout(); });
+$('layBtn').addEventListener('click', () => layOpen($('layOv').hidden));
+$('layClose').addEventListener('click', () => layOpen(false));
+$('layOv').addEventListener('click', (e) => { if (e.target.id === 'layOv') layOpen(false); });
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('layOv').hidden) { e.stopPropagation(); layOpen(false); } }, true);
+$('layReset').addEventListener('click', () => { cfg.layout2 = JSON.parse(JSON.stringify(LAY_DEF)); save(); applyLayout(); layOpen(true); });
 applyLayout();
 // 화면 모드: 밝게 · 어둡게 · 윈도우 따라가기
 const darkMQ = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
