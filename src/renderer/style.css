@@ -494,3 +494,4 @@ body.splitting,body.splitting *{cursor:col-resize!important;user-select:none}
 .bc-to{display:flex;align-items:center;gap:12px;font-size:12px;margin:4px 0 8px}.bc-to>span{color:var(--sub);font-size:11px}
 .bc-msg{font-size:11px;line-height:1.7;margin:6px 0 0;color:#ccc}.bc-msg:empty{display:none}.bc-msg.err{color:#ff8a8a}
 .hint.err{color:#ff8a8a}
+#bcCard .yt-only[hidden]{display:none!important}

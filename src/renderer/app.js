@@ -1430,7 +1430,11 @@ const bcInvoke = async (ch, ...a) => { if (DEMO) return { ok: false, error: '데
 function bcMsg(t, err) { $('bcMsg').innerHTML = t || ''; $('bcMsg').classList.toggle('err', !!err); }
 function bcRenderAcc() {
   const st = bcSt || { chzzk: {}, youtube: {}, redirect: {} };
-  $('bcAcc').innerHTML = ['chzzk', 'youtube'].map((p) => {
+  // 유튜브는 아직 준비 중 → 내 앱 정보를 직접 넣었거나 이미 연결된 경우만 보여 줌
+  const yt = !!(st.youtube && (st.youtube.hasApp || st.youtube.connected));
+  document.querySelectorAll('#bcCard .yt-only').forEach((el) => { el.hidden = !yt; });
+  $('bcSub').textContent = yt ? '치지직 · 유튜브에 제목·태그를 한 번에' : '치지직 제목·태그·카테고리';
+  $('bcAcc').innerHTML = (yt ? ['chzzk', 'youtube'] : ['chzzk']).map((p) => {
     const a = st[p] || {};
     const state = a.connected ? `<span class="ok">연결됨${a.channel ? ' · ' + esc(a.channel.name) : ''}</span>` : a.hasApp ? '<span>로그인하면 제목·태그를 바꿀 수 있어요</span>' : '<span>준비 중</span>';
     return `<div class="bc-row" data-p="${p}"><i class="pd ${p}"></i><b>${BC_NAME[p]}</b>${state}
