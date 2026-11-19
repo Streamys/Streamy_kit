@@ -196,7 +196,14 @@ function updateSizeLabel() {
 let propsFor = null;
 engine.on('items', () => {
   renderSources();
-  if (engineOk) { const ids = selIds(); if (ids.length !== 1) { $('propsBody').innerHTML = ''; propsFor = null; } else if (propsFor !== ids[0]) showProps(); }
+  if (engineOk) {
+    const ids = selIds();
+    if (ids.length !== 1) { $('propsBody').innerHTML = ''; propsFor = null; }
+    else if (propsFor !== ids[0]) {
+      showProps();
+      if (mode !== 'air' && $('addBox').hidden) { openTab('sources'); document.querySelector('.tab-body').scrollTop = 0; }   // 누르면 그 소스 설정만 바로
+    }
+  }
   clearTimeout(countT); countT = setTimeout(renderScenes, 150);
 });
 let countT = 0;
@@ -220,6 +227,7 @@ async function removeSelected() {
 let addKind = null;
 $('srcAdd').addEventListener('click', () => {
   const box = $('addBox'); box.hidden = !box.hidden;
+  if (!box.hidden) { openTab('sources'); document.querySelector('.tab-body').scrollTop = 0; }
   $('srcAdd').classList.toggle('open', !box.hidden);
   $('srcAdd').textContent = box.hidden ? '＋ 추가' : '✕ 닫기';
   if (!box.hidden) { addKind = null; renderTypes(); renderAddForm(); }
@@ -395,7 +403,7 @@ function guideData() {
 }
 function guideDraw() {
   if (guideRaf) return;
-  guideRaf = requestAnimationFrame(() => { guideRaf = 0; try { ipcRenderer.send('ov:draw', guideData()); } catch (e) { rlog('warn', 'guide', e); } });
+  guideRaf = requestAnimationFrame(() => { guideRaf = 0; try { ipcRenderer.send('ov:draw', { ...guideData(), color: cfg.themeDark ? ['#E11D2E', '#FF4D5E', 'rgba(225,29,46,.10)'] : ['#6B5CE7', '#9A8FF5', 'rgba(107,92,231,.10)'] }); } catch (e) { rlog('warn', 'guide', e); } });
 }
 function guideShow() {
   const on = engineOk && mode !== 'air' && cfg.guide !== false;
@@ -501,7 +509,7 @@ window.addEventListener('mouseup', () => { if (drag) { crumb(`drag end ${drag.mo
 // 미리보기 · 소스 목록 · 소스 설정 말고 아무 데나 누르면 선택 풀기 (빨간 테두리 없어짐)
 document.addEventListener('mousedown', (e) => {
   if (!engineOk || e.button !== 0 || !engine.sel.size || drag) return;
-  if (e.target.closest('#preview, #sourceList, #propsBody, #editBar, .src-tools, #addBox, .vt-card, .vts-card')) return;
+  if (e.target.closest('#preview, #sourceList, #propsBody, #editBar, .src-tools, #addBox, .vt-card, .vts-card, .rail, #tab-sources')) return;
   crumb('click outside → deselect'); engine.clearSelection(); engine.emit('items');
 }, true);
 prev.addEventListener('mouseleave', () => { if (!drag && hoverId != null) { hoverId = null; guideDraw(); } });
@@ -1235,6 +1243,10 @@ function setMode(m, quiet) {
   if (!quiet) { cfg.mode = m; save(); }
 }
 $('modeSw').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setMode(b.dataset.m); });
+// 화면 테마: 기본 = 밝은 카드, 설정에서 예전 검정·빨강
+function applyTheme() { document.body.classList.toggle('theme-dark', !!cfg.themeDark); $('themeDark').checked = !!cfg.themeDark; if (typeof guideDraw === 'function') guideDraw(); }
+$('themeDark').addEventListener('change', () => { cfg.themeDark = $('themeDark').checked; save(); applyTheme(); });
+applyTheme();
 $('airOnLive').checked = cfg.airOnLive !== false;
 $('airOnLive').addEventListener('change', () => { cfg.airOnLive = $('airOnLive').checked; save(); });
 

@@ -35,6 +35,25 @@
 </header>
 
 <div class="layout">
+  <aside class="rail" id="rail">
+      <section class="scene-row">
+      <div class="row-head"><h3>장면</h3><small>F1~F9</small><button class="ph-toggle" id="phToggle" title="스마트폰으로 볼 때 화면 보이기/숨기기">📱 폰 화면</button></div>
+      <div class="scene-tiles" id="sceneTiles"></div>
+    </section>
+    <section class="src-rail">
+        <div class="src-head">
+          <div class="src-title"><b id="srcSceneName">장면</b><small>의 소스</small></div>
+          <div class="src-tools">
+            <button id="srcAdd" class="accent" title="소스 추가">＋ 추가</button>
+            <button id="srcUp" title="앞으로">▲</button>
+            <button id="srcDown" title="뒤로">▼</button>
+            <button id="srcDel" title="선택한 소스 삭제">🗑</button>
+          </div>
+        </div>
+        <ul class="list src-list" id="sourceList"></ul>
+        <p class="hint tiny">더블클릭: 이름·이모지 바꾸기 · Ctrl+클릭: 여러 개 고르기 · Shift+클릭: 범위 고르기</p>
+    </section>
+  </aside>
   <main class="stage">
     <div class="stage-top">
     <div class="preview-wrap" id="previewWrap">
@@ -73,10 +92,6 @@
       </div>
     </div>
 
-    <section class="scene-row">
-      <div class="row-head"><h3>장면</h3><small>클릭해서 전환 · 더블클릭으로 이름 바꾸기 · 우클릭으로 삭제</small><button class="ph-toggle" id="phToggle" title="스마트폰으로 볼 때 화면 보이기/숨기기">📱 폰 화면</button></div>
-      <div class="scene-tiles" id="sceneTiles"></div>
-    </section>
 
     <section class="sound">
       <div class="row-head"><h3>사운드</h3><small>막대 뒤 움직임 = 지금 들어오는 소리</small>
@@ -153,15 +168,7 @@
 
       <!-- 소스 -->
       <section class="tab" id="tab-sources">
-        <div class="src-head">
-          <div class="src-title"><b id="srcSceneName">장면</b><small>의 소스</small></div>
-          <div class="src-tools">
-            <button id="srcAdd" class="accent" title="소스 추가">＋ 추가</button>
-            <button id="srcUp" title="앞으로">▲</button>
-            <button id="srcDown" title="뒤로">▼</button>
-            <button id="srcDel" title="선택한 소스 삭제">🗑</button>
-          </div>
-        </div>
+        <div id="propsBody"></div>
         <div class="vt-card" id="vtCard">
           <button class="vt-go" id="vtGo"><span>🧸</span><b>버추얼 원클릭 연결</b><small>켜져 있는 버추얼 프로그램을 찾아서 화면에 띄워요</small></button>
           <div class="vt-row"><label class="check tiny"><input type="checkbox" id="vtAuto"> 버추얼 프로그램을 켜면 자동으로 띄우기</label></div>
@@ -193,9 +200,6 @@
           <div class="type-grid" id="typeGrid"></div>
           <div class="add-form" id="addForm"></div>
         </div>
-        <ul class="list src-list" id="sourceList"></ul>
-        <p class="hint tiny">더블클릭: 이름·이모지 바꾸기 · Ctrl+클릭: 여러 개 고르기 · Shift+클릭: 범위 고르기</p>
-        <div id="propsBody"></div>
       </section>
 
       <!-- 사운드 -->
@@ -241,6 +245,8 @@
         </div>
         <div class="row"><button id="miniTest">오버레이 미리 보기</button></div>
         <p class="hint">오버레이는 끌어서 옮길 수 있고, 위치는 기억해요. ⤢ 누르면 원래 창으로 돌아와요.</p>
+        <h4>화면 테마</h4>
+        <label class="check"><input type="checkbox" id="themeDark"> 예전 검정 · 빨강 테마로 보기</label>
         <h4>ON AIR 화면</h4>
         <label class="check"><input type="checkbox" id="airOnLive"> 방송이 시작되면 자동으로 ON AIR 화면으로 바꾸기</label>
         <h4>채팅 기록</h4>

@@ -4,7 +4,7 @@
 const { ipcRenderer } = require('electron');
 const cv = document.getElementById('c');
 const g = cv.getContext('2d');
-const RED = '#E11D2E', RED2 = '#FF4D5E', FONT = "'Pretendard','Malgun Gothic',system-ui,sans-serif";
+let RED = '#E11D2E', RED2 = '#FF4D5E', TINT = 'rgba(225,29,46,.10)'; const FONT = "'Pretendard','Malgun Gothic',system-ui,sans-serif";
 let data = { items: [] };
 
 function fit() {
@@ -53,7 +53,7 @@ function draw() {
   // 3) 마우스를 올린 소스
   for (const it of items) {
     if (it.state !== 'hover') continue;
-    g.fillStyle = 'rgba(225,29,46,.10)'; g.fillRect(it.x, it.y, it.w, it.h);
+    g.fillStyle = TINT; g.fillRect(it.x, it.y, it.w, it.h);
     g.setLineDash([7, 5]); g.lineWidth = 2; g.strokeStyle = RED2; g.strokeRect(it.x + 1, it.y + 1, it.w - 2, it.h - 2); g.setLineDash([]);
     pill(`${it.name} · 클릭해서 선택`, it.x + 6, it.y + 6, { bg: 'rgba(11,11,13,.85)', size: 12 });
   }
@@ -74,7 +74,11 @@ function draw() {
 }
 let raf = 0;
 const later = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); };
-ipcRenderer.on('ov:draw', (_e, d) => { data = d || { items: [] }; later(); });
+ipcRenderer.on('ov:draw', (_e, d) => {
+  data = d || { items: [] };
+  if (data.color) { RED = data.color[0]; RED2 = data.color[1]; TINT = data.color[2]; }   // 테마 포인트 색
+  later();
+});
 window.addEventListener('resize', later);
 
 // 화면 확인용 (개발 전용)
