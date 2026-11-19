@@ -1102,3 +1102,28 @@ body.scene-dragging #sceneDel,body.src-dragging-list #srcDel{box-shadow:0 0 0 2p
 .ao-go{flex:1;padding:12px!important;font-size:14px!important;border:none;border-radius:12px;background:var(--red);color:var(--onac);font-weight:800}
 .ao-empty[hidden]{display:none}
 .ao-form input[type=color]{padding:3px;height:38px;width:100%}
+
+/* v0.20.1 확인 창 */
+.cf-ov{position:fixed;inset:0;z-index:400;display:flex;align-items:center;justify-content:center;background:rgba(20,22,30,.42);backdrop-filter:blur(3px);animation:cfIn .14s ease-out;-webkit-app-region:no-drag}
+.cf-ov.out{opacity:0;transition:opacity .12s}
+.cf-box{width:360px;max-width:92vw;display:flex;flex-direction:column;align-items:center;text-align:center;padding:26px 24px 20px;background:var(--card);border:1px solid var(--line);border-radius:22px;box-shadow:0 24px 60px rgba(20,22,30,.32);animation:cfPop .18s cubic-bezier(.2,.9,.3,1.2)}
+.cf-ic{width:52px;height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;background:var(--soft);margin-bottom:14px}
+.cf-ic .ico{width:26px;height:26px;color:var(--red)}
+.cf-box.danger .cf-ic{background:rgba(240,68,82,.12)}
+.cf-box.danger .cf-ic .ico{color:var(--live)}
+.cf-title{font-size:16px;margin-bottom:6px}
+.cf-msg{margin:0;font-size:13px;line-height:1.6;color:var(--text);word-break:keep-all}
+.cf-detail{margin:6px 0 0;font-size:12px;line-height:1.55;color:var(--sub);word-break:keep-all}
+.cf-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;margin-top:20px}
+.cf-btns.many{grid-template-columns:1fr}
+.cf-btns button{height:42px;border-radius:12px;font-size:13px;font-weight:800;border:1px solid var(--line);background:var(--card2);color:var(--text);outline:none}
+.cf-btns button:focus-visible{box-shadow:0 0 0 3px var(--soft)}
+.cf-btns .cf-main{order:2;background:var(--red);border-color:var(--red);color:var(--onac)}
+.cf-btns .cf-cancel{order:1}
+.cf-btns .cf-mid{order:2}
+.cf-btns.many .cf-main{order:0}.cf-btns.many .cf-mid{order:1}.cf-btns.many .cf-cancel{order:3}
+.cf-box.danger .cf-main{background:var(--live);border-color:var(--live)}
+.cf-btns button:hover{filter:brightness(1.04)}
+.cf-btns .cf-cancel:hover{background:var(--hover)}
+@keyframes cfIn{from{opacity:0}to{opacity:1}}
+@keyframes cfPop{from{transform:scale(.94);opacity:0}to{transform:none;opacity:1}}

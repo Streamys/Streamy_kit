@@ -6,6 +6,26 @@ const path = require('path');
 const { Engine, SOURCE_TYPES, PLATFORMS, ENCODERS, VIRTUAL_APPS, VIRTUAL_SPOTS, VIRTUAL_DEFAULT, VTS_SENDER, appOfExe, exeOf } = require('./engine.js');
 const { FLAT_ICONS, UI_ICON } = require('./icons.js');
 const ic = (n) => UI_ICON(n);
+// 확인 창 (윈도우 기본 창 대신 앱 디자인으로). 고른 버튼 번호를 돌려줌, 닫으면 마지막(취소)
+function uiConfirm({ title = '확인', message = '', detail = '', buttons = ['확인', '취소'] } = {}) {
+  return new Promise((resolve) => {
+    const danger = /삭제|종료|지우기|빼기/.test(buttons[0] || '');
+    const ov = document.createElement('div'); ov.className = 'cf-ov';
+    ov.innerHTML = `<div class="cf-box${danger ? ' danger' : ''}" role="dialog" aria-modal="true">
+      <div class="cf-ic">${ic(danger ? 'warn' : 'ok')}</div>
+      <b class="cf-title">${esc(title)}</b>
+      <p class="cf-msg">${esc(message).replace(/\n/g, '<br>')}</p>${detail ? `<p class="cf-detail">${esc(detail).replace(/\n/g, '<br>')}</p>` : ''}
+      <div class="cf-btns${buttons.length > 2 ? ' many' : ''}">${buttons.map((b, i) => `<button data-i="${i}" class="${i === 0 ? 'cf-main' : i === buttons.length - 1 ? 'cf-cancel' : 'cf-mid'}">${esc(b)}</button>`).join('')}</div></div>`;
+    const cancel = buttons.length - 1;
+    const done = (i) => { window.removeEventListener('keydown', key, true); ov.classList.add('out'); setTimeout(() => ov.remove(), 120); try { hidePreview('confirm', false); } catch {} resolve(i); };
+    const key = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(cancel); } else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); done(0); } };
+    ov.addEventListener('click', (e) => { const b = e.target.closest('button[data-i]'); if (b) done(+b.dataset.i); else if (e.target === ov) done(cancel); });
+    window.addEventListener('keydown', key, true);
+    try { hidePreview('confirm', true); } catch {}
+    document.body.appendChild(ov);
+    setTimeout(() => ov.querySelector(danger ? '.cf-cancel' : '.cf-main')?.focus(), 0);
+  });
+}
 // 소스 아이콘: 기본 이모지 그대로면 플랫 아이콘, 사용자가 바꾼 이모지면 그 이모지
 function srcIcon(kind) { return FLAT_ICONS[kind] || UI_ICON('dot'); }
 
@@ -139,7 +159,7 @@ function renderScenes() {
       }));
       b.addEventListener('contextmenu', guard(async (e) => {
         e.preventDefault(); if (DEMO) return;
-        const r = await ipcRenderer.invoke('app:confirm', { title: '장면', message: `'${s.name}' 장면을 어떻게 할까요?`, buttons: ['삭제', '왼쪽으로', '오른쪽으로', '취소'] });
+        const r = await uiConfirm({ title: '장면', message: `'${s.name}' 장면을 어떻게 할까요?`, buttons: ['삭제', '왼쪽으로', '오른쪽으로', '취소'] });
         if (r === 0) engine.removeScene(s.id); if (r === 1) engine.moveScene(s.id, -1); if (r === 2) engine.moveScene(s.id, 1);
         saveScenes();
       }));
@@ -152,7 +172,7 @@ async function deleteScene(id) {
   if (DEMO || !engineOk) return;
   const sc = engine.scenes.find((x) => x.id === id); if (!sc) return;
   if (engine.scenes.length <= 1) return toast('장면은 하나 이상 있어야 해요.', true);
-  const r = await ipcRenderer.invoke('app:confirm', { title: '장면 삭제', message: `'${sc.name}' 장면을 삭제할까요?\n안에 있는 소스 배치도 같이 사라져요.`, buttons: ['삭제', '취소'] });
+  const r = await uiConfirm({ title: '장면 삭제', message: `'${sc.name}' 장면을 삭제할까요?\n안에 있는 소스 배치도 같이 사라져요.`, buttons: ['삭제', '취소'] });
   if (r === 0) { engine.removeScene(id); saveScenes(); renderScenes(); renderSources(); }
 }
 $('sceneAdd').addEventListener('click', guard(addSceneNow));
@@ -279,7 +299,7 @@ async function removeSelected() {
   const ids = selIds(); if (!ids.length) return toast('삭제할 소스를 먼저 골라 주세요.');
   const names = engine.items().filter((x) => ids.includes(x.id)).map((x) => x.name);
   const msg = names.length === 1 ? `'${names[0]}'을(를) 이 장면에서 뺄까요?` : `선택한 ${names.length}개 소스를 이 장면에서 뺄까요?\n${names.join(', ')}`;
-  const r = await ipcRenderer.invoke('app:confirm', { title: '소스 삭제', message: msg, buttons: ['삭제', '취소'] });
+  const r = await uiConfirm({ title: '소스 삭제', message: msg, buttons: ['삭제', '취소'] });
   if (r === 0) { engine.removeItems(ids); saveScenes(); }
 }
 
@@ -1181,7 +1201,7 @@ engine.on('stream', (states) => {
 $('btnLive').addEventListener('click', guard(async () => {
   if (DEMO) return;
   if (engine.streaming) {
-    const r = await ipcRenderer.invoke('app:confirm', { title: '방송 종료', message: '방송을 종료할까요?', buttons: ['종료', '취소'] });
+    const r = await uiConfirm({ title: '방송 종료', message: '방송을 종료할까요?', buttons: ['종료', '취소'] });
     if (r === 0) engine.stopStream(); return;
   }
   const targets = Object.entries(cfg.keys).filter(([, key]) => key).map(([platform, key]) => ({ platform, key }));
@@ -1267,7 +1287,7 @@ async function doUpdate(auto = false) {
   const v = upd.info && upd.info.version; if (!v) return;
   const quick = upd.info.kind === 'patch';
   if (!auto) {
-    const r = await ipcRenderer.invoke('app:confirm', { title: '업데이트', message: `Streamy Kit v${v}로 업데이트할까요?` + (quick ? ' (빠른 업데이트)' : ''), detail: quick ? '몇 초 동안 껐다 켜져요. 장면과 설정은 그대로예요.' : '설치하는 동안 잠깐 꺼졌다가 자동으로 다시 켜져요. 장면과 설정은 그대로 유지돼요.', buttons: ['업데이트', '나중에'] });
+    const r = await uiConfirm({ title: '업데이트', message: `Streamy Kit v${v}로 업데이트할까요?` + (quick ? ' (빠른 업데이트)' : ''), detail: quick ? '몇 초 동안 껐다 켜져요. 장면과 설정은 그대로예요.' : '설치하는 동안 잠깐 꺼졌다가 자동으로 다시 켜져요. 장면과 설정은 그대로 유지돼요.', buttons: ['업데이트', '나중에'] });
     if (r !== 0) return;
   }
   updBusy = true; updPending = false;
@@ -2218,7 +2238,7 @@ function phoneChat(list) {
 // ================================================================== 종료
 ipcRenderer.on('app:request-quit', async () => {
   if (engine.streaming) {
-    const r = await ipcRenderer.invoke('app:confirm', { title: 'Streamy Kit 종료', message: '방송 중이에요. 방송을 끝내고 종료할까요?', buttons: ['종료', '취소'] });
+    const r = await uiConfirm({ title: 'Streamy Kit 종료', message: '방송 중이에요. 방송을 끝내고 종료할까요?', buttons: ['종료', '취소'] });
     if (r !== 0) { ipcRenderer.send('app:quit-cancelled'); return; }
   }
   ipcRenderer.send('app:quitting');
