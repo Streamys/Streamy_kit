@@ -1233,3 +1233,7 @@ i.pd,.bc-tabs .pm,.bc-to-chip .pm,.chat-switch .pm,.chat-switch .pd,#miniPlat .p
 [hidden][hidden][hidden]{display:none!important}
 .tabs{grid-template-columns:repeat(6,1fr)!important}
 .tabs button{font-size:12px!important;padding-left:0!important;padding-right:0!important}
+.ch.muted .mute .ico{color:var(--onac)!important}
+.ch .mute .ico{width:14px;height:14px}
+.ch:not(.muted) .mute .ico{color:var(--sub)}
+.ch:not(.muted) .mute:hover .ico{color:var(--red)}
