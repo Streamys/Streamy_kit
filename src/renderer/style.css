@@ -1068,3 +1068,5 @@ body.scene-dragging #sceneDel,body.src-dragging-list #srcDel{box-shadow:0 0 0 2p
 .scene-row .tile.dragging{opacity:.4}
 .scene-row .tile.drop-b{box-shadow:inset 0 2px 0 var(--red)}
 .scene-row .tile.drop-a{box-shadow:inset 0 -2px 0 var(--red)}
+/* v0.19.3 소스 탭: 고른 소스가 있을 때만 그 설정 칸 */
+#propsCard:has(#propsBody:empty){display:none}
