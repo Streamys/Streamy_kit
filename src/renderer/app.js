@@ -1534,6 +1534,7 @@ function applyAccent() {
     : { '--bg': ['#E9EBF0', .05], '--bg2': ['#F7F7F9', .02], '--card': ['#F7F7F9', .02], '--card2': ['#EFF0F3', .035], '--sec': ['#EAECF0', .045], '--line': ['#DDE0E6', .05], '--line2': ['#CBCFD8', .05], '--hover': ['#E3E5EB', .06] };
   for (const [k, [b, t]] of Object.entries(N)) st.setProperty(k, tint(b, t));
   applyAppIcon(a);
+  if (typeof miniConfigSend === 'function') setTimeout(miniConfigSend, 0);
   const row = $('accentRow');
   if (row) {
     row.innerHTML = ACCENTS.map(([h, n]) => `<button class="accent-sw${h.toLowerCase() === a.toLowerCase() ? ' on' : ''}" data-c="${h}" title="${n}" aria-label="${n}" style="--c:${h}"><i></i><span>${n}</span></button>`).join('')
@@ -1767,7 +1768,7 @@ $('chatLogDir').addEventListener('click', () => ipcRenderer.invoke('chat:log-ope
 $('chatLogDir2').addEventListener('click', () => ipcRenderer.invoke('chat:log-open'));
 
 // ================================================================== 최소화 오버레이
-function miniConfigSend() { ipcRenderer.send('mini:config', { ...cfg.mini }); }
+function miniConfigSend() { try { ipcRenderer.send('mini:config', { ...cfg.mini, dark: !!cfg.themeDark, accent: accentNow(), font: (typeof lay === 'function' && lay().font) || '' }); } catch {} }
 function renderMiniSettings() {
   const m = cfg.mini;
   $('miniOn').checked = m.on;

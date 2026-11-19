@@ -9,19 +9,28 @@ const PN = { chzzk: '치지직', youtube: '유튜브', soop: 'SOOP' };
 let cfg = { platforms: ['chzzk', 'youtube', 'soop'], opacity: 30, count: 5 };
 let msgs = [];
 
+const AV = ['#F7C6D3', '#C9E8F7', '#D6CCF7', '#C8EED9', '#FBE2B8', '#F9CFC2', '#CDE0FA', '#E2D4F0'];
+const avColor = (n) => { let h = 0; for (const c of String(n)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return AV[h % AV.length]; };
+const hexRgb = (h) => { const n = parseInt(String(h || '#E5577E').replace('#', '').padEnd(6, '0').slice(0, 6), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+$('restore').innerHTML = UI_ICON('expand'); $('close').innerHTML = UI_ICON('x');
 function applyCfg() {
-  // 투명도 30% = 배경이 70%만 보임 (글자는 항상 선명하게)
-  $('box').style.setProperty('--a', String(Math.max(0.1, 1 - (Number(cfg.opacity) || 0) / 100)));
+  // 투명도 30% = 배경이 70%만 보임 (글자는 항상 선명하게) · 앱과 같은 밝게/어둡게 · 포인트 색 · 글꼴
+  $('box').style.setProperty('--a', String(Math.max(0.15, 1 - (Number(cfg.opacity) || 0) / 100)));
+  document.body.classList.toggle('dark', !!cfg.dark);
+  const a = cfg.accent || '#E5577E', [r, g, b] = hexRgb(a);
+  document.documentElement.style.setProperty('--red', a);
+  document.documentElement.style.setProperty('--soft', `rgba(${r},${g},${b},${cfg.dark ? 0.18 : 0.12})`);
+  document.documentElement.style.setProperty('--font', cfg.font ? `'${cfg.font}','Pretendard','Malgun Gothic',system-ui,sans-serif` : '');
   renderChats();
 }
 function renderChats() {
   const list = msgs.filter((m) => cfg.platforms.includes(m.p) && m.kind !== 'system').slice(-(cfg.count || 5));
   const box = $('chats');
-  if (!cfg.platforms.length) { box.innerHTML = '<div class="empty">설정 → 최소화 오버레이에서 플랫폼을 골라 주세요</div>'; return; }
-  if (!list.length) { box.innerHTML = `<div class="empty">${cfg.platforms.map((p) => PN[p]).join(' · ')} 채팅이 오면 여기에 보여요</div>`; return; }
+  if (!cfg.platforms.length) { box.innerHTML = '<div class="empty">플랫폼을 골라 주세요</div>'; return; }
+  if (!list.length) { box.innerHTML = '<div class="empty">채팅을 기다리는 중</div>'; return; }
   box.innerHTML = list.map((m) => {
     const body = (m.parts || []).map((x) => (x.t === 'img' ? `<img src="${esc(x.src)}" alt="${esc(x.alt)}" referrerpolicy="no-referrer">` : esc(x.v))).join('');
-    return `<div class="cm p-${m.p} ${m.kind || ''}"><i class="pd ${m.p}"></i>${m.amount ? `<span class="amt">${esc(m.amount)}</span>` : ''}<span class="nk">${esc(m.nick)}</span>${body}</div>`;
+    return `<div class="cm ${m.kind || ''}"><span class="av" style="background:${avColor(m.nick)}">${esc(String(m.nick || '?').slice(0, 1).toUpperCase())}</span><div class="tx">${m.amount ? `<span class="amt">${esc(m.amount)}</span>` : ''}<span class="nk">${esc(m.nick)}</span><span class="msg">${body}</span></div></div>`;
   }).join('');
 }
 function renderState(s) {
@@ -30,11 +39,11 @@ function renderState(s) {
   $('label').textContent = s.label || '오프라인';
   $('time').textContent = s.time || '';
   const parts = [];
-  if (s.scene) parts.push(`장면 <b>${esc(s.scene)}</b>`);
-  if (s.viewers != null) parts.push(`${UI_ICON('eye')} <b>${Number(s.viewers).toLocaleString('ko-KR')}</b>`);
+  if (s.scene) parts.push(`<b>${esc(s.scene)}</b>`);
+  if (s.viewers != null) parts.push(`${UI_ICON('eye')}<b>${Number(s.viewers).toLocaleString('ko-KR')}</b>`);
   if (s.state === 'live' && s.kbps != null) parts.push(`<b>${s.kbps.toLocaleString('ko-KR')}</b>kbps`);
-  if (s.state === 'live' && s.drop != null) parts.push(`드롭 <b>${s.drop.toFixed(1)}%</b>`);
-  if (s.rec) parts.push('<span class="rec">● 녹화</span>');
+  if (s.state === 'live' && s.drop) parts.push(`드롭 <b>${s.drop.toFixed(1)}%</b>`);
+  if (s.rec) parts.push('<b class="rec">녹화 중</b>');
   $('stats').innerHTML = parts.map((x) => `<span>${x}</span>`).join('');
 }
 
