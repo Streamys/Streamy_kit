@@ -942,3 +942,7 @@ body:not(.theme-dark) .sec-card .bc-card>:not(.hint):not(.bc-msg):not(.chips):no
 body:not(.theme-dark) .virt-card>.vt-card,body:not(.theme-dark) .sec-card .vts-card{border:1px solid var(--line)!important;box-shadow:0 1px 3px rgba(25,31,40,.06)}
 body:not(.theme-dark) .sec-card input,body:not(.theme-dark) .sec-card select,body:not(.theme-dark) .sec-card textarea{border:1px solid var(--line)!important}
 body:not(.theme-dark) .rail>section,body:not(.theme-dark) .panel{border:1px solid var(--line)}
+/* 화면 모드 미리보기도 부드러운 톤 */
+.mt-prev.light{background:#E9EBF0}.mt-prev.light i,.mt-prev.light b{background:#F7F7F9}
+.mt-prev.dark{background:#16171C}.mt-prev.dark i,.mt-prev.dark b{background:#282A33}
+.mt-prev.auto{background:linear-gradient(135deg,#E9EBF0 50%,#16171C 50%)}.mt-prev.auto i{background:#F7F7F9}.mt-prev.auto b{background:#282A33}
