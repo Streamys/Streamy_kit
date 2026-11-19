@@ -5,12 +5,12 @@
   --live:#F04452;--soft:rgba(107,92,231,.12);--soft2:rgba(107,92,231,.06);--hover:#ECEEF3;--warnbg:#FFF4D6;
   --shadow:0 1px 2px rgba(25,31,40,.05),0 8px 24px rgba(25,31,40,.06);--radius:18px;
 }
-/* 예전 검정·빨강 (설정에서 켜기) */
+/* 다크 모드 (설정 › 화면 테마) — 같은 카드 디자인, 어두운 바탕 */
 body.theme-dark{
-  --bg:#0B0B0D;--bg2:#121215;--card:#18181C;--card2:#1F1F24;--line:#2A2A31;--line2:#3A3A42;
-  --text:#F4F4F5;--sub:#9A9AA3;--red:#E11D2E;--red2:#F23A4A;--red-dark:#A3101E;--yellow:#F5B700;
-  --live:#E11D2E;--soft:var(--soft);--soft2:var(--soft2);--hover:#26262c;--warnbg:#3a2a00;
-  --shadow:none;--radius:12px;
+  --bg:#0E0F13;--bg2:#1A1B22;--card:#1A1B22;--card2:#24262F;--line:#2C2F39;--line2:#3A3D49;
+  --text:#ECEEF3;--sub:#9499A8;--red:#8B7CF6;--red2:#9D90F8;--red-dark:#6B5CE7;--yellow:#F5C04A;
+  --live:#F04452;--soft:rgba(139,124,246,.18);--soft2:rgba(139,124,246,.08);--hover:#2C2F39;--warnbg:#3A2F12;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25);--radius:18px;
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:'Pretendard','Malgun Gothic',system-ui,sans-serif;font-size:13px;overflow:hidden;user-select:none}
@@ -513,7 +513,7 @@ body{background:var(--bg)}
 .layout{height:calc(100% - 52px);padding:0 12px 12px;gap:12px}
 .rail{width:236px;flex:none;display:flex;flex-direction:column;gap:12px;min-height:0}
 .rail>section,.stage .sound,.panel,.preview-wrap{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--line)}
-body:not(.theme-dark) .rail>section,body:not(.theme-dark) .stage .sound,body:not(.theme-dark) .panel,body:not(.theme-dark) .preview-wrap{border-color:transparent}
+.rail>section,.stage .sound,.panel,.preview-wrap{border-color:transparent}
 .stage{padding:0;gap:12px}
 .preview-wrap{padding:12px}
 .preview{border-radius:10px;outline:none}
@@ -554,33 +554,33 @@ body:not(.theme-dark) .rail>section,body:not(.theme-dark) .stage .sound,body:not
 .tabs{margin:12px 12px 0;padding:4px;border-bottom:none;background:var(--card2);border-radius:14px;grid-template-columns:repeat(6,1fr)}
 .tabs button{border:none;border-radius:10px;padding:8px 2px;font-size:12px}
 .tabs button.on{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(25,31,40,.10)}
-body.theme-dark .tabs button.on{background:var(--card2);box-shadow:inset 0 -2px 0 var(--red)}
+body.theme-dark .tabs button.on{background:var(--hover);box-shadow:none}
 .tab-body{padding:16px}
 .actions{border-top:none;padding:8px 16px 16px}
 .go-live{border-radius:16px;height:56px}
 .rec{border-radius:16px}
 input,select,textarea{border-radius:12px}
-body:not(.theme-dark) input,body:not(.theme-dark) select,body:not(.theme-dark) textarea{background:var(--card2);border-color:transparent}
-body:not(.theme-dark) input:focus,body:not(.theme-dark) select:focus,body:not(.theme-dark) textarea:focus{border-color:var(--red);background:var(--card)}
+input,select,textarea{background:var(--card2);border-color:transparent}
+input:focus,select:focus,textarea:focus{border-color:var(--red);background:var(--card)}
 .tab button:not(.link):not(.chip):not(.type):not(.x):not(.eye):not(.enc){border-radius:12px}
-body:not(.theme-dark) .tab button:not(.link):not(.chip):not(.type):not(.x):not(.eye):not(.enc):not(.primary-sm):not(.vt-go){background:var(--card2);border-color:transparent}
-body:not(.theme-dark) .tab button:not(.link):not(.chip):not(.type):not(.x):not(.eye):not(.enc):not(.primary-sm):not(.vt-go):hover{background:var(--hover)}
+.tab button:not(.link):not(.chip):not(.type):not(.x):not(.eye):not(.enc):not(.primary-sm):not(.vt-go){background:var(--card2);border-color:transparent}
+.tab button:not(.link):not(.chip):not(.type):not(.x):not(.eye):not(.enc):not(.primary-sm):not(.vt-go):hover{background:var(--hover)}
 .chip,.type,.plat,.key-item,.bc-card,.vts-card,.upd-box{border-radius:14px}
-body:not(.theme-dark) .chip,body:not(.theme-dark) .type,body:not(.theme-dark) .plat{background:var(--card2);border-color:transparent}
-body:not(.theme-dark) .bc-card,body:not(.theme-dark) .vts-card{background:var(--card2);border-color:transparent}
+.chip,.type,.plat{background:var(--card2);border-color:transparent}
+.bc-card,.vts-card{background:var(--card2);border-color:transparent}
 .toast.show{border-radius:14px}
 
 /* 사운드: 밝은 테마 레벨 색 (초록 → 노랑 → 빨강) */
 .stage .sound{padding:12px 16px 14px}
-body:not(.theme-dark) .bar .lvl{background:linear-gradient(90deg,#3DD598 0%,#3DD598 60%,#F5B83D 80%,#F04452 100%)}
-body:not(.theme-dark) .bar .ticks{background:repeating-linear-gradient(90deg,transparent 0 calc(10% - 1px),rgba(255,255,255,.9) calc(10% - 1px) 10%)}
-body:not(.theme-dark) .bar .pk{background:#191F28}
-body:not(.theme-dark) .bar input::-webkit-slider-thumb{box-shadow:0 0 0 2px #fff}
+.bar .lvl{background:linear-gradient(90deg,#3DD598 0%,#3DD598 60%,#F5B83D 80%,#F04452 100%)}
+.bar .ticks{background:repeating-linear-gradient(90deg,transparent 0 calc(10% - 1px),rgba(255,255,255,.9) calc(10% - 1px) 10%)}
+.bar .pk{background:#191F28}
+.bar input::-webkit-slider-thumb{box-shadow:0 0 0 2px #fff}
 
 /* 위쪽 바 */
-body:not(.theme-dark) .live-pill:not(.live):not(.wait){background:var(--card)}
-body:not(.theme-dark) .live-pill{box-shadow:var(--shadow)}
-body:not(.theme-dark) .mode-sw,body:not(.theme-dark) .viewers,body:not(.theme-dark) .upd-check{box-shadow:var(--shadow)}
+.live-pill:not(.live):not(.wait){background:var(--card)}
+.live-pill{box-shadow:var(--shadow)}
+.mode-sw,.viewers,.upd-check{box-shadow:var(--shadow)}
 
 /* ON AIR: 왼쪽엔 장면만 */
 body.mode-air .src-rail{display:none}
@@ -589,14 +589,32 @@ body.mode-air .rail .scene-row{max-height:none;flex:1}
 .src-rail .src-title{flex-basis:100%;margin-bottom:2px}
 .src-rail .src-tools{width:100%}.src-rail .src-tools button.accent{flex:1}
 .bc-row button{white-space:nowrap}
-body:not(.theme-dark) .preview-wrap{background:var(--card2);box-shadow:none}
+.preview-wrap{background:var(--card2);box-shadow:none}
 body.mode-air .rail .tile{width:100%;height:auto;min-height:52px}
 body.mode-air .rail .tile b{font-size:14px}
-body:not(.theme-dark) .tab .chat-switch button.on{background:var(--red)!important;color:#fff!important}
-body:not(.theme-dark) .tab #chatLog.on{background:var(--soft)}
+.tab .chat-switch button.on{background:var(--red)!important;color:#fff!important}
+.tab #chatLog.on{background:var(--soft)}
 /* 회색 카드 안의 버튼 · 칩은 흰색으로 (안 보이는 것 방지) */
-body:not(.theme-dark) .vts-card .chip,body:not(.theme-dark) .bc-card .chip,body:not(.theme-dark) .vts-card input,body:not(.theme-dark) .vts-card select,body:not(.theme-dark) .bc-card input,body:not(.theme-dark) .bc-card select,body:not(.theme-dark) .bc-card textarea{background:var(--card)}
-body:not(.theme-dark) .tab .vts-card button:not(.primary-sm):not(.chip),body:not(.theme-dark) .tab .bc-card button:not(.primary-sm):not(.chip):not(.link){background:var(--card)!important}
-body:not(.theme-dark) .vts-card .chip.on,body:not(.theme-dark) .bc-card .chip.on{background:var(--soft)}
-body:not(.theme-dark) .cm .nk{color:#4E5968}
-body:not(.theme-dark) .cm.p-chzzk .nk{color:#0F8A62}body:not(.theme-dark) .cm.p-youtube .nk{color:#C8264A}body:not(.theme-dark) .cm.p-soop .nk{color:#2D62C8}
+.vts-card .chip,.bc-card .chip,.vts-card input,.vts-card select,.bc-card input,.bc-card select,.bc-card textarea{background:var(--card)}
+.tab .vts-card button:not(.primary-sm):not(.chip),.tab .bc-card button:not(.primary-sm):not(.chip):not(.link){background:var(--card)!important}
+.vts-card .chip.on,.bc-card .chip.on{background:var(--soft)}
+.cm .nk{color:#4E5968}
+.cm.p-chzzk .nk{color:#0F8A62}.cm.p-youtube .nk{color:#C8264A}.cm.p-soop .nk{color:#2D62C8}
+
+/* 다크 모드 세부 */
+body.theme-dark .bar .ticks{background:repeating-linear-gradient(90deg,transparent 0 calc(10% - 1px),rgba(14,15,19,.85) calc(10% - 1px) 10%)}
+body.theme-dark .bar .pk{background:#ECEEF3}
+body.theme-dark .bar input::-webkit-slider-thumb{box-shadow:0 0 0 2px #0E0F13}
+body.theme-dark .cm .nk{color:#C3C7D2}
+body.theme-dark .cm.p-chzzk .nk{color:#5FE3B2}body.theme-dark .cm.p-youtube .nk{color:#FF8DA1}body.theme-dark .cm.p-soop .nk{color:#8DB4FF}
+body.theme-dark .preview-wrap{background:#14151B}
+body.theme-dark .vt-card{border-color:rgba(139,124,246,.35)}
+
+/* 탭 4개: 방송 · 채팅 · 소스 · 설정 (사운드 = 사운드 칸 ⚙, 타이머 = 소스 탭 안) */
+.tabs{grid-template-columns:repeat(4,1fr)}
+.tab-back{display:flex;align-items:center;gap:8px;margin:0 0 14px}
+.tab-back b{font-size:15px}
+.tab .tab-back button{padding:6px 12px!important}
+.sec-card{background:var(--card2);border-radius:14px;padding:14px;margin-top:14px}
+.sec-card h4{margin-top:0}
+.sec-card .timer-big{font-size:38px;padding:4px 0 10px}

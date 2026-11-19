@@ -403,7 +403,7 @@ function guideData() {
 }
 function guideDraw() {
   if (guideRaf) return;
-  guideRaf = requestAnimationFrame(() => { guideRaf = 0; try { ipcRenderer.send('ov:draw', { ...guideData(), color: cfg.themeDark ? ['#E11D2E', '#FF4D5E', 'rgba(225,29,46,.10)'] : ['#6B5CE7', '#9A8FF5', 'rgba(107,92,231,.10)'] }); } catch (e) { rlog('warn', 'guide', e); } });
+  guideRaf = requestAnimationFrame(() => { guideRaf = 0; try { ipcRenderer.send('ov:draw', { ...guideData(), color: cfg.themeDark ? ['#8B7CF6', '#B3A9FA', 'rgba(139,124,246,.12)'] : ['#6B5CE7', '#9A8FF5', 'rgba(107,92,231,.10)'] }); } catch (e) { rlog('warn', 'guide', e); } });
 }
 function guideShow() {
   const on = engineOk && mode !== 'air' && cfg.guide !== false;
@@ -577,7 +577,9 @@ function meterLoop(ts = performance.now()) {
   requestAnimationFrame(meterLoop);
 }
 requestAnimationFrame(meterLoop);
-$('soundGear').addEventListener('click', () => openTab('sound'));
+let tabBeforeSound = 'stream';
+$('soundGear').addEventListener('click', () => { tabBeforeSound = document.querySelector('.tabs button.on')?.dataset.tab || 'stream'; openTab('sound'); });
+$('soundBack').addEventListener('click', () => openTab(tabBeforeSound));
 
 // ================================================================== 사운드 탭: 지금 나오는 소리 → 끌어다 분리
 let liveApps = [];          // [{ exe, desc, title, peak }]
