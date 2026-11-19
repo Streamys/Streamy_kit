@@ -71,7 +71,11 @@ async function checkLocal(manual) {
   emit({ status: 'available', error: '' });
   return state;
 }
-function emit(patch) { state = { ...state, ...patch }; ctx.send('update:state', { ...state, current: ctx.app.getVersion(), info }); }
+function emit(patch) {
+  state = { ...state, ...patch };
+  if (['available', 'downloading', 'ready'].includes(state.status) && !(info && info.version)) state.status = 'latest';   // 받을 게 없는데 버튼만 뜨는 일 막기
+  ctx.send('update:state', { ...state, current: ctx.app.getVersion(), info });
+}
 
 // 1.10.0 > 1.9.3 처럼 숫자로 비교
 function newer(a, b) {
@@ -113,6 +117,7 @@ async function check(manual) {
 
 async function download() {
   if (!info) throw new Error('받을 업데이트가 없어요.');
+  if (state.status === 'downloading') return state;     // 두 번 눌려도 한 번만
   if (state.status === 'ready' && file && fs.existsSync(file)) return state;
   const dir = path.join(os.tmpdir(), 'streamy-kit-update');
   fs.mkdirSync(dir, { recursive: true });
@@ -222,7 +227,7 @@ function cleanupLocal() {
   let names = []; try { names = fs.readdirSync(localDir); } catch { return; }
   for (const n of names) {
     const m = n.match(LOCAL_RE); if (!m) continue;
-    if (!newer(m[1], ctx.app.getVersion())) { try { fs.unlinkSync(path.join(localDir, n)); ctx.log.info('update', 'removed old update file', n); } catch {} }
+    if (!newer(m[1] || m[3], ctx.app.getVersion())) { try { fs.unlinkSync(path.join(localDir, n)); ctx.log.info('update', 'removed old update file', n); } catch {} }
   }
   try { fs.rmSync(path.join(os.tmpdir(), 'streamy-kit-update'), { recursive: true, force: true }); } catch {}
   // 지금 쓰는 것보다 오래된 빠른 업데이트 폴더 정리

@@ -1277,7 +1277,7 @@ function renderUpdate() {
   $('updCheck').textContent = upd.status === 'available' || upd.status === 'ready' ? `v${v}로 업데이트` : '업데이트 확인';
   $('updCheck').disabled = upd.status === 'checking' || upd.status === 'downloading';
   const notes = $('updNotes'); notes.hidden = !(v && upd.info.notes); notes.textContent = v ? upd.info.notes : '';
-  const show = ['available', 'downloading', 'ready'].includes(upd.status);
+  const show = !!v && ['available', 'downloading', 'ready'].includes(upd.status);
   btn.hidden = !show;
   btn.classList.toggle('busy', upd.status === 'downloading');
   txt.textContent = upd.status === 'downloading' ? `받는 중 ${upd.progress || 0}%` : upd.status === 'ready' ? `v${v} 설치하기` : `업데이트 v${v}`;
