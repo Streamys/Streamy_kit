@@ -37,15 +37,10 @@ function draw() {
   fit();
   g.clearRect(0, 0, innerWidth, innerHeight);
   const items = data.items || [];
-  // 0) 방송 · 녹화에서 뺀 소스: 빗금 + '방송 제외' / '녹화 제외'
+  // 0) 방송 · 녹화에서 뺀 소스: 오른쪽 아래에 빨간 네모 + 흰 글씨
   for (const it of items) {
     if (!it.off) continue;
-    g.save(); g.beginPath(); g.rect(it.x, it.y, it.w, it.h); g.clip();
-    g.fillStyle = 'rgba(11,11,13,.38)'; g.fillRect(it.x, it.y, it.w, it.h);
-    g.strokeStyle = 'rgba(255,255,255,.22)'; g.lineWidth = 2;
-    for (let d = -it.h; d < it.w; d += 14) { g.beginPath(); g.moveTo(it.x + d, it.y + it.h); g.lineTo(it.x + d + it.h, it.y); g.stroke(); }
-    g.restore();
-    pill(it.off === 'stream' ? '방송 제외' : '녹화 제외', it.x + it.w - 6, it.y + it.h - 6, { bg: 'rgba(11,11,13,.88)', size: 11, align: 'right', vAlign: 'bottom' });
+    pill(it.off === 'stream' ? '방송 제외' : '녹화 제외', it.x + it.w - 6, it.y + it.h - 6, { bg: RED, fg: '#fff', size: 12, align: 'right', vAlign: 'bottom' });
   }
   // 1) 모든 소스: 옅은 점선 (어디에 뭐가 있는지)
   for (const it of items) {
@@ -79,8 +74,8 @@ function draw() {
     const tag = pill(it.name, it.x + (above ? 0 : 6), ty, { vAlign: above ? 'bottom' : 'top' });
     if (data.size) pill(data.size, tag.x + tag.w + 4, tag.y, { bg: 'rgba(11,11,13,.9)', size: 12 });
   }
-  // 5) 사용법 안내 (아래 가운데)
-  if (data.hint) pill(data.hint, innerWidth / 2, innerHeight - 10, { bg: 'rgba(11,11,13,.82)', fg: '#E4E4E7', bold: 700, size: 12, align: 'center', vAlign: 'bottom' });
+  // 5) 사용법 안내는 표시 안 함 (글 줄이기)
+  if (false && data.hint) pill(data.hint, innerWidth / 2, innerHeight - 10, { bg: 'rgba(11,11,13,.82)', fg: '#E4E4E7', bold: 700, size: 12, align: 'center', vAlign: 'bottom' });
 }
 let raf = 0;
 const later = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); };
