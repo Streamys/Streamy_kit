@@ -1348,3 +1348,6 @@ label.check,.lay-chk,label:has(>input[type=checkbox]){cursor:pointer}
 .vis-row .ic svg{width:18px;height:18px}
 .vis-row.part .ic{color:var(--red)}
 .vis-row .nm{flex:1;min-width:0;font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.lay-wrap{display:flex;align-items:center;gap:8px}
+.tb-name{font-size:12px;font-weight:700;color:var(--sub);white-space:nowrap;-webkit-app-region:no-drag}
