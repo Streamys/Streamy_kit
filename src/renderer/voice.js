@@ -316,9 +316,11 @@
       let m = -120; for (let k = b0; k <= b1; k++) if (fft[k] > m) m = fft[k];
       return m;
     });
+    const sb = solo != null ? V().bands.find((b) => b.id === solo) : null, edges = sb ? soloEdges(sb) : null;
     for (let i = 0; i < vals.length; i++) {
       const x = xsCache[i][0], m = (vals[Math.max(0, i - 1)] + vals[i] * 2 + vals[Math.min(vals.length - 1, i + 1)]) / 4;   // 살짝 부드럽게
-      const t = Math.max(0, Math.min(1, (m + 95) / 70)), y = base - t * span;
+      const f = xsCache[i][1], out = edges && (f < edges[0] || f > edges[1]);           // 구간만 듣기: 구간 밖은 구름도 안 보이게
+      const t = out ? 0 : Math.max(0, Math.min(1, (m + 95) / 70)), y = base - t * span;
       d += 'L' + x.toFixed(1) + ' ' + y.toFixed(1) + ' '; e += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
     }
     cloud.setAttribute('d', d + `L${W} ${H} Z`); edge.setAttribute('d', e);
