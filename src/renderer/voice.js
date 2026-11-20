@@ -235,7 +235,7 @@
   const gW = el('g', {}, svg), gN = el('g', {}, svg);
   const labels = Q('voZones'), bubble = Q('voBubble');
 
-  function resize() { const r = wrap.getBoundingClientRect(); W = Math.max(300, Math.round(r.width)); H = Math.max(200, Math.round(r.height)); svg.setAttribute('viewBox', `0 0 ${W} ${H}`); }
+  function resize() { if (wrap.hidden) return; const r = wrap.getBoundingClientRect(); if (r.width < 50 || r.height < 50) return; W = Math.max(300, Math.round(r.width)); H = Math.max(200, Math.round(r.height)); svg.setAttribute('viewBox', `0 0 ${W} ${H}`); }
   function zonesDraw() {
     gZones.innerHTML = ''; labels.innerHTML = '';
     const s = curSel(), v = V();
@@ -349,7 +349,8 @@
     const b = e.target.closest('button[data-view]'); if (!b || !b.dataset.view) return;
     const v = V(); if (v.view === b.dataset.view) return;
     v.view = b.dataset.view; if (v.view === 'comp') solo = null;
-    syncChain(); requestAnimationFrame(() => { resize(); drawAll(); }); saveSoon();
+    syncChain(); headDraw();                                  // 먼저 화면을 보이게 바꾼 뒤
+    requestAnimationFrame(() => { resize(); drawAll(); }); saveSoon();   // 보이는 크기로 다시 잼
   });
   function changed(quick) {
     if (!quick) V().preset = V().preset || '';
