@@ -1391,7 +1391,7 @@ $('isoOn').addEventListener('change', () => { const c = isoCfg(); c.on = $('isoO
 
 // ================================================================== 방송 · 녹화 따로 보이기 (사운드 탭, 녹화 트랙 아래)
 // 소스마다 [방송] [녹화] 켜고 끄기 — 모든 장면의 같은 소스에 한 번에 적용
-const whereOf = (w) => ({ stream: (w || 'both') !== 'record', record: (w || 'both') !== 'stream' });
+const whereOf = (w) => ({ stream: w !== 'record' && w !== 'none', record: w !== 'stream' && w !== 'none' });
 function visSources() {
   if (DEMO) return demo.items.map((x) => ({ name: x.name, kind: x.kind, where: x.where || 'both' }));
   if (!engineOk) return [];
@@ -1408,13 +1408,15 @@ function renderVis() {
   box.innerHTML = list.length ? '' : '<div class="iso-empty">장면에 소스를 넣으면 여기서 고를 수 있어요.</div>';
   for (const x of list) {
     const w = whereOf(x.where);
-    const row = document.createElement('div'); row.className = 'vis-row' + (x.where !== 'both' ? ' part' : '');
+    const row = document.createElement('div'); row.className = 'vis-row' + (x.where === 'none' ? ' hid' : x.where !== 'both' ? ' part' : '');
     row.innerHTML = `<span class="ic">${srcIcon(x.kind)}</span><span class="nm">${esc(x.name)}</span><span class="vis-tg">` +
       [['stream', '방송'], ['record', '녹화']].map(([k, l]) => `<button class="vis${w[k] ? '' : ' off'}" data-o="${k}">${ic(w[k] ? 'eye' : 'eyeOff')}<span>${l}</span></button>`).join('') + '</span>';
     row.querySelector('.vis-tg').addEventListener('click', guard((e) => {
       const b = e.target.closest('button'); if (!b || DEMO) return;
       const key = b.dataset.o; w[key] = !w[key];
-      if (!w.stream && !w.record) { renderVis(); return toast('둘 다 빼려면 소스 옆 눈 버튼으로 숨겨 주세요.', true); }
+      // 둘 다 끄면 = 눈 버튼으로 숨긴 것과 같음 (모든 장면에서 숨김)
+      if (!w.stream && !w.record) { engine.setWhereSource(x.name, 'both'); engine.setVisibleSource(x.name, false); saveScenes(); renderVis(); return; }
+      if (x.where === 'none') engine.setVisibleSource(x.name, true);
       const next = w.stream && w.record ? 'both' : w.stream ? 'stream' : 'record';
       const now = engine.setWhereSource(x.name, next); saveScenes();
       if (!now) toast('지금 방송 · 녹화가 끝나면 적용돼요.');

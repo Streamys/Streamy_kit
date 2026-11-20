@@ -378,9 +378,20 @@ class Engine {
     const ok = this.syncMultiRender();
     this.emit('items'); return ok;
   }
+  // 'none' = 모든 장면에서 숨김(눈 끔)
   sourceWhere(name) {
-    for (const sc of this.scenes) for (const it of this.uItems(sc)) if (it.source.name === name) return this.itemWhere(it);
-    return 'both';
+    let first = null, anyVisible = false;
+    for (const sc of this.scenes) for (const it of this.uItems(sc)) {
+      if (it.source.name !== name) continue;
+      if (!first) first = it;
+      if (it.visible) anyVisible = true;
+    }
+    if (!first) return 'both';
+    return anyVisible ? this.itemWhere(first) : 'none';
+  }
+  setVisibleSource(name, v) {
+    for (const sc of this.scenes) for (const it of this.uItems(sc)) if (it.source.name === name) { try { it.visible = v; } catch {} }
+    this.emit('items');
   }
   selectiveUsed() {
     for (const s of this.scenes) for (const it of this.uItems(s)) if (this.itemWhere(it) !== 'both') return true;
