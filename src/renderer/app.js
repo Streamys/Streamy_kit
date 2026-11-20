@@ -248,7 +248,7 @@ function renderSources() {
       setTimeout(() => { nmi.focus(); nmi.select(); });
     } else {
       li.className = (it.selected ? 'on' : '') + (it.visible ? '' : ' hidden');
-      li.innerHTML = `<span class="ic">${srcIcon(it.kind)}</span><span class="nm">${esc(it.name)}</span>${it.where && it.where !== 'both' ? `<span class="where-tag ${it.where}" title="${WHERE[it.where][0]} 보여요">${it.where === 'stream' ? '방송만' : '녹화만'}</span>` : ''}<button class="eye" title="보이기/숨기기">${it.visible ? ic('eye') : ic('eyeOff')}</button>`;
+      li.innerHTML = `<span class="ic">${srcIcon(it.kind)}</span><span class="nm">${esc(it.name)}</span>${it.where && it.where !== 'both' ? `<span class="vis-off" title="${it.where === 'stream' ? '녹화' : '방송'}에서 뺐어요">${ic('eyeOff')}${it.where === 'stream' ? '녹화' : '방송'}</span>` : ''}<button class="eye" title="보이기/숨기기">${it.visible ? ic('eye') : ic('eyeOff')}</button>`;
       li.addEventListener('click', guard((e) => {
         if (DEMO) return;
         engine.select(it.id, e.shiftKey ? 'range' : (e.ctrlKey || e.metaKey) ? 'toggle' : 'single');
@@ -605,7 +605,7 @@ function refreshRects() {
       if (!x.visible) continue;
       const it = engine.itemObj(x.id); if (!it) continue;
       const r = engine.itemRect(it); if (!(r.w > 0 && r.h > 0)) continue;
-      out.push({ id: x.id, name: x.name, icon: x.icon, x: r.x, y: r.y, w: r.w, h: r.h });
+      out.push({ id: x.id, name: x.name, icon: x.icon, x: r.x, y: r.y, w: r.w, h: r.h, where: x.where || 'both' });
     }
   } catch (e) { rlog('warn', 'refreshRects', e); }
   rects = out;
@@ -626,7 +626,7 @@ function guideData() {
   const selId = engine.sel.size === 1 ? engine.primary : null;
   for (const r of rects.slice().reverse()) {                     // 아래(뒤)부터 그림
     const state = engine.sel.has(r.id) ? 'sel' : r.id === hoverId ? 'hover' : 'norm';
-    items.push({ x: m.ox + r.x * m.s, y: m.oy + r.y * m.s, w: r.w * m.s, h: r.h * m.s, name: r.name, state });
+    items.push({ x: m.ox + r.x * m.s, y: m.oy + r.y * m.s, w: r.w * m.s, h: r.h * m.s, name: r.name, state, off: r.where === 'stream' ? 'record' : r.where === 'record' ? 'stream' : '' });
   }
   let size = '', hint = '';
   const sr = selId != null ? rects.find((r) => r.id === selId) : null;
@@ -1390,22 +1390,28 @@ function renderIso() {
 $('isoOn').addEventListener('change', () => { const c = isoCfg(); c.on = $('isoOn').checked; save(); renderIso(); });
 
 // ================================================================== 방송 · 녹화 따로 보이기 (선택한 소스)
-const WHERE = { both: ['방송 · 녹화', 'eye'], stream: ['방송에만', 'live'], record: ['녹화에만', 'rec'] };
-const WHERE_NEXT = { both: 'stream', stream: 'record', record: 'both' };
+// 편집 막대의 [방송] [녹화] 버튼 = 그 소스를 방송에 / 녹화에 넣을지 켜고 끄기 (눈 버튼처럼)
+const whereOf = (it) => ({ stream: (it?.where || 'both') !== 'record', record: (it?.where || 'both') !== 'stream' });
+function selItem() { return engineOk && engine.sel.size === 1 ? engine.items().find((x) => x.id === engine.primary) : null; }
 function renderWhere() {
-  const b = $('whereBtn'); if (!b) return;
-  let w = 'both';
-  if (DEMO) w = 'both';
-  else if (engineOk && engine.sel.size === 1) { const it = engine.items().find((x) => x.id === engine.primary); if (it) w = it.where || 'both'; }
-  b.dataset.w = w; b.innerHTML = `<i class="wdot ${w}"></i>${WHERE[w][0]}`;
+  const it = DEMO ? demo.items[0] : selItem(), w = whereOf(it);
+  for (const [id, key, label] of [['visStream', 'stream', '방송'], ['visRec', 'record', '녹화']]) {
+    const b = $(id); if (!b) continue;
+    b.classList.toggle('off', !w[key]);
+    b.innerHTML = `${ic(w[key] ? 'eye' : 'eyeOff')}<span>${label}</span>`;
+  }
 }
-$('whereBtn').addEventListener('click', guard(() => {
-  if (DEMO || !engineOk || engine.sel.size !== 1) return;
-  const it = engine.items().find((x) => x.id === engine.primary); if (!it) return;
-  const next = WHERE_NEXT[it.where || 'both'];
+for (const id of ['visStream', 'visRec']) $(id).addEventListener('click', guard(() => {
+  if (DEMO) return;
+  const it = selItem(); if (!it) return;
+  const w = whereOf(it), key = $(id).dataset.o;
+  w[key] = !w[key];
+  if (!w.stream && !w.record) return toast('둘 다 빼려면 소스 옆 눈 버튼으로 숨겨 주세요.', true);
+  const next = w.stream && w.record ? 'both' : w.stream ? 'stream' : 'record';
   const now = engine.setWhere(it.id, next); saveScenes();
-  if (!now) toast('지금 방송 · 녹화가 끝나면 적용돼요.');
-  else toast(next === 'stream' ? `'${it.name}' — 방송에만 보여요 (녹화엔 안 담겨요).` : next === 'record' ? `'${it.name}' — 녹화에만 담겨요 (방송엔 안 보여요).` : `'${it.name}' — 방송 · 녹화 둘 다 보여요.`);
+  const label = key === 'stream' ? '방송' : '녹화';
+  if (!now) toast(`지금 방송 · 녹화가 끝나면 적용돼요.`);
+  else toast(w[key] ? `'${it.name}' — 다시 ${label}에 나와요.` : `'${it.name}' — ${label}에서 뺐어요. 미리보기에만 보여요.`);
 }));
 
 setInterval(() => {
@@ -1629,7 +1635,7 @@ async function boot() {
 // 개발용 화면 미리보기 (윈도우가 아닌 환경에서 STREAMY_DEMO=1)
 const demo = {
   scenes: [{ id: 'a', name: '게임 방송', n: 3 }, { id: 'b', name: '저챗', n: 2 }, { id: 'c', name: '쉬는 시간', n: 1 }, { id: 'd', name: '합방', n: 4 }], current: 'a',
-  items: [{ id: 3, name: '웹캠', kind: 'webcam', icon: '', visible: true, selected: true }, { id: 2, name: '타이머', kind: 'timer', icon: '', visible: true, selected: true, where: 'stream' }, { id: 1, name: '모니터 1', kind: 'monitor', icon: '', visible: true }],
+  items: [{ id: 3, name: '웹캠', kind: 'webcam', icon: '', visible: true, selected: true }, { id: 2, name: '타이머', kind: 'timer', icon: '', visible: true, selected: true, where: 'record' }, { id: 1, name: '모니터 1', kind: 'monitor', icon: '', visible: true }],
   audio: [{ name: 'd', label: '데스크톱 소리', vol: 0.8, muted: false }, { name: 'm', label: '마이크', vol: 0.72, muted: false }, { name: 'dc', label: '디스코드', vol: 0.55, muted: false, kind: 'app' }, { name: 'ch', label: 'Google Chrome', vol: 0.4, muted: false, kind: 'app' }],
   sep: [{ name: 'dc', label: '디스코드', exe: 'Discord.exe' }, { name: 'ch', label: 'Google Chrome', exe: 'chrome.exe' }],
   live: [{ exe: 'Spotify.exe', desc: 'Spotify', peak: 0.4 }, { exe: 'msedge.exe', desc: 'Microsoft Edge', peak: 0.2 }, { exe: 'League of Legends.exe', desc: 'League of Legends', peak: 0.6 }, { exe: 'KakaoTalk.exe', desc: '카카오톡', peak: 0 }],

@@ -1312,14 +1312,15 @@ label.check,.lay-chk,label:has(>input[type=checkbox]){cursor:pointer}
 .trk-one{height:26px;padding:0 10px;border-radius:8px;font-size:12px;font-weight:800;display:inline-flex;align-items:center;background:var(--soft,var(--card2));color:var(--red2,var(--red))}
 .trk-all{border-bottom:1px solid var(--line);border-radius:0;padding-bottom:6px;margin-bottom:2px}
 
-/* 방송 · 녹화 따로 보이기 (v0.28) */
-.edit-actions .where-btn{display:inline-flex!important;align-items:center;gap:6px;font-weight:800}
-.edit-actions .where-btn[data-w="stream"],.edit-actions .where-btn[data-w="record"]{color:var(--red2,var(--red))}
-.wdot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--sub);display:inline-block}
-.wdot.stream{background:var(--red)}
-.wdot.record{background:transparent;box-shadow:inset 0 0 0 2px var(--red)}
-.where-tag{flex:none;font-size:10.5px;font-weight:800;line-height:18px;padding:0 6px;border-radius:6px;margin-left:4px;background:var(--soft,var(--card2));color:var(--red2,var(--red))}
-.where-tag.record{background:transparent;box-shadow:inset 0 0 0 1.5px var(--red)}
+/* 방송 · 녹화 따로 보이기 (v0.28.1): 편집 막대 [방송] [녹화] 켜고 끄기 */
+.vis-tg{display:inline-flex;gap:2px;padding:2px;border-radius:10px;background:var(--card2);flex:none}
+.edit-actions .vis-tg button.vis{display:inline-flex!important;align-items:center;gap:5px;height:28px;padding:0 10px!important;border-radius:8px;border:none;background:var(--card)!important;color:var(--text);font-weight:800;box-shadow:0 1px 2px rgba(25,31,40,.06)}
+.edit-actions .vis-tg button.vis svg{width:15px;height:15px;color:var(--red)}
+.edit-actions .vis-tg button.vis.off{background:transparent!important;color:var(--sub);box-shadow:none}
+.edit-actions .vis-tg button.vis.off svg{color:var(--sub)}
+.edit-actions .vis-tg button.vis.off span{text-decoration:line-through;text-decoration-thickness:1.5px}
+.vis-off{flex:none;display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:800;line-height:18px;padding:0 6px 0 4px;border-radius:6px;margin-left:4px;background:var(--card2);color:var(--sub);text-decoration:line-through}
+.vis-off svg{width:12px;height:12px}
 /* 소스별 따로 녹화 */
 .sec-card>.iso-list{display:grid!important;grid-template-columns:1fr 1fr;gap:6px;padding:8px!important}
 .sec-card>.iso-list[hidden],#isoHint[hidden]{display:none!important}
@@ -1335,3 +1336,7 @@ label.check,.lay-chk,label:has(>input[type=checkbox]){cursor:pointer}
 #isoList .iso-chip.full{opacity:.45}
 .iso-empty{grid-column:1/-1;font-size:12px;color:var(--sub);text-align:center;padding:10px}
 #recOpen{display:inline-flex;align-items:center;gap:6px}
+.edit-bar .sel-size{white-space:nowrap;flex:none}
+.edit-actions{display:flex!important;align-items:center;gap:6px;flex-wrap:nowrap;min-width:0}
+.edit-actions>button{white-space:nowrap;padding-left:10px!important;padding-right:10px!important;flex:none}
+.edit-actions>.vis-tg{margin-right:4px}

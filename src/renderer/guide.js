@@ -37,6 +37,16 @@ function draw() {
   fit();
   g.clearRect(0, 0, innerWidth, innerHeight);
   const items = data.items || [];
+  // 0) 방송 · 녹화에서 뺀 소스: 빗금 + '방송 제외' / '녹화 제외'
+  for (const it of items) {
+    if (!it.off) continue;
+    g.save(); g.beginPath(); g.rect(it.x, it.y, it.w, it.h); g.clip();
+    g.fillStyle = 'rgba(11,11,13,.38)'; g.fillRect(it.x, it.y, it.w, it.h);
+    g.strokeStyle = 'rgba(255,255,255,.22)'; g.lineWidth = 2;
+    for (let d = -it.h; d < it.w; d += 14) { g.beginPath(); g.moveTo(it.x + d, it.y + it.h); g.lineTo(it.x + d + it.h, it.y); g.stroke(); }
+    g.restore();
+    pill(it.off === 'stream' ? '방송 제외' : '녹화 제외', it.x + it.w - 6, it.y + it.h - 6, { bg: 'rgba(11,11,13,.88)', size: 11, align: 'right', vAlign: 'bottom' });
+  }
   // 1) 모든 소스: 옅은 점선 (어디에 뭐가 있는지)
   for (const it of items) {
     if (it.state !== 'norm') continue;
@@ -86,7 +96,7 @@ if (process.env.STREAMY_DEMO_GUIDE) {
   data = {
     items: [
       { x: 0, y: 0, w: innerWidth, h: innerHeight, name: '모니터 1', state: 'norm' },
-      { x: innerWidth * 0.72, y: innerHeight * 0.05, w: innerWidth * 0.25, h: innerHeight * 0.14, name: '타이머', state: 'hover' },
+      { x: innerWidth * 0.72, y: innerHeight * 0.05, w: innerWidth * 0.25, h: innerHeight * 0.14, name: '타이머', state: 'norm', off: 'stream' },
       { x: innerWidth * 0.05, y: innerHeight * 0.58, w: innerWidth * 0.3, h: innerHeight * 0.36, name: '웹캠', state: 'sel' },
     ],
     guides: [{ x1: innerWidth * 0.05, y1: 0, x2: innerWidth * 0.05, y2: innerHeight }],
