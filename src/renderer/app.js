@@ -1416,7 +1416,10 @@ async function boot() {
   try { await ipcRenderer.invoke('engine:prepare'); } catch (e) { rlog('warn', 'prepare', e); }
   // 엔진 켜는 동안 화면이 잠깐 멈춰서, 그 전에 안내를 띄우고 메인에 알림 (응답 없음 창 안 띄우게)
   const boot = document.createElement('div'); boot.className = 'boot-ov';
-  boot.innerHTML = '<div class="boot-box"><i class="boot-spin"></i><b>방송 엔진 준비 중</b><small>처음 켤 땐 1~2분 걸릴 수 있어요</small></div>';
+  // 엔진이 켜지는 동안 화면이 멈춰서 진행률을 직접 알 수 없음 → 지난번 걸린 시간 기준으로 막대를 채움 (멈춰도 움직이는 애니메이션)
+  const expect = Math.min(300000, Math.max(8000, (cfg.bootMs || 30000) * 1.2));
+  boot.innerHTML = `<div class="boot-box"><b>방송 엔진 준비 중</b><div class="boot-bar"><i style="animation-duration:${expect}ms"></i></div>
+    <small>일반 데스크톱 기준 최대 30초</small><small>그래픽카드가 없는 노트북은 5분까지 걸릴 수 있어요!</small></div>`;
   document.body.appendChild(boot);
   ipcRenderer.send('engine:booting', true);
   await nextFrame(); await nextFrame();
@@ -1425,7 +1428,9 @@ async function boot() {
   try {
     engine.start({ osnDir: info.osnDir, dataDir: info.dataDir, width: q[0], height: q[1], fps: q[2] });
     rlog('info', `engine started in ${Math.round(performance.now() - t0)}ms`, 'encoders:', engine.encoderTypes().join(','));
-    ipcRenderer.send('engine:booting', false); boot.remove();
+    ipcRenderer.send('engine:booting', false);
+    cfg.bootMs = Math.round(performance.now() - t0); save();
+    boot.classList.add('done'); setTimeout(() => boot.remove(), 450);
     engineOk = true;
     // 0.19.2~0.21.0에서 넣은 모니터(번호로 지정)는 화면이 안 잡혀서, 진짜 모니터 ID로 바꿔 줌
     setTimeout(function fixMon(n = 0) {
