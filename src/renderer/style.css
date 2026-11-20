@@ -1581,3 +1581,33 @@ code,.key-item code,#liveTime,#recDirV,.vc-row b,.vo-bt em,.vo-bt small,.vo-chip
 .cp-v small{font-family:inherit;font-size:11px;color:var(--sub);margin-left:2px;font-weight:500}
 .cp-st{font-size:12px;font-weight:700;color:var(--sub)}
 .cp-empty{font-size:12px;color:var(--sub);padding-top:8px;border-top:1px solid var(--line)}
+
+/* 포인트 색 직접 고르기 창 (v0.32.2) */
+.col-ov{position:fixed;inset:0;z-index:230;display:flex;align-items:center;justify-content:center;background:rgba(20,22,30,.32);-webkit-app-region:no-drag}
+.col-ov[hidden]{display:none}
+.col-box{width:340px;padding:18px;box-sizing:border-box;display:flex;flex-direction:column;gap:12px;background:var(--bg);border:1px solid var(--line);border-radius:22px;box-shadow:0 20px 50px rgba(20,22,30,.3)}
+.col-head{display:flex;align-items:baseline;gap:8px}
+.col-head b{font-size:15px;font-weight:800;letter-spacing:-.02em}
+.col-head small{flex:1;font-size:11.5px;color:var(--sub)}
+.col-head .lay-x{align-self:center}
+.col-sv{position:relative;height:180px;border-radius:14px;cursor:crosshair;touch-action:none;background:linear-gradient(to top,#000,transparent),linear-gradient(to right,#fff,var(--hue,#f00))}
+.col-dot{position:absolute;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.3),0 2px 6px rgba(0,0,0,.3);pointer-events:none}
+.col-hue{position:relative;height:16px;border-radius:999px;cursor:pointer;touch-action:none;background:linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)}
+.col-knob{position:absolute;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:var(--c,#f00);border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.25),0 2px 6px rgba(0,0,0,.25);pointer-events:none}
+.col-row{display:flex;align-items:center;gap:10px}
+.col-prev{width:40px;height:40px;border-radius:12px;flex:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+.col-hex{flex:1;min-width:0;display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;border-radius:12px;border:1px solid var(--line);background:var(--card)}
+.col-hex span{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;color:var(--sub)}
+.col-hex input{flex:1;min-width:0;border:none!important;background:transparent!important;padding:0!important;font-family:var(--mono);font-size:14px;font-weight:600;color:var(--text);outline:none;box-shadow:none!important}
+.col-pv{display:flex;flex-direction:column;gap:4px;flex:none}
+.col-pv-btn{height:22px;padding:0 10px!important;border-radius:7px!important;border:none!important;background:var(--red)!important;color:var(--onac,#fff)!important;font-size:11px;font-weight:800;pointer-events:none}
+.col-pv-chip{font-size:11px;font-weight:800;color:var(--red2,var(--red));text-align:center}
+.col-cap{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--sub);margin-top:2px}
+.col-sws{display:flex;flex-wrap:wrap;gap:8px}
+.col-sws button{width:28px;height:28px;padding:0!important;border-radius:50%!important;border:none!important;background:var(--c)!important;box-shadow:inset 0 0 0 2px rgba(255,255,255,.35);cursor:pointer}
+.col-sws button:hover{transform:scale(1.1)}
+.col-warn{margin:0;min-height:16px;font-size:11.5px;font-weight:700;color:#D9822B}
+.col-btns{display:flex;gap:8px}
+.col-btns button{flex:1;height:40px;border-radius:12px!important;font-weight:800}
+.col-btns button{border:1px solid var(--line)!important;background:var(--card)!important;color:var(--text)!important}
+.col-btns #colOk{border-color:transparent!important;background:var(--red)!important;color:var(--onac,#fff)!important}

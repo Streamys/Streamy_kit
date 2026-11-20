@@ -1859,7 +1859,7 @@ const mixHex = (h, to, t) => { const a = hexRgb(h), b = to === 'w' ? [255, 255, 
 const rgba = (h, a) => { const [r, g, b] = hexRgb(h); return `rgba(${r},${g},${b},${a})`; };
 function accentNow() { const a = String(cfg.accent || ACCENTS[0][0]); return /^#[0-9a-f]{6}$/i.test(a) ? a : ACCENTS[0][0]; }
 function guideColors() { const a = accentNow(); return [cfg.themeDark ? mixHex(a, 'w', 0.12) : a, mixHex(a, 'w', 0.35), rgba(a, 0.11)]; }
-function applyAccent() {
+function applyAccent(light) {
   const a = accentNow(), dark = !!cfg.themeDark, st = document.body.style;
   st.setProperty('--red', a);
   st.setProperty('--red2', mixHex(a, 'w', 0.12));
@@ -1873,12 +1873,13 @@ function applyAccent() {
     ? { '--bg': ['#16171C', .04], '--bg2': ['#1F2128', .03], '--card': ['#1F2128', .03], '--card2': ['#282A33', .035], '--sec': ['#24262E', .035], '--line': ['#31343E', .04], '--line2': ['#3F4250', .04], '--hover': ['#2E3039', .05] }
     : { '--bg': ['#E9EBF0', .05], '--bg2': ['#F7F7F9', .02], '--card': ['#F7F7F9', .02], '--card2': ['#EFF0F3', .035], '--sec': ['#EAECF0', .045], '--line': ['#DDE0E6', .05], '--line2': ['#CBCFD8', .05], '--hover': ['#E3E5EB', .06] };
   for (const [k, [b, t]] of Object.entries(N)) st.setProperty(k, tint(b, t));
+  if (light) return;          // 색 고르는 중: 화면 색만 바로 (아이콘 · 오버레이 · 목록은 놓을 때)
   applyAppIcon(a);
   if (typeof miniConfigSend === 'function') setTimeout(miniConfigSend, 0);
   const row = $('accentRow');
   if (row) {
     row.innerHTML = ACCENTS.map(([h, n]) => `<button class="accent-sw${h.toLowerCase() === a.toLowerCase() ? ' on' : ''}" data-c="${h}" title="${n}" aria-label="${n}" style="--c:${h}"><i></i><span>${n}</span></button>`).join('')
-      + `<label class="accent-sw custom${ACCENTS.some(([h]) => h.toLowerCase() === a.toLowerCase()) ? '' : ' on'}" title="직접 고르기" style="--c:${a}"><i></i><span>직접</span><input type="color" id="accentPick" value="${a}"></label>`;
+      + `<button class="accent-sw custom${ACCENTS.some(([h]) => h.toLowerCase() === a.toLowerCase()) ? '' : ' on'}" id="accentCustom" title="직접 고르기" style="--c:${a}"><i></i><span>직접</span></button>`;
   }
 }
 // 앱 아이콘도 포인트 색 따라가기 (제목줄 로고 · 작업 표시줄 · 트레이)
@@ -2085,9 +2086,98 @@ function applyTheme() {
 }
 $('modeRow').addEventListener('click', (e) => { const b = e.target.closest('.mode-tile'); if (!b) return; cfg.themeMode = b.dataset.m; save(); applyTheme(); });
 if (darkMQ) darkMQ.addEventListener('change', () => { if (themeMode() === 'auto') applyTheme(); });
-$('accentRow').addEventListener('click', (e) => { const b = e.target.closest('button.accent-sw'); if (!b) return; cfg.accent = b.dataset.c; save(); applyTheme(); });
-$('accentRow').addEventListener('input', (e) => { if (e.target.id !== 'accentPick') return; cfg.accent = e.target.value; applyAccent(); if (typeof guideDraw === 'function') guideDraw(); });
-$('accentRow').addEventListener('change', (e) => { if (e.target.id !== 'accentPick') return; cfg.accent = e.target.value; save(); applyTheme(); });
+$('accentRow').addEventListener('click', (e) => {
+  const b = e.target.closest('button.accent-sw'); if (!b) return;
+  if (b.id === 'accentCustom') return colorOpen();
+  cfg.accent = b.dataset.c; save(); applyTheme();
+});
+
+// ================================================================== 포인트 색 직접 고르기 (전용 창): 끄는 동안 앱 색이 바로 바뀜
+const hsv2hex = (h, s2, v) => {
+  const f = (n) => { const k = (n + h / 60) % 6; return v - v * s2 * Math.max(0, Math.min(k, 4 - k, 1)); };
+  return '#' + [f(5), f(3), f(1)].map((x) => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
+};
+const hex2hsv = (hex) => {
+  const [r, g, b] = hexRgb(hex).map((x) => x / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [(h * 60 + 360) % 360, mx ? d / mx : 0, mx];
+};
+let colorSt = null;
+function colorOpen() {
+  let ov = $('colorOv');
+  if (!ov) {
+    ov = document.createElement('div'); ov.className = 'col-ov'; ov.id = 'colorOv';
+    ov.innerHTML = `<div class="col-box" role="dialog" aria-label="포인트 색 직접 고르기">
+      <div class="col-head"><b>포인트 색</b><small>끌면서 바로 바뀌는 걸 확인하세요</small><button class="lay-x" id="colX" title="취소 (Esc)">${ic('x')}</button></div>
+      <div class="col-sv" id="colSv"><i class="col-dot" id="colSvDot"></i></div>
+      <div class="col-hue" id="colHue"><i class="col-knob" id="colHueKnob"></i></div>
+      <div class="col-row"><span class="col-prev" id="colPrev"></span>
+        <label class="col-hex"><span>HEX</span><input id="colHex" maxlength="7" spellcheck="false"></label>
+        <span class="col-pv"><button class="col-pv-btn">버튼</button><span class="col-pv-chip">글자</span></span></div>
+      <div class="col-cap">추천 · 최근</div>
+      <div class="col-sws" id="colSws"></div>
+      <p class="col-warn" id="colWarn"></p>
+      <div class="col-btns"><button id="colCancel">취소</button><button class="primary-sm" id="colOk">이 색으로</button></div>
+    </div>`;
+    document.body.appendChild(ov);
+    const drag = (el, fn) => el.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); el.setPointerCapture(e.pointerId);
+      const mv = (ev) => { const r = el.getBoundingClientRect(); fn(Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)), Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height))); };
+      mv(e); const up = () => { el.removeEventListener('pointermove', mv); el.removeEventListener('pointerup', up); colorLive(true); };
+      el.addEventListener('pointermove', mv); el.addEventListener('pointerup', up);
+    });
+    drag($('colSv'), (x, y) => { colorSt.s = x; colorSt.v = 1 - y; colorSet(); });
+    drag($('colHue'), (x) => { colorSt.h = x * 359.9; colorSet(); });
+    $('colHex').addEventListener('input', () => {
+      let v = $('colHex').value.trim(); if (!v.startsWith('#')) v = '#' + v;
+      if (/^#[0-9a-f]{6}$/i.test(v)) { [colorSt.h, colorSt.s, colorSt.v] = hex2hsv(v); colorSet(true); colorLive(true); }
+    });
+    $('colSws').addEventListener('click', (e) => { const b = e.target.closest('button[data-c]'); if (!b) return; [colorSt.h, colorSt.s, colorSt.v] = hex2hsv(b.dataset.c); colorSet(); colorLive(true); });
+    $('colOk').addEventListener('click', () => colorClose(true));
+    $('colCancel').addEventListener('click', () => colorClose(false));
+    $('colX').addEventListener('click', () => colorClose(false));
+    ov.addEventListener('pointerdown', (e) => { if (e.target === ov) colorClose(true); });
+    window.addEventListener('keydown', (e) => { if ($('colorOv') && !$('colorOv').hidden && e.key === 'Escape') { e.stopPropagation(); colorClose(false); } if ($('colorOv') && !$('colorOv').hidden && e.key === 'Enter' && document.activeElement !== $('colHex')) colorClose(true); }, true);
+  }
+  const start = accentNow();
+  colorSt = { orig: start, h: 0, s: 0, v: 0 };
+  [colorSt.h, colorSt.s, colorSt.v] = hex2hsv(start);
+  const recent = Array.isArray(cfg.accentRecent) ? cfg.accentRecent : [];
+  $('colSws').innerHTML = [...ACCENTS.map(([h, n]) => [h, n]), ...recent.filter((h) => !ACCENTS.some(([a]) => a.toLowerCase() === h.toLowerCase())).slice(0, 6).map((h) => [h, '최근'])]
+    .map(([h, n]) => `<button data-c="${h}" title="${n} · ${h}" style="--c:${h}"></button>`).join('');
+  ov.hidden = false; hidePreview('color', true);
+  colorSet();
+}
+function colorSet(fromHex) {
+  const c = colorSt, hex = hsv2hex(c.h, c.s, c.v);
+  c.hex = hex;
+  $('colSv').style.setProperty('--hue', hsv2hex(c.h, 1, 1));
+  $('colSvDot').style.left = c.s * 100 + '%'; $('colSvDot').style.top = (1 - c.v) * 100 + '%';
+  $('colHueKnob').style.left = c.h / 360 * 100 + '%'; $('colHueKnob').style.setProperty('--c', hsv2hex(c.h, 1, 1));
+  $('colPrev').style.background = hex;
+  if (!fromHex && document.activeElement !== $('colHex')) $('colHex').value = hex.toUpperCase();
+  // 너무 밝거나 어두우면 알려 줌 (흰 글씨가 올라가는 버튼 기준)
+  const [r, g, b] = hexRgb(hex).map((x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+  const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  $('colWarn').textContent = L > 0.55 ? '너무 밝으면 버튼 글씨가 잘 안 보일 수 있어요' : c.v < 0.25 ? '너무 어두우면 어두운 테마에서 잘 안 보여요' : '';
+  colorLive(false);
+}
+let colorRaf = 0;
+function colorLive(full) {
+  cfg.accent = colorSt.hex;
+  if (full) { applyAccent(); if (typeof guideDraw === 'function') guideDraw(); return; }
+  if (colorRaf) return;
+  colorRaf = requestAnimationFrame(() => { colorRaf = 0; applyAccent(true); });
+}
+function colorClose(ok) {
+  const ov = $('colorOv'); if (!ov || ov.hidden) return;
+  ov.hidden = true; hidePreview('color', false);
+  if (ok) {
+    cfg.accentRecent = [colorSt.hex, ...(cfg.accentRecent || []).filter((h) => h.toLowerCase() !== colorSt.hex.toLowerCase())].slice(0, 6);
+  } else cfg.accent = colorSt.orig;
+  save(); applyTheme();
+}
 applyTheme();
 
 // ================================================================== 채팅 기록 (파일 저장)
