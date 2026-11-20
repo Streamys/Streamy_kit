@@ -35,6 +35,7 @@
 - **글 줄이기 · 줄 맞춤**: 설명 문구 숨김, 카드 제목/여백/버튼 통일, 사운드 % 위치, 아이콘+글자 세로 정렬 (v0.22 ~ v0.22.1), 플랫폼 뱃지(색 점 · 치/유/숲) 제거 — 채팅 메시지 안 표시만 유지 (v0.24.1)
 
 ### 동작 · 안정성
+- **v0.33.2** 시작 애니메이션 위로 엔진 미리보기(네이티브 검은 창)가 먼저 뜨던 문제: `prevHide`에 'intro'를 넣어 두고 createDisplay 직후 화면 밖으로 옮김, 가이드 창·폰 화면도 대기. 애니메이션이 끝나면 `hidePreview('intro', false)`로 제자리.
 - **v0.33.1** 시작 애니메이션 끝: 로고가 나온 뒤 가운데 빛나는 선에서 화면이 위아래로 확 열리며(`.in-top`/`.in-bot` translateY) 본 화면이 보임. 다 열리면(`animationName==='in-open-b'`) 치움. 주의: ::after 애니메이션의 animationend도 부모에서 잡히므로 이름으로 구분.
 - **v0.33.0** 시작 애니메이션 (TV 켜지듯): index.html 맨 앞 `#intro` + style.css `in-*` 키프레임 (약 1.8초). 선이 가로로 그어지고 → 세로로 퍼지는 빛 → ON AIR 불 깜빡 후 켜짐 → 로고. transform/opacity만 써서 `engine.start`가 화면을 멈춰도 계속 재생됨. 클릭하면 건너뜀, 6초 안전장치. 설정 › 화면 테마 `#introOn` (`cfg.introOff`). 캡처(SHOT_OUT)일 땐 안 나옴.
 - **v0.32.2** 포인트 색 '직접': 기본 색 고르기 창(클릭하면 닫힘) 대신 전용 창 `#colorOv` (app.js `colorOpen/colorSet/colorLive/colorClose`). 색 사각형 + 색상 띠 + HEX + 추천·최근(`cfg.accentRecent` 6개). 끄는 동안 `applyAccent(true)`(가벼운 적용, rAF)로 앱 색이 바로 바뀌고, 손을 떼면 전체 적용. [이 색으로]/바깥 클릭/Enter=저장, [취소]/Esc=원래 색. 너무 밝거나 어두우면 안내 문구.
