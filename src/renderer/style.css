@@ -1243,3 +1243,7 @@ i.pd,.bc-tabs .pm,.bc-to-chip .pm,.chat-switch .pm,.chat-switch .pd,#miniPlat .p
 .stage>.sound:not(.lay-sized){flex:none}
 .stage>.sound:not(.lay-sized) .sound-list{max-height:170px!important}
 .rail>.sound .sound-list{grid-template-columns:1fr}
+/* v0.25.4 사운드 목록 스크롤바가 % 숫자를 가리지 않게 */
+.sound .sound-list{scrollbar-gutter:stable;padding-right:10px;box-sizing:border-box}
+.sound .sound-list::-webkit-scrollbar{width:6px}
+.ch .pct{min-width:38px;padding-left:6px}
