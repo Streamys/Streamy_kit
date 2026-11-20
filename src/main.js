@@ -87,8 +87,35 @@ function main() {
     win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
     // 화면이 그려지면 바로 보여줌. 혹시 늦어도 2초 뒤엔 무조건 보여줌 (로딩 화면이 먼저 그려짐)
     let shown = false;
-    const show = (why) => { if (shown || !win || win.isDestroyed()) return; shown = true; win.show(); log.info('main', `window shown (${why}) in ${Date.now() - t0}ms`); };
-    win.once('ready-to-show', () => show('ready'));
+    // 시작 애니메이션: 본 창 위에 투명 창을 덮음 (엔진 미리보기는 HTML 위에 뜨는 네이티브 창이라 본 창 안에선 못 가림)
+    let intro = null, introReady = false;
+    try {
+      let st = {}; try { st = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'settings.json'), 'utf8')) || {}; } catch {}
+      if (!st.introOff && !process.env.SHOT_OUT) {
+        intro = new BrowserWindow({
+          parent: win, frame: false, transparent: true, resizable: false, movable: false, focusable: false, skipTaskbar: true,
+          show: false, hasShadow: false, backgroundColor: '#00000000', title: 'Streamy Kit',
+          webPreferences: { nodeIntegration: false, contextIsolation: true, spellcheck: false, backgroundThrottling: false },
+        });
+        intro.loadFile(path.join(__dirname, 'renderer', 'intro.html'), { query: { c: /^#[0-9a-f]{6}$/i.test(st.accent || '') ? st.accent : '' } });
+        intro.once('ready-to-show', () => { introReady = true; trigger('intro'); });
+        intro.on('closed', () => { intro = null; });
+        const place = () => { try { if (intro && !intro.isDestroyed() && win && !win.isDestroyed()) intro.setBounds(win.getContentBounds()); } catch {} };
+        for (const ev of ['move', 'resize', 'maximize', 'unmaximize']) win.on(ev, place);
+        setTimeout(() => { try { if (intro && !intro.isDestroyed()) intro.close(); } catch {} }, 7000);   // 안전장치
+      }
+    } catch {}
+    let winReady = false;
+    const show = (why) => {
+      if (shown || !win || win.isDestroyed()) return; shown = true;
+      if (intro && !intro.isDestroyed() && introReady) { intro.setBounds(win.getContentBounds()); intro.showInactive(); }
+      else if (intro && !intro.isDestroyed()) intro.close();
+      win.show();
+      if (intro && !intro.isDestroyed()) { intro.setBounds(win.getContentBounds()); intro.moveTop(); }
+      log.info('main', `window shown (${why}) in ${Date.now() - t0}ms`);
+    };
+    function trigger(why) { if (winReady && (!intro || introReady)) show(why); }
+    win.once('ready-to-show', () => { winReady = true; trigger('ready'); });
     // 빠른 업데이트로 켜졌으면, 15초 동안 문제없으면 "정상" 표시 (두 번 연속 실패하면 기본 버전으로 돌아감)
     setTimeout(() => { try { if (win && !win.isDestroyed() && !win.webContents.isCrashed()) global.STREAMY?.markGood?.(); } catch {} }, 15000);
     setTimeout(() => show('timeout'), 2000);

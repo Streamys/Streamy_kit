@@ -103,15 +103,6 @@ function cfgForDisk(c) {
 }
 const writeJson = (f, d) => { try { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(d, null, 2)); fs.renameSync(f + '.tmp', f); } catch (e) { rlog('error', 'writeJson', e); } };
 let saveT = null, sceneT = null;
-// ================================================================== 시작 애니메이션 (TV 켜지듯) — CSS만으로 움직여서 엔진이 화면을 멈춰도 계속 재생됨
-(() => {
-  const el = document.getElementById('intro'); if (!el) return;
-  if (cfg.introOff || process.env.SHOT_OUT) { el.remove(); return; }
-  const done = () => { if (!el.isConnected) return; el.remove(); if (typeof hidePreview === 'function') hidePreview('intro', false); };
-  el.addEventListener('animationend', (e) => { if (e.animationName === 'in-open-b') done(); });
-  el.addEventListener('pointerdown', () => el.classList.add('skip'));
-  setTimeout(done, 6000);           // 혹시 애니메이션이 안 끝나도 6초 뒤엔 무조건 치움
-})();
 function save() { clearTimeout(saveT); saveT = setTimeout(() => writeJson(info.settingsFile, cfgForDisk(cfg)), 300); }
 function saveScenes() { if (!engineOk) return; clearTimeout(sceneT); sceneT = setTimeout(() => { try { writeJson(scenesFile, engine.serialize()); } catch (e) { rlog('error', 'saveScenes', e); } }, 600); }
 function saveAudioState() {
@@ -534,7 +525,6 @@ function addSourceFrom(kind, prefix, after) {
 let srcDrag = false;
 // 엔진 미리보기(네이티브 창)는 HTML 위에 떠 있어서, 위에 뭘 띄우거나 끌어 놓을 땐 잠깐 숨김
 const prevHide = new Set();
-if (document.getElementById('intro')) prevHide.add('intro');   // 시작 애니메이션 동안엔 엔진 미리보기(검은 창)를 숨겨 둠
 function hidePreview(why, on) {
   const before = prevHide.size; on ? prevHide.add(why) : prevHide.delete(why);
   if (!engineOk || (before > 0) === (prevHide.size > 0)) return;
@@ -735,7 +725,7 @@ function guideDraw() {
   guideRaf = requestAnimationFrame(() => { guideRaf = 0; try { ipcRenderer.send('ov:draw', { ...guideData(), color: guideColors() }); } catch (e) { rlog('warn', 'guide', e); } });
 }
 function guideShow() {
-  const on = engineOk && mode !== 'air' && cfg.guide !== false && !prevHide.size;
+  const on = engineOk && mode !== 'air' && cfg.guide !== false;
   ipcRenderer.send('ov:show', on);
   if (engineOk) engine.setDrawUI(mode !== 'air' && !(ovOk && on));      // 가이드를 못 쓰면 엔진 기본 선택 표시로
   guideDraw();
@@ -1748,7 +1738,6 @@ async function boot() {
   for (const [kind, name] of [['desktop', '데스크톱 소리'], ['mic', '마이크']]) if (cfg.devices[kind]) { try { engine.setAudioDevice(name, cfg.devices[kind]); } catch {} }
   try {
     engine.createDisplay(ipcRenderer.sendSync('app:window-handle'));
-    if (prevHide.size) { try { engine.moveDisplay(-20000, -20000, 1, 1); } catch {} }
     prev.classList.add('has-engine');
     layoutDisplay(); guideShow(); phoneSync();
   } catch (e) { rlog('error', 'display', e); toast('미리보기 화면을 만들지 못했어요. 설정 → 문제 해결에서 그래픽 가속을 꺼 보세요.', true); }
@@ -2693,7 +2682,7 @@ function phoneLayout() {
   if (phoneRaf) return;
   phoneRaf = requestAnimationFrame(() => {
     phoneRaf = 0;
-    if (!engineOk || !engine.phoneDisplay || prevHide.has('intro')) return;
+    if (!engineOk || !engine.phoneDisplay) return;
     const r = $('phVideo').getBoundingClientRect(), z = window.devicePixelRatio || 1;
     try { engine.movePhoneDisplay(r.left * z, r.top * z, r.width * z, r.height * z); } catch (e) { rlog('warn', 'phone move', e); }
   });
