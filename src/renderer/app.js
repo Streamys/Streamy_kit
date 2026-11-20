@@ -1648,8 +1648,6 @@ $('btnRetry').addEventListener('click', () => ipcRenderer.send('app:relaunch'));
 $('btnRestart').addEventListener('click', () => ipcRenderer.send('app:relaunch'));
 $('btnLogs').addEventListener('click', () => ipcRenderer.invoke('app:open-path', info.logDir));
 $('btnLogs2').addEventListener('click', () => ipcRenderer.invoke('app:open-path', info.logDir));
-$('introOn').checked = !cfg.introOff;
-$('introOn').addEventListener('change', () => { cfg.introOff = !$('introOn').checked; save(); toast(cfg.introOff ? '다음부터 바로 켜져요.' : '다음에 켤 때 보여 드릴게요.'); });
 $('gpuOff').addEventListener('change', async () => { const v = await ipcRenderer.invoke('app:set-gpu', $('gpuOff').checked); $('gpuOff').checked = v; toast('저장했어요. 다시 시작하면 적용돼요.'); });
 
 // ================================================================== 미리보기 위치 맞추기 (창 크기 바뀔 때 바로 따라감)
@@ -1693,12 +1691,6 @@ async function boot() {
   await nextFrame();
   try { await ipcRenderer.invoke('engine:prepare'); } catch (e) { rlog('warn', 'prepare', e); }
   // 엔진 켜는 동안 화면이 잠깐 멈춰서, 그 전에 안내를 띄우고 메인에 알림 (응답 없음 창 안 띄우게)
-  const boot = document.createElement('div'); boot.className = 'boot-ov';
-  // 엔진이 켜지는 동안 화면이 멈춰서 진행률을 직접 알 수 없음 → 지난번 걸린 시간 기준으로 막대를 채움 (멈춰도 움직이는 애니메이션)
-  const expect = Math.min(300000, Math.max(8000, (cfg.bootMs || 30000) * 1.2));
-  boot.innerHTML = `<div class="boot-box"><b>방송 엔진 준비 중</b><div class="boot-bar"><i style="animation-duration:${expect}ms"></i></div>
-    <small>일반 데스크톱 기준 최대 30초</small><small>그래픽카드가 없는 노트북은 5분까지 걸릴 수 있어요!</small></div>`;
-  if (cfg.introOff) document.body.appendChild(boot);   // 시작 애니메이션이 켜져 있으면 그쪽 로딩 막대가 대신함
   ipcRenderer.send('engine:booting', true); ipcRenderer.send('intro:status', '방송 엔진 준비 중');
   await nextFrame(); await nextFrame();
   const q = { '1080p60': [1920, 1080, 60], '1080p30': [1920, 1080, 30], '720p60': [1280, 720, 60] }[cfg.quality] || [1920, 1080, 60];
@@ -1708,7 +1700,6 @@ async function boot() {
     rlog('info', `engine started in ${Math.round(performance.now() - t0)}ms`, 'encoders:', engine.encoderTypes().join(','));
     ipcRenderer.send('engine:booting', false);
     cfg.bootMs = Math.round(performance.now() - t0); save();
-    boot.classList.add('done'); setTimeout(() => boot.remove(), 450);
     engineOk = true;
     setTimeout(checkBtMic, 3000);
     // 0.19.2~0.21.0에서 넣은 모니터(번호로 지정)는 화면이 안 잡혀서, 진짜 모니터 ID로 바꿔 줌
@@ -1727,7 +1718,7 @@ async function boot() {
       } catch (e) { rlog('warn', 'monitor fix', e); }
     }, 1500);
     setTimeout(() => { try { for (const it of engine.items()) { const o = engine.itemObj(it.id), st = engine.sourceSettings(it.name); rlog('info', 'source', it.kind, it.name, `${o?.source?.width || 0}x${o?.source?.height || 0}`, it.visible ? 'shown' : 'hidden', JSON.stringify(st?.settings || {}).slice(0, 220)); } } catch (e) { rlog('warn', 'source diag', e); } }, 4000);
-  } catch (e) { ipcRenderer.send('engine:booting', false); ipcRenderer.send('intro:open'); boot.remove(); engineError(e); return; }
+  } catch (e) { ipcRenderer.send('engine:booting', false); ipcRenderer.send('intro:open'); engineError(e); return; }
   try { engine.setRecTracks(cfg.recTracks); } catch (e) { rlog('warn', 'rec tracks', e); }
   try {
     let saved = null; try { saved = JSON.parse(fs.readFileSync(scenesFile, 'utf8')); } catch {}

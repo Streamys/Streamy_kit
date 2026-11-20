@@ -91,7 +91,7 @@ function main() {
     let intro = null, introReady = false;
     try {
       let st = {}; try { st = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'settings.json'), 'utf8')) || {}; } catch {}
-      if (!st.introOff && !process.env.SHOT_OUT) {
+      if (!process.env.SHOT_OUT) {          // 시작 애니메이션 = 로딩 화면이라 끄는 설정 없음
         intro = new BrowserWindow({
           parent: win, frame: false, transparent: true, resizable: false, movable: false, focusable: false, skipTaskbar: true,
           show: false, hasShadow: false, backgroundColor: '#00000000', title: 'Streamy Kit',
