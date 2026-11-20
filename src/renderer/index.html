@@ -368,6 +368,16 @@
       <div class="vo-seg vo-ab" id="voAB"><button data-ab="off">원래 소리</button><button data-ab="on">필터</button></div>
       <button class="lay-x" id="voClose" data-ic="x" title="닫기 (Esc)"></button>
     </div>
+    <div class="vo-lock" id="voLock" hidden>
+      <div class="vo-lock-card">
+        <span class="vo-lock-ic"><svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+        <b>인증키를 넣어 주세요</b>
+        <small>마이크 필터는 인증키가 있어야 쓸 수 있어요</small>
+        <input id="voKey" placeholder="SK-XXXX-XXXX-XXXX" maxlength="40" autocomplete="off" spellcheck="false" aria-label="인증키">
+        <em id="voKeyErr"></em>
+        <button id="voKeyGo">확인</button>
+      </div>
+    </div>
     <div class="vo-chain" id="voChain"></div>
     <div class="vo-graph" id="voGraph">
       <div class="vo-zones" id="voZones"></div>

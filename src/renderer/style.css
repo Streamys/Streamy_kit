@@ -1500,3 +1500,17 @@ label.check,.lay-chk,label:has(>input[type=checkbox]){cursor:pointer}
 .vc-easy span{display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:var(--sub)}
 .vc-easy span i{font-style:normal}
 .vc-easy span b{color:var(--text)}
+/* 마이크 필터 인증키 (테스트용) */
+.vo-box{position:relative}
+.vo-lock{position:absolute;inset:78px 0 0 0;z-index:5;display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:0 0 26px 26px}
+.vo-lock[hidden]{display:none}
+.vo-locked .vo-chain,.vo-locked .vo-graph,.vo-locked .vo-foot,.vo-locked .vo-comp,.vo-locked .vo-test{visibility:hidden}
+.vo-locked .vo-head>*:not(.vo-logo):not(.vo-title):not(#voClose):not(.vo-fill){visibility:hidden}
+.vo-lock-card{width:360px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+.vo-lock-ic{width:56px;height:56px;border-radius:18px;background:var(--soft);color:var(--red);display:flex;align-items:center;justify-content:center;margin-bottom:6px}
+.vo-lock-card b{font-size:19px;font-weight:900}
+.vo-lock-card small{font-size:12.5px;color:var(--sub);display:block!important}
+.vo-lock-card input{margin-top:10px;width:100%;height:46px;box-sizing:border-box;border-radius:14px;border:1.5px solid var(--line);background:var(--card);color:var(--text);text-align:center;font:800 17px ui-monospace,Consolas,monospace;letter-spacing:1.5px}
+.vo-lock-card input:focus{outline:none;border-color:var(--red)}
+.vo-lock-card em{font-style:normal;font-size:12.5px;font-weight:700;color:var(--red2,var(--red));min-height:18px}
+.vo-lock-card button{width:100%;height:44px;border-radius:14px;border:none;background:var(--red);color:var(--onac,#fff);font-weight:900;font-size:14.5px;cursor:pointer}

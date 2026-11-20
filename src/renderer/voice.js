@@ -548,10 +548,31 @@
   Q('voRec').addEventListener('contextmenu', (e) => { e.preventDefault(); A.recBuf = null; recordTest(); });
   Q('voMic').addEventListener('change', async () => { micStop(); try { await micStart(); } catch (e) { toast('마이크를 열 수 없어요.', true); } });
 
+  // ---------------------------------------------------------------- 인증키 (테스트용 · 나중에 서버 로그인 확인으로 바꿀 것)
+  // 프로그램을 켤 때마다 한 번 넣어야 함 (저장 안 함). 키 자체는 코드에 없고 해시만 비교.
+  const KEY_HASH = '371400ed9be2e35fa162cf86447849392d210d158795eef532448262af9aa8fe';
+  let unlocked = false;
+  const keyHash = (k) => require('crypto').createHash('sha256').update(k).digest('hex');
+  const normKey = (k) => String(k || '').toUpperCase().replace(/\s+/g, '').replace(/[^A-Z0-9-]/g, '');
+  function lockShow(on) {
+    Q('voLock').hidden = !on;
+    ov.classList.toggle('vo-locked', on);
+    if (on) { Q('voKey').value = ''; Q('voKeyErr').textContent = ''; setTimeout(() => Q('voKey').focus(), 50); }
+  }
+  function tryKey() {
+    const k = normKey(Q('voKey').value);
+    if (!k) { Q('voKeyErr').textContent = '인증키를 넣어 주세요.'; return; }
+    if (keyHash(k) !== KEY_HASH) { Q('voKeyErr').textContent = '인증키가 맞지 않아요.'; Q('voKey').select(); return; }
+    unlocked = true; lockShow(false); open(true);
+  }
+  Q('voKeyGo').addEventListener('click', tryKey);
+  Q('voKey').addEventListener('keydown', (e) => { if (e.key === 'Enter') tryKey(); e.stopPropagation(); });
+
   // ---------------------------------------------------------------- 열기 / 닫기
   function open(on) {
     ov.hidden = !on;
     try { hidePreview('voice', on); } catch {}
+    if (on && !unlocked) { lockShow(true); return; }
     if (on) {
       V(); sel = V().bands[1] ? V().bands[1].id : null;
       requestAnimationFrame(async () => {
@@ -561,6 +582,8 @@
         if (!raf) loop();
       });
     } else {
+      lockShow(false);
+      if (!A.ctx && !raf) return;
       solo = null; stopPlay(true); setListen(false); micStop();
       if (raf) { cancelAnimationFrame(raf); raf = 0; }
       if (A.ctx) { A.ctx.close().catch(() => {}); A.ctx = null; A.sig = ''; A.filters = []; A.soloNodes = []; A.comp = null; A.ready = null; }
