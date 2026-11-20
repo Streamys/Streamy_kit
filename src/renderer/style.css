@@ -1613,9 +1613,18 @@ code,.key-item code,#liveTime,#recDirV,.vc-row b,.vo-bt em,.vo-bt small,.vo-chip
 .col-btns #colOk{border-color:transparent!important;background:var(--red)!important;color:var(--onac,#fff)!important}
 
 /* 시작 애니메이션 (v0.33.0): transform/opacity만 써서 엔진이 화면을 멈춰도 GPU가 계속 그림 */
-.intro{position:fixed;inset:0;z-index:9999;background:#0B0B0D;overflow:hidden;cursor:pointer;-webkit-app-region:no-drag;
-  animation:in-out .32s cubic-bezier(.4,0,.2,1) 1.45s forwards}
-.intro.skip{animation:in-out .18s ease forwards}
+.intro{position:fixed;inset:0;z-index:9999;overflow:hidden;cursor:pointer;-webkit-app-region:no-drag}
+/* 마지막에 화면이 가운데서 위아래로 확 열리면서 본 화면이 보임 */
+.in-top,.in-bot{position:absolute;left:0;right:0;height:50.5%;background:#0B0B0D}
+.in-top{top:0;animation:in-open-t .55s cubic-bezier(.75,0,.15,1) 1.5s forwards}
+.in-bot{bottom:0;animation:in-open-b .55s cubic-bezier(.75,0,.15,1) 1.5s forwards}
+.in-top::after,.in-bot::after{content:'';position:absolute;left:0;right:0;height:2px;background:#fff;box-shadow:0 0 14px 2px var(--red),0 0 40px 6px color-mix(in srgb,var(--red) 50%,transparent);opacity:0;animation:in-fade .1s ease 1.4s forwards}
+.in-top::after{bottom:0}.in-bot::after{top:0}
+.in-stage{position:absolute;inset:0;animation:in-gone .28s cubic-bezier(.4,0,1,1) 1.36s forwards}
+.intro.skip .in-stage{animation:in-gone .12s ease forwards}
+.intro.skip .in-top{animation:in-open-t .35s cubic-bezier(.75,0,.15,1) .05s forwards}
+.intro.skip .in-bot{animation:in-open-b .35s cubic-bezier(.75,0,.15,1) .05s forwards}
+.intro.skip .in-top::after,.intro.skip .in-bot::after{animation:in-fade .05s forwards}
 .in-line{position:absolute;left:0;right:0;top:50%;height:2px;margin-top:-1px;background:#fff;box-shadow:0 0 18px var(--red);
   transform:scaleX(0);animation:in-line .62s cubic-bezier(.2,.8,.2,1) .05s forwards}
 .in-flash{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 0%,color-mix(in srgb,var(--red) 22%,transparent) 30%,color-mix(in srgb,var(--red) 55%,#fff) 50%,color-mix(in srgb,var(--red) 22%,transparent) 70%,transparent 100%);
@@ -1639,4 +1648,6 @@ code,.key-item code,#liveTime,#recDirV,.vc-row b,.vo-bt em,.vo-bt small,.vo-chip
 @keyframes in-rise{to{opacity:1;transform:none}}
 @keyframes in-fade{to{opacity:1}}
 @keyframes in-blink{0%{opacity:1}20%{opacity:0}40%{opacity:1}60%{opacity:0}80%,100%{opacity:1}}
-@keyframes in-out{to{opacity:0;transform:scale(1.03)}}
+@keyframes in-gone{to{opacity:0;transform:scale(1.12)}}
+@keyframes in-open-t{to{transform:translateY(-102%)}}
+@keyframes in-open-b{to{transform:translateY(102%)}}

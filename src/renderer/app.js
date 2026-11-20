@@ -108,7 +108,7 @@ let saveT = null, sceneT = null;
   const el = document.getElementById('intro'); if (!el) return;
   if (cfg.introOff || process.env.SHOT_OUT) { el.remove(); return; }
   const done = () => el.remove();
-  el.addEventListener('animationend', (e) => { if (e.target === el) done(); });
+  el.addEventListener('animationend', (e) => { if (e.animationName === 'in-open-b') done(); });
   el.addEventListener('pointerdown', () => el.classList.add('skip'));
   setTimeout(done, 6000);           // 혹시 애니메이션이 안 끝나도 6초 뒤엔 무조건 치움
 })();
