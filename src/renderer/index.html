@@ -7,6 +7,14 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div class="intro" id="intro" title="클릭하면 건너뛰어요">
+  <i class="in-line"></i><i class="in-flash"></i>
+  <div class="in-core">
+    <div class="in-lamp"><span class="in-dot"><i></i></span><b>ON AIR</b></div>
+    <div class="in-brand"><img src="logo.png" alt=""><b>Streamy</b><span>Kit</span></div>
+  </div>
+  <i class="in-scan"></i>
+</div>
 <header class="titlebar">
   <div class="brand"><img src="logo.png" alt=""><b>Streamy</b><span>Kit</span><em id="ver"></em></div>
   <div class="mode-sw" id="modeSw" title="세팅: 화면·소스·사운드 꾸미기 / ON AIR: 방송 화면 + 장면 + 채팅만">
@@ -298,6 +306,7 @@
         <div class="field">포인트 색
           <div class="accent-row" id="accentRow"></div>
         </div>
+        <label class="check"><input type="checkbox" id="introOn"> 켤 때 시작 애니메이션 보여주기</label>
         <h4>업데이트</h4>
         <div class="upd-box">
           <div><b id="updCur"></b><small id="updStatus">확인 전</small></div>

@@ -103,6 +103,15 @@ function cfgForDisk(c) {
 }
 const writeJson = (f, d) => { try { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(d, null, 2)); fs.renameSync(f + '.tmp', f); } catch (e) { rlog('error', 'writeJson', e); } };
 let saveT = null, sceneT = null;
+// ================================================================== 시작 애니메이션 (TV 켜지듯) — CSS만으로 움직여서 엔진이 화면을 멈춰도 계속 재생됨
+(() => {
+  const el = document.getElementById('intro'); if (!el) return;
+  if (cfg.introOff || process.env.SHOT_OUT) { el.remove(); return; }
+  const done = () => el.remove();
+  el.addEventListener('animationend', (e) => { if (e.target === el) done(); });
+  el.addEventListener('pointerdown', () => el.classList.add('skip'));
+  setTimeout(done, 6000);           // 혹시 애니메이션이 안 끝나도 6초 뒤엔 무조건 치움
+})();
 function save() { clearTimeout(saveT); saveT = setTimeout(() => writeJson(info.settingsFile, cfgForDisk(cfg)), 300); }
 function saveScenes() { if (!engineOk) return; clearTimeout(sceneT); sceneT = setTimeout(() => { try { writeJson(scenesFile, engine.serialize()); } catch (e) { rlog('error', 'saveScenes', e); } }, 600); }
 function saveAudioState() {
@@ -1648,6 +1657,8 @@ $('btnRetry').addEventListener('click', () => ipcRenderer.send('app:relaunch'));
 $('btnRestart').addEventListener('click', () => ipcRenderer.send('app:relaunch'));
 $('btnLogs').addEventListener('click', () => ipcRenderer.invoke('app:open-path', info.logDir));
 $('btnLogs2').addEventListener('click', () => ipcRenderer.invoke('app:open-path', info.logDir));
+$('introOn').checked = !cfg.introOff;
+$('introOn').addEventListener('change', () => { cfg.introOff = !$('introOn').checked; save(); toast(cfg.introOff ? '다음부터 바로 켜져요.' : '다음에 켤 때 보여 드릴게요.'); });
 $('gpuOff').addEventListener('change', async () => { const v = await ipcRenderer.invoke('app:set-gpu', $('gpuOff').checked); $('gpuOff').checked = v; toast('저장했어요. 다시 시작하면 적용돼요.'); });
 
 // ================================================================== 미리보기 위치 맞추기 (창 크기 바뀔 때 바로 따라감)
