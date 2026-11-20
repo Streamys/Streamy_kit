@@ -7,6 +7,26 @@ const { Engine, SOURCE_TYPES, PLATFORMS, ENCODERS, VIRTUAL_APPS, VIRTUAL_SPOTS, 
 const { FLAT_ICONS, UI_ICON } = require('./icons.js');
 const ic = (n) => UI_ICON(n);
 // 확인 창 (윈도우 기본 창 대신 앱 디자인으로). 고른 버튼 번호를 돌려줌, 닫으면 마지막(취소)
+// 안내 창 (확인 창과 같은 디자인): 아이콘 · 제목 · 한 줄 · 순서 · 칩 · 버튼
+function uiNotice({ icon = 'warn', title = '', message = '', steps = [], chips = [], foot = '', buttons = ['확인'] } = {}) {
+  return new Promise((resolve) => {
+    const ov = document.createElement('div'); ov.className = 'cf-ov';
+    ov.innerHTML = `<div class="cf-box nt ${icon === 'warn' ? 'warnish' : ''}" role="dialog" aria-modal="true">
+      <div class="cf-ic">${icon === 'warn' ? '<b class="bang">!</b>' : (FLAT_ICONS[icon] || ic(icon))}</div>
+      <b class="cf-title">${esc(title)}</b>${message ? `<p class="cf-msg">${esc(message)}</p>` : ''}
+      ${steps.length ? `<ol class="nt-steps">${steps.map((x) => `<li><span>${x}</span></li>`).join('')}</ol>` : ''}
+      ${chips.length ? `<div class="nt-chips">${chips.map((x) => `<span>${esc(x)}</span>`).join('')}</div>` : ''}
+      ${foot ? `<p class="cf-detail">${esc(foot)}</p>` : ''}
+      <div class="cf-btns${buttons.length === 1 ? ' one' : ''}">${buttons.map((b, i) => `<button data-i="${i}" class="${i === 0 ? 'cf-main' : 'cf-cancel'}">${esc(b)}</button>`).join('')}</div></div>`;
+    const done = (i) => { window.removeEventListener('keydown', key, true); ov.classList.add('out'); setTimeout(() => ov.remove(), 120); try { hidePreview('notice', false); } catch {} resolve(i); };
+    const key = (e) => { if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); done(e.key === 'Enter' ? 0 : -1); } };
+    ov.addEventListener('click', (e) => { const b = e.target.closest('button[data-i]'); if (b) done(+b.dataset.i); else if (e.target === ov) done(-1); });
+    window.addEventListener('keydown', key, true);
+    try { hidePreview('notice', true); } catch {}
+    document.body.appendChild(ov);
+    setTimeout(() => ov.querySelector('.cf-main')?.focus(), 0);
+  });
+}
 function uiConfirm({ title = '확인', message = '', detail = '', buttons = ['확인', '취소'] } = {}) {
   return new Promise((resolve) => {
     const danger = /삭제|종료|지우기|빼기/.test(buttons[0] || '');
@@ -1849,7 +1869,12 @@ $('vtGo').addEventListener('click', guard(() => {
   if (DEMO) { renderVtFound([], '데모 화면이에요.'); return; }
   openWins = ipcRenderer.sendSync('windows:get') || openWins;
   const list = virtualApps(); vtLastSeen = list;
-  if (!list.length) return renderVtFound([], `켜져 있는 버추얼 프로그램을 찾지 못했어요. 먼저 프로그램을 켜 주세요.<br>지원: ${VIRTUAL_APPS.map((a) => a.name).join(' · ')}<br>목록에 없는 프로그램은 ＋ 추가 → 버추얼에서 창을 직접 고르면 돼요.`);
+  if (!list.length) {
+    renderVtFound([]);
+    uiNotice({ icon: 'virtual', title: '켜져 있는 버추얼 프로그램이 없어요', message: '먼저 프로그램을 켜 주세요', chips: VIRTUAL_APPS.map((a) => a.name), buttons: ['확인', '창에서 직접 고르기'] })
+      .then((i) => { if (i === 1) { setAddMenu(true); aoKind = 'virtual'; renderAddOv(); } });
+    return;
+  }
   if (list.length > 1) return renderVtFound(list);
   connectVirtual(list[0]); renderVtFound(list);
 }));
@@ -2111,6 +2136,12 @@ const VTS_EXE = 'vtube studio.exe';
 const vtsInvoke = async (ch, ...a) => { if (DEMO) return { ok: false, error: '데모 화면이에요.' }; try { return await ipcRenderer.invoke(ch, ...a); } catch (e) { return { ok: false, error: e.message }; } };
 let vtsState = { status: 'off' };
 function vtsMsg(t) { $('vtsMsg').innerHTML = t || ''; }
+let vtsUserTry = false;
+function vtsHowTo() {
+  return uiNotice({ icon: 'warn', title: 'VTube Studio에 연결할 수 없어요', message: 'VTube Studio가 꺼져 있거나 API가 꺼져 있어요',
+    steps: ['VTube Studio 켜기', '<b>설정</b> (톱니바퀴) 열기', '<b>플러그인 API</b> 켜기 <small>포트 8001</small>'],
+    foot: '켜지면 자동으로 다시 연결돼요' });
+}
 function vtsRender(st) {
   vtsState = st || vtsState;
   const s = vtsState.status;
@@ -2120,7 +2151,11 @@ function vtsRender(st) {
   $('vtsConnect').innerHTML = s === 'connected' ? '연결 끊기' : ic('link') + ' 연결';
   $('vtsBody').hidden = s !== 'connected';
   if (s === 'waiting-allow') vtsMsg('VTube Studio 화면에 <b>Streamy Kit 허용</b> 창이 떴어요. <b>허용</b>을 눌러 주세요. (한 번만 하면 돼요)');
-  else if (s === 'off' && vtsState.detail && cfg.vtsUse) vtsMsg(`${esc(vtsState.detail)} · 켜지면 자동으로 다시 붙어요.<br>처음이면 VTube Studio 설정(톱니바퀴) → <b>VTube Studio 플러그인 API 켜기</b>(포트 8001)를 켜 주세요.`);
+  else if (s === 'off' && vtsState.detail && cfg.vtsUse) {
+    vtsMsg(`<button class="vts-warn" id="vtsHow"><b class="bang">!</b>VTube Studio에 연결할 수 없어요</button>`);
+    $('vtsHow').onclick = vtsHowTo;
+    if (vtsUserTry) { vtsUserTry = false; vtsHowTo(); }
+  }
   else if (s === 'error') vtsMsg(esc(vtsState.detail || ''));
   else if (s === 'connected') vtsMsg('');
   if (s === 'connected' && vtsState.model) vtsFillPos(vtsState.model.pos);
@@ -2186,6 +2221,7 @@ async function vtsLaunch(quiet) {
 }
 $('vtsLaunch').addEventListener('click', async () => { await vtsLaunch(false); cfg.vtsUse = true; save(); vtsInvoke('vts:connect'); });
 $('vtsConnect').addEventListener('click', async () => {
+  vtsUserTry = vtsState.status !== 'connected';
   if (vtsState.status === 'connected' || vtsState.status === 'connecting' || vtsState.status === 'waiting-allow') { cfg.vtsUse = false; save(); await vtsInvoke('vts:disconnect'); vtsMsg(''); return; }
   cfg.vtsUse = true; save();
   vtsMsg('VTube Studio에 연결하는 중…');
