@@ -2227,8 +2227,6 @@ $('vtsConnect').addEventListener('click', async () => {
   vtsMsg('VTube Studio에 연결하는 중…');
   await vtsInvoke('vts:connect');
 });
-$('vtsAuto').checked = !!cfg.vtsAuto;
-$('vtsAuto').addEventListener('change', () => { cfg.vtsAuto = $('vtsAuto').checked; if (cfg.vtsAuto) cfg.vtsUse = true; save(); if (cfg.vtsAuto) { vtsLaunch(true); vtsInvoke('vts:connect'); } });
 // Spout2로 화면 넣기: VTube Studio 전용 Spout2 소스를 지금 장면에 (창 캡처로 넣어 둔 게 있으면 숨김)
 $('vtsSpout').addEventListener('click', guard(() => {
   if (DEMO) return toast('데모 화면이에요.');
@@ -2260,8 +2258,8 @@ $('vtsSpout').addEventListener('click', guard(() => {
     $('vtsExpr').innerHTML = '<button class="chip on">웃음</button><button class="chip">화남</button><button class="chip">눈물</button><button class="chip">하트 눈</button>';
     $('vtsKeys').innerHTML = '<button class="chip">손 흔들기</button><button class="chip">배경 바꾸기</button><button class="chip">모자 쓰기</button>'; return; }
   vtsRender(await ipcRenderer.invoke('vts:status').catch(() => ({ status: 'off' })));
-  if (cfg.vtsAuto) await vtsLaunch(true);
-  if (cfg.vtsAuto || cfg.vtsUse) vtsInvoke('vts:connect');
+  // VTube Studio를 알아서 켜지 않음 (켜기 · 연결 버튼을 눌렀을 때만)
+  if (cfg.vtsUse) vtsInvoke('vts:connect');
 })();
 
 
