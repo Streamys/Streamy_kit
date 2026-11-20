@@ -379,6 +379,13 @@ function main() {
       fs.writeFileSync(path.join(app.getPath('userData'), 'app-icon.png'), img.toPNG());
     } catch {}
   });
+  // 스트림 키 같은 비밀 값: 윈도우 보안 저장(safeStorage)으로 암호화 → 이 PC · 이 계정에서만 풀림
+  ipcMain.on('secret:enc', (e, txt) => {
+    try { e.returnValue = safeStorage.isEncryptionAvailable() ? 'e:' + safeStorage.encryptString(String(txt)).toString('base64') : null; } catch { e.returnValue = null; }
+  });
+  ipcMain.on('secret:dec', (e, b) => {
+    try { e.returnValue = String(b || '').startsWith('e:') ? safeStorage.decryptString(Buffer.from(String(b).slice(2), 'base64')) : null; } catch { e.returnValue = null; }
+  });
   ipcMain.on('app:info', (e) => {
     e.returnValue = {
       osnDir: osnDir(),

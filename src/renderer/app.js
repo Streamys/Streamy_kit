@@ -85,6 +85,9 @@ const scenesFile = path.join(path.dirname(info.settingsFile), 'scenes.json');
 function loadSettings() {
   try {
     const s = JSON.parse(fs.readFileSync(info.settingsFile, 'utf8'));
+    // 스트림 키는 암호화해서 저장 (keysEnc). 예전 평문(keys)은 읽어서 다음 저장 때 암호화로 바뀜
+    if (s.keysEnc) { try { const plain = ipcRenderer.sendSync('secret:dec', s.keysEnc); if (plain) s.keys = { ...(s.keys || {}), ...JSON.parse(plain) }; } catch {} }
+    delete s.keysEnc;
     return { ...DEFAULTS, ...s, keys: { ...DEFAULTS.keys, ...(s.keys || {}) }, timer: { ...DEFAULTS.timer, ...(s.timer || {}) }, channels: { ...DEFAULTS.channels, ...(s.channels || {}) }, mini: { ...DEFAULTS.mini, ...(s.mini || {}) } };
   } catch { return JSON.parse(JSON.stringify(DEFAULTS)); }
 }
@@ -92,9 +95,15 @@ let cfg = loadSettings();
 // 예전 형식(window 문자열) → 실행 파일 이름
 cfg.appAudio = (cfg.appAudio || []).map((a) => ({ exe: a.exe || String(a.window || '').split(':').pop(), label: a.label })).filter((a) => a.exe);
 delete cfg.audioApps; delete cfg.platform;
+// 설정 저장: 스트림 키만 암호화해서 keysEnc로 (암호화를 못 쓰는 PC면 예전처럼)
+function cfgForDisk(c) {
+  const out = { ...c };
+  try { const e = ipcRenderer.sendSync('secret:enc', JSON.stringify(c.keys || {})); if (e) { out.keysEnc = e; delete out.keys; } } catch {}
+  return out;
+}
 const writeJson = (f, d) => { try { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(d, null, 2)); fs.renameSync(f + '.tmp', f); } catch (e) { rlog('error', 'writeJson', e); } };
 let saveT = null, sceneT = null;
-function save() { clearTimeout(saveT); saveT = setTimeout(() => writeJson(info.settingsFile, cfg), 300); }
+function save() { clearTimeout(saveT); saveT = setTimeout(() => writeJson(info.settingsFile, cfgForDisk(cfg)), 300); }
 function saveScenes() { if (!engineOk) return; clearTimeout(sceneT); sceneT = setTimeout(() => { try { writeJson(scenesFile, engine.serialize()); } catch (e) { rlog('error', 'saveScenes', e); } }, 600); }
 function saveAudioState() {
   if (!engineOk) return;
@@ -1378,7 +1387,7 @@ $('updCheck').addEventListener('click', async () => {
 ipcRenderer.on('app:quit-for-update', () => {
   ipcRenderer.send('app:quitting');
   rlog('info', 'quit for update');
-  try { if (engineOk) { writeJson(scenesFile, engine.serialize()); saveAudioState(); writeJson(info.settingsFile, cfg); } } catch (e) { rlog('error', 'save on update', e); }
+  try { if (engineOk) { writeJson(scenesFile, engine.serialize()); saveAudioState(); writeJson(info.settingsFile, cfgForDisk(cfg)); } } catch (e) { rlog('error', 'save on update', e); }
   try { engine.shutdown(); } catch (e) { rlog('error', 'shutdown', e); }
   ipcRenderer.send('app:ready-to-quit');
 });
@@ -2374,7 +2383,7 @@ ipcRenderer.on('app:request-quit', async () => {
   }
   ipcRenderer.send('app:quitting');
   rlog('info', 'shutting down');
-  try { if (engineOk) { writeJson(scenesFile, engine.serialize()); saveAudioState(); writeJson(info.settingsFile, cfg); } } catch (e) { rlog('error', 'save on quit', e); }
+  try { if (engineOk) { writeJson(scenesFile, engine.serialize()); saveAudioState(); writeJson(info.settingsFile, cfgForDisk(cfg)); } } catch (e) { rlog('error', 'save on quit', e); }
   try { engine.shutdown(); } catch (e) { rlog('error', 'shutdown', e); }
   ipcRenderer.send('app:ready-to-quit');
 });
