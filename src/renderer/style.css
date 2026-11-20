@@ -1291,3 +1291,9 @@ label.check,.lay-chk,label:has(>input[type=checkbox]){cursor:pointer}
 .boot-ov.done .boot-bar i{animation:none;transform:scaleX(1);transition:transform .3s ease-out}
 .boot-ov.done{opacity:0;transition:opacity .3s .15s}
 .boot-box small{line-height:1.5}
+/* v0.26.5 엔진 준비: 네모 상자 없이 어두운 화면 위에 바로 */
+.boot-box{background:none!important;border:none!important;box-shadow:none!important;width:420px!important;padding:0!important}
+.boot-box b{color:#F3F4F7;font-size:17px;letter-spacing:-.2px}
+.boot-box small{color:rgba(243,244,247,.62)!important;font-size:12.5px}
+.boot-bar{height:8px;background:rgba(255,255,255,.12)!important;margin:10px 0 8px}
+.boot-ov{background:rgba(10,11,15,.8)!important}
