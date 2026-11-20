@@ -127,6 +127,7 @@ function main() {
       clearTimeout(hangT);
       hangT = setTimeout(async () => {
         if (!rendererBusy || quitting || !win || win.isDestroyed()) return;
+        if (engineBooting && Date.now() - engineBooting < 240000) { log.info('main', 'still booting engine, waiting'); return; }   // 엔진 켜는 중엔 기다림 (처음 켤 땐 1~2분 걸리는 PC가 있음)
         const r = await dialog.showMessageBox(win, { type: 'warning', title: 'Streamy Kit 응답 없음', message: 'Streamy Kit이 응답하지 않아요.', detail: '방송 엔진이 멈췄을 수 있어요. 다시 시작하면 장면 설정은 그대로 유지돼요.', buttons: ['다시 시작', '기다리기'], defaultId: 0 });
         if (r.response === 0) { log.warn('main', 'user chose restart on hang'); await killOwnEngine('hang'); app.relaunch(); quitting = true; app.exit(0); }
       }, 20000);
@@ -144,6 +145,8 @@ function main() {
     });
   }
   let quitAskT = null;
+  let engineBooting = 0;
+  ipcMain.on('engine:booting', (_e, on) => { engineBooting = on ? Date.now() : 0; });
 
   async function forceQuit(why) {
     if (quitting) return;

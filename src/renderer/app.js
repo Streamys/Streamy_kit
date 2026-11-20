@@ -1414,12 +1414,18 @@ async function boot() {
 
   await nextFrame();
   try { await ipcRenderer.invoke('engine:prepare'); } catch (e) { rlog('warn', 'prepare', e); }
-  await nextFrame();
+  // 엔진 켜는 동안 화면이 잠깐 멈춰서, 그 전에 안내를 띄우고 메인에 알림 (응답 없음 창 안 띄우게)
+  const boot = document.createElement('div'); boot.className = 'boot-ov';
+  boot.innerHTML = '<div class="boot-box"><i class="boot-spin"></i><b>방송 엔진 준비 중</b><small>처음 켤 땐 1~2분 걸릴 수 있어요</small></div>';
+  document.body.appendChild(boot);
+  ipcRenderer.send('engine:booting', true);
+  await nextFrame(); await nextFrame();
   const q = { '1080p60': [1920, 1080, 60], '1080p30': [1920, 1080, 30], '720p60': [1280, 720, 60] }[cfg.quality] || [1920, 1080, 60];
   const t0 = performance.now();
   try {
     engine.start({ osnDir: info.osnDir, dataDir: info.dataDir, width: q[0], height: q[1], fps: q[2] });
     rlog('info', `engine started in ${Math.round(performance.now() - t0)}ms`, 'encoders:', engine.encoderTypes().join(','));
+    ipcRenderer.send('engine:booting', false); boot.remove();
     engineOk = true;
     // 0.19.2~0.21.0에서 넣은 모니터(번호로 지정)는 화면이 안 잡혀서, 진짜 모니터 ID로 바꿔 줌
     setTimeout(function fixMon(n = 0) {
@@ -1437,7 +1443,7 @@ async function boot() {
       } catch (e) { rlog('warn', 'monitor fix', e); }
     }, 1500);
     setTimeout(() => { try { for (const it of engine.items()) { const o = engine.itemObj(it.id), st = engine.sourceSettings(it.name); rlog('info', 'source', it.kind, it.name, `${o?.source?.width || 0}x${o?.source?.height || 0}`, it.visible ? 'shown' : 'hidden', JSON.stringify(st?.settings || {}).slice(0, 220)); } } catch (e) { rlog('warn', 'source diag', e); } }, 4000);
-  } catch (e) { engineError(e); return; }
+  } catch (e) { ipcRenderer.send('engine:booting', false); boot.remove(); engineError(e); return; }
   try {
     let saved = null; try { saved = JSON.parse(fs.readFileSync(scenesFile, 'utf8')); } catch {}
     if (saved && saved.scenes && saved.scenes.length) engine.load(saved);
