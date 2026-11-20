@@ -1698,7 +1698,7 @@ async function boot() {
   const expect = Math.min(300000, Math.max(8000, (cfg.bootMs || 30000) * 1.2));
   boot.innerHTML = `<div class="boot-box"><b>방송 엔진 준비 중</b><div class="boot-bar"><i style="animation-duration:${expect}ms"></i></div>
     <small>일반 데스크톱 기준 최대 30초</small><small>그래픽카드가 없는 노트북은 5분까지 걸릴 수 있어요!</small></div>`;
-  document.body.appendChild(boot);
+  if (cfg.introOff) document.body.appendChild(boot);   // 시작 애니메이션이 켜져 있으면 그쪽 로딩 막대가 대신함
   ipcRenderer.send('engine:booting', true); ipcRenderer.send('intro:status', '방송 엔진 준비 중');
   await nextFrame(); await nextFrame();
   const q = { '1080p60': [1920, 1080, 60], '1080p30': [1920, 1080, 30], '720p60': [1280, 720, 60] }[cfg.quality] || [1920, 1080, 60];
