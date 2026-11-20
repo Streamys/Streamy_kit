@@ -21,7 +21,7 @@
     v.level = v.level || 'pro'; if (v.tone == null) v.tone = 30; if (v.mud == null) v.mud = 40; if (v.cutOn == null) v.cutOn = true;
     return v;
   }
-  let sel = 2, drag = null, bypass = false, saveT = 0;
+  let sel = 2, drag = null, bypass = false, saveT = 0, solo = null;   // solo = 그 밴드 구간만 듣기
   const saveSoon = () => { clearTimeout(saveT); saveT = setTimeout(() => save(), 400); };
 
   // ---------------------------------------------------------------- 수학 (그림 = 실제 필터와 같은 RBJ 식)
@@ -60,7 +60,9 @@
   const bandDb = (b, f) => (b.type === 'hp' || b.type === 'lp' ? 2 : 1) * magDb(coefs(b), f);
 
   // ---------------------------------------------------------------- 실제 소리 (WebAudio: 같은 바이쿼드)
-  const A = { ctx: null, stream: null, mic: null, play: null, recBuf: null, chainIn: null, filters: [], sig: '', an: null, mon: null, listening: false, playing: false, rec: null };
+  const A = { soloNodes: [], ctx: null, stream: null, mic: null, play: null, recBuf: null, chainIn: null, filters: [], sig: '', an: null, mon: null, listening: false, playing: false, rec: null };
+  // 구간만 듣기 방식: 자르기면 '잘려 나가는 쪽', 쉘프면 '바뀌는 쪽', 벨 · 노치면 '그 둘레'
+  const soloKindOf = (b) => ({ hp: 'cut-low', lp: 'cut-high', ls: 'shelf-low', hs: 'shelf-high', bell: 'band', notch: 'band' })[b.type] || 'band';
   const WA_TYPE = { hp: 'highpass', lp: 'lowpass', bell: 'peaking', ls: 'lowshelf', hs: 'highshelf', notch: 'notch' };
   function ensureCtx() {
     if (A.ctx) return A.ctx;
@@ -75,19 +77,30 @@
   function syncChain() {
     if (!A.ctx) return;
     const bs = V().bands.filter((b) => b.on);
-    const sig = bypass ? 'bypass' : bs.map((b) => b.type).join(',');
+    const sb = solo != null ? V().bands.find((b) => b.id === solo) : null;
+    const soloKind = sb ? soloKindOf(sb) : '';
+    const sig = (bypass ? 'bypass' : bs.map((b) => b.type).join(',')) + '|' + soloKind;
     if (sig !== A.sig) {
       try { A.chainIn.disconnect(); } catch {}
       for (const f of A.filters) { try { f.node.disconnect(); } catch {} }
-      A.filters = [];
+      for (const n of A.soloNodes || []) { try { n.disconnect(); } catch {} }
+      A.filters = []; A.soloNodes = [];
       let last = A.chainIn;
       if (!bypass) for (const b of bs) {
         const n = (b.type === 'hp' || b.type === 'lp') ? 2 : 1;      // 로우컷 · 하이컷은 2단 (12dB → 24dB/옥타브), 그림과 같게
         for (let i = 0; i < n; i++) { const node = A.ctx.createBiquadFilter(); node.type = WA_TYPE[b.type]; last.connect(node); last = node; A.filters.push({ node, b }); }
       }
-      last.connect(A.an); A.sig = sig;
+      if (sb) {
+        // 그 구간만: 벨 · 노치 = 그 주파수 둘레만, 쉘프 = 그 아래/위만, 자르기 = 잘려 나가는 소리(필터 전)
+        let src = soloKind.startsWith('cut') ? A.chainIn : last;
+        const t = soloKind.endsWith('low') ? 'lowpass' : soloKind.endsWith('high') ? 'highpass' : 'bandpass';
+        for (let i = 0; i < (t === 'bandpass' ? 1 : 2); i++) { const n = A.ctx.createBiquadFilter(); n.type = t; src.connect(n); src = n; A.soloNodes.push(n); }
+        src.connect(A.an);
+      } else last.connect(A.an);
+      A.sig = sig;
     }
     const t = A.ctx.currentTime;
+    if (sb) for (const n of A.soloNodes) { n.frequency.setTargetAtTime(Math.max(20, Math.min(20000, sb.f)), t, 0.015); n.Q.setTargetAtTime(n.type === 'bandpass' ? Math.max(0.5, Math.min(12, sb.q)) : 0.71, t, 0.015); }
     let i = 0;
     for (const b of bypass ? [] : bs) {
       const n = (b.type === 'hp' || b.type === 'lp') ? 2 : 1;
@@ -164,6 +177,7 @@
   const defs = el('defs', {}, svg);
   defs.innerHTML = '<linearGradient id="voCloudG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--red)" stop-opacity=".8"/><stop offset="1" stop-color="var(--red)" stop-opacity=".14"/></linearGradient><filter id="voGlow" x="-5%" y="-30%" width="110%" height="160%"><feGaussianBlur stdDeviation="4"/></filter>';
   const gZones = el('g', {}, svg);
+  const soloRect = el('rect', { class: 'vo-solo-r', y: 0 }, svg);
   const zero = el('line', { class: 'vo-zero' }, svg);
   const cloud = el('path', { fill: 'url(#voCloudG)' }, svg);
   const edge = el('path', { class: 'vo-edge', fill: 'none' }, svg);
@@ -198,6 +212,13 @@
     }
     curve.setAttribute('d', d); glow.setAttribute('d', d);
     ov.classList.toggle('vo-bypass', bypass);
+    const sb = solo != null ? V().bands.find((b) => b.id === solo) : null;
+    ov.classList.toggle('vo-soloing', !!sb);
+    if (sb) {
+      const k = soloKindOf(sb), bw = bwOf(Math.max(0.5, sb.q));
+      const a = k.endsWith('low') ? 20 : k.endsWith('high') ? sb.f : sb.f / Math.pow(2, bw / 2), z = k.endsWith('low') ? sb.f : k.endsWith('high') ? 20000 : sb.f * Math.pow(2, bw / 2);
+      soloRect.setAttribute('x', fx(Math.max(20, a))); soloRect.setAttribute('width', Math.max(4, fx(Math.min(20000, z)) - fx(Math.max(20, a)))); soloRect.setAttribute('height', H);
+    } else soloRect.setAttribute('width', 0);
   }
   function nodesDraw() {
     gN.innerHTML = ''; gW.innerHTML = '';
@@ -226,14 +247,16 @@
     bubble.style.left = Math.max(12, Math.min(88, x / W * 100)) + '%';
     bubble.style.top = (y / H * 100) + '%';
     bubble.style.transform = `translate(-50%, ${above ? 'calc(-100% - 26px)' : '26px'})`;
-    bubble.innerHTML = `<div class="vo-bt"><b>${zoneOf(s.f, s)}</b><em>${s.on ? g : '꺼짐'}</em><small>${fmtF(s.f)}</small></div>` + (v.level === 'pro'
+    const so = solo === s.id;
+    bubble.innerHTML = `<div class="vo-bt"><b>${zoneOf(s.f, s)}</b><em>${s.on ? g : '꺼짐'}</em><small>${fmtF(s.f)}</small><button data-a="solo" class="vo-solo${so ? ' on' : ''}" title="이 구간 소리만 들어보기"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v-2a8 8 0 0 1 16 0v2M4 14h3v6H5a1 1 0 0 1-1-1v-5zM20 14h-3v6h2a1 1 0 0 0 1-1v-5z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>${so ? '구간만 듣는 중' : '이 구간만 듣기'}</button></div>` + (v.level === 'pro'
       ? `<div class="vo-bb">${TYPES.map(([k, l, d]) => `<button data-t="${k}" class="${s.type === k ? 'on' : ''}" title="${l}" aria-label="${l}"><svg width="22" height="14" viewBox="0 0 26 16"><path d="${d}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`).join('')}<i></i><button data-a="onoff" class="txt">${s.on ? '끄기' : '켜기'}</button><button data-a="del" aria-label="지우기">${ic('x')}</button></div>` : '');
   }
   bubble.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return; const s = curSel(); if (!s) return;
+    if (b.dataset.a === 'solo') { setSolo(solo === s.id ? null : s.id); return; }
     if (b.dataset.t) { s.type = b.dataset.t; s.q = s.type === 'notch' ? 4 : s.type === 'bell' ? 1 : 0.71; }
     else if (b.dataset.a === 'onoff') s.on = !s.on;
-    else if (b.dataset.a === 'del') { V().bands = V().bands.filter((x) => x.id !== s.id); sel = null; }
+    else if (b.dataset.a === 'del') { V().bands = V().bands.filter((x) => x.id !== s.id); sel = null; if (solo === s.id) solo = null; }
     changed();
   });
   function chipsDraw() {
@@ -242,7 +265,7 @@
       const g = hasGain(b) ? (b.g > 0 ? '+' : '') + b.g.toFixed(1) : ({ hp: '자름', lp: '자름', notch: '파냄' })[b.type];
       const btn = document.createElement('button'); btn.className = 'vo-chip' + (sel === b.id ? ' on' : '') + (b.on ? '' : ' off');
       btn.innerHTML = `<span>${zoneOf(b.f, b)}</span><b>${b.on ? g : '꺼짐'}</b>`;
-      btn.addEventListener('click', () => { sel = b.id; drawAll(); });
+      btn.addEventListener('click', () => { sel = b.id; if (solo != null) { solo = b.id; syncChain(); } drawAll(); });
       box.appendChild(btn);
     }
   }
@@ -290,8 +313,8 @@
 
   // ---------------------------------------------------------------- 조작
   const local = (e) => { const r = svg.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }; };
-  function grab(e, id, kind) { e.stopPropagation(); e.preventDefault(); sel = id; drag = { id, kind }; try { svg.setPointerCapture(e.pointerId); } catch {} nodesDraw(); zonesDraw(); chipsDraw(); }
-  svg.addEventListener('pointerdown', () => { if (V().level !== 'easy') { sel = null; drawAll(); } });
+  function grab(e, id, kind) { e.stopPropagation(); e.preventDefault(); if (solo != null && solo !== id) { solo = id; syncChain(); } sel = id; drag = { id, kind }; try { svg.setPointerCapture(e.pointerId); } catch {} nodesDraw(); zonesDraw(); chipsDraw(); }
+  svg.addEventListener('pointerdown', () => { if (V().level !== 'easy') { sel = null; if (solo != null) { solo = null; syncChain(); } drawAll(); } });
   svg.addEventListener('pointermove', (e) => {
     if (!drag) return;
     const v = V(), b = v.bands.find((x) => x.id === drag.id); if (!b) return;
@@ -308,8 +331,8 @@
     const p = local(e), id = Math.max(0, ...v.bands.map((b) => b.id)) + 1;
     v.bands.push({ id, type: 'bell', f: xf(p.x), g: Math.max(-15, Math.min(15, yg(p.y))), q: 1, on: true }); sel = id; v.preset = ''; changed();
   });
-  Q('voLevel').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; V().level = b.dataset.l; drawAll(); saveSoon(); });
-  Q('voPresets').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; const v = V(); v.bands = mkBands(PRESETS[b.dataset.p][1]); v.preset = b.dataset.p; sel = 2; changed(); });
+  Q('voLevel').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.l === 'easy') solo = null; V().level = b.dataset.l; drawAll(); saveSoon(); });
+  Q('voPresets').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; solo = null; const v = V(); v.bands = mkBands(PRESETS[b.dataset.p][1]); v.preset = b.dataset.p; sel = 2; changed(); });
   Q('voAB').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; bypass = b.dataset.ab === 'off'; changed(); });
   function easyApply() {
     const v = V(), k = v.tone / 100, bs = [];
@@ -321,6 +344,13 @@
   Q('voMud').addEventListener('input', () => { V().mud = Number(Q('voMud').value); easyApply(); });
   Q('voCut').addEventListener('click', () => { V().cutOn = !V().cutOn; easyApply(); });
 
+  async function setSolo(id) {
+    solo = id;
+    if (id != null && !A.listening && !A.playing) {     // 듣는 중이 아니면 실시간 듣기를 같이 켬
+      try { await micStart(); setListen(true); } catch (e) { toast('마이크를 열 수 없어요.', true); solo = null; }
+    }
+    syncChain(); curveDraw(); bubbleDraw(); renderTest();
+  }
   // 들어보기
   function renderTest() {
     const lb = Q('voListen'), rb = Q('voRec'), st = Q('voStatus');
@@ -329,7 +359,7 @@
     if (A.rec) { rb.classList.add('on'); rb.querySelector('span').textContent = `녹음 중 ${Math.max(0, 5 - Math.floor((Date.now() - A.rec.t0) / 1000))}초`; }
     else if (A.playing) { rb.classList.add('on'); rb.querySelector('span').textContent = '반복 재생 중 · 멈추기'; }
     else { rb.classList.remove('on'); rb.querySelector('span').textContent = A.recBuf ? '다시 녹음 · 재생' : '5초 녹음해서 비교'; }
-    st.textContent = A.playing ? '위에서 [원래 소리] ↔ [필터]를 바꿔 가며 들어 보세요' : A.listening ? '이어폰으로 들어 주세요 (스피커면 소리가 울려요)' : '';
+    st.textContent = solo != null ? '고른 구간 소리만 나와요 · 다시 누르면 전체 소리' : A.playing ? '위에서 [원래 소리] ↔ [필터]를 바꿔 가며 들어 보세요' : A.listening ? '이어폰으로 들어 주세요 (스피커면 소리가 울려요)' : '';
   }
   Q('voListen').addEventListener('click', async () => {
     try { await micStart(); } catch (e) { toast('마이크를 열 수 없어요: ' + (e.message || e), true); return; }
@@ -352,9 +382,9 @@
         if (!raf) loop();
       });
     } else {
-      stopPlay(true); setListen(false); micStop();
+      solo = null; stopPlay(true); setListen(false); micStop();
       if (raf) { cancelAnimationFrame(raf); raf = 0; }
-      if (A.ctx) { A.ctx.close().catch(() => {}); A.ctx = null; A.sig = ''; A.filters = []; }
+      if (A.ctx) { A.ctx.close().catch(() => {}); A.ctx = null; A.sig = ''; A.filters = []; A.soloNodes = []; }
       save();
     }
   }
