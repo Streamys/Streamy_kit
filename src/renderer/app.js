@@ -1688,7 +1688,7 @@ async function boot() {
   $('tMode').value = cfg.timer.mode; $('tMin').value = cfg.timer.minutes; $('tLabel').value = cfg.timer.label; $('tTheme').value = cfg.timer.theme;
   timer({ type: 'config', ...cfg.timer });
   renderScenes(); renderSources(); renderMixer();
-  if (DEMO) { demoMode(); return; }
+  if (DEMO) { demoMode(); ipcRenderer.send('intro:open'); return; }
 
   await nextFrame();
   try { await ipcRenderer.invoke('engine:prepare'); } catch (e) { rlog('warn', 'prepare', e); }
@@ -1699,7 +1699,7 @@ async function boot() {
   boot.innerHTML = `<div class="boot-box"><b>방송 엔진 준비 중</b><div class="boot-bar"><i style="animation-duration:${expect}ms"></i></div>
     <small>일반 데스크톱 기준 최대 30초</small><small>그래픽카드가 없는 노트북은 5분까지 걸릴 수 있어요!</small></div>`;
   document.body.appendChild(boot);
-  ipcRenderer.send('engine:booting', true);
+  ipcRenderer.send('engine:booting', true); ipcRenderer.send('intro:status', '방송 엔진 준비 중');
   await nextFrame(); await nextFrame();
   const q = { '1080p60': [1920, 1080, 60], '1080p30': [1920, 1080, 30], '720p60': [1280, 720, 60] }[cfg.quality] || [1920, 1080, 60];
   const t0 = performance.now();
@@ -1727,7 +1727,7 @@ async function boot() {
       } catch (e) { rlog('warn', 'monitor fix', e); }
     }, 1500);
     setTimeout(() => { try { for (const it of engine.items()) { const o = engine.itemObj(it.id), st = engine.sourceSettings(it.name); rlog('info', 'source', it.kind, it.name, `${o?.source?.width || 0}x${o?.source?.height || 0}`, it.visible ? 'shown' : 'hidden', JSON.stringify(st?.settings || {}).slice(0, 220)); } } catch (e) { rlog('warn', 'source diag', e); } }, 4000);
-  } catch (e) { ipcRenderer.send('engine:booting', false); boot.remove(); engineError(e); return; }
+  } catch (e) { ipcRenderer.send('engine:booting', false); ipcRenderer.send('intro:open'); boot.remove(); engineError(e); return; }
   try { engine.setRecTracks(cfg.recTracks); } catch (e) { rlog('warn', 'rec tracks', e); }
   try {
     let saved = null; try { saved = JSON.parse(fs.readFileSync(scenesFile, 'utf8')); } catch {}
@@ -1745,6 +1745,23 @@ async function boot() {
   if (soundOpen) renderDevices();
   rlog('info', `ready in ${Math.round(performance.now() - t0)}ms`);
   if (!engine.items().length) { openTab('sources'); $('srcAdd').click(); toast('＋ 추가에서 모니터 화면이나 게임부터 넣어 보세요.'); }
+  introWhenFrames();
+}
+// 시작 애니메이션은 미리보기에 화면이 들어온 뒤에 열기 (웹캠·모니터가 첫 화면을 보내기까지 잠깐 걸림). 최대 3초
+function introWhenFrames() {
+  ipcRenderer.send('intro:status', '화면 불러오는 중');
+  const t0 = performance.now();
+  (function poll() {
+    let wait = 0;
+    try {
+      for (const it of engine.items()) {
+        if (!it.visible || !['webcam', 'monitor', 'window', 'game', 'virtual', 'image', 'browser'].includes(it.kind)) continue;
+        if (!(engine.itemObj(it.id)?.source?.width > 0)) wait++;
+      }
+    } catch { wait = 0; }
+    if (!wait || performance.now() - t0 > 3000) { ipcRenderer.send('intro:open'); if (wait) rlog('info', 'intro: opened before', wait, 'source(s) had frames'); return; }
+    setTimeout(poll, 100);
+  })();
 }
 
 // 개발용 화면 미리보기 (윈도우가 아닌 환경에서 STREAMY_DEMO=1)

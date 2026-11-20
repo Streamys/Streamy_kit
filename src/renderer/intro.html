@@ -13,15 +13,26 @@ html,body{margin:0;height:100%;background:transparent;overflow:hidden;font-famil
 .intro{position:fixed;inset:0;z-index:9999;overflow:hidden;cursor:pointer;-webkit-app-region:no-drag}
 /* 마지막에 화면이 가운데서 위아래로 확 열리면서 본 화면이 보임 */
 .in-top,.in-bot{position:absolute;left:0;right:0;height:50.5%;background:#0B0B0D}
-.in-top{top:0;animation:in-open-t .55s cubic-bezier(.75,0,.15,1) 1.5s forwards}
-.in-bot{bottom:0;animation:in-open-b .55s cubic-bezier(.75,0,.15,1) 1.5s forwards}
-.in-top::after,.in-bot::after{content:'';position:absolute;left:0;right:0;height:2px;background:#fff;box-shadow:0 0 14px 2px var(--red),0 0 40px 6px color-mix(in srgb,var(--red) 50%,transparent);opacity:0;animation:in-fade .1s ease 1.4s forwards}
+.in-top{top:0}.in-bot{bottom:0}
+.in-top::after,.in-bot::after{content:'';position:absolute;left:0;right:0;height:2px;background:#fff;box-shadow:0 0 14px 2px var(--red),0 0 40px 6px color-mix(in srgb,var(--red) 50%,transparent);opacity:0}
 .in-top::after{bottom:0}.in-bot::after{top:0}
-.in-stage{position:absolute;inset:0;animation:in-gone .28s cubic-bezier(.4,0,1,1) 1.36s forwards}
-.intro.skip .in-stage{animation:in-gone .12s ease forwards}
-.intro.skip .in-top{animation:in-open-t .35s cubic-bezier(.75,0,.15,1) .05s forwards}
-.intro.skip .in-bot{animation:in-open-b .35s cubic-bezier(.75,0,.15,1) .05s forwards}
-.intro.skip .in-top::after,.intro.skip .in-bot::after{animation:in-fade .05s forwards}
+.in-stage{position:absolute;inset:0}
+/* 준비가 끝나면(.open) 가운데 빛나는 선에서 위아래로 열림 */
+.intro.open .in-top::after,.intro.open .in-bot::after{animation:in-fade .1s ease forwards}
+.intro.open .in-stage{animation:in-gone .28s cubic-bezier(.4,0,1,1) forwards}
+.intro.open .in-top{animation:in-open-t .55s cubic-bezier(.75,0,.15,1) .12s forwards}
+.intro.open .in-bot{animation:in-open-b .55s cubic-bezier(.75,0,.15,1) .12s forwards}
+/* 로고가 다 나온 뒤에도 준비 중이면 로딩 막대 */
+.in-load{position:absolute;left:50%;top:calc(50% + 78px);width:300px;margin-left:-150px;display:flex;flex-direction:column;align-items:center;gap:10px;opacity:0;transform:translateY(6px);transition:opacity .35s ease,transform .35s ease}
+.intro.wait .in-load{opacity:1;transform:none}
+.in-bar{width:100%;height:4px;border-radius:999px;background:rgba(255,255,255,.1);overflow:hidden}
+.in-bar i{display:block;height:100%;border-radius:inherit;background:var(--red);box-shadow:0 0 12px var(--red);transform-origin:left;transform:scaleX(0)}
+.intro.wait .in-bar i{animation:in-fill var(--d,30s) cubic-bezier(.15,.7,.3,1) forwards}
+.intro.ready .in-bar i{animation:none;transform:scaleX(1);transition:transform .2s ease}
+.in-st{font-size:13px;font-weight:700;color:rgba(255,255,255,.85);letter-spacing:-.01em}
+.in-hint{font-size:11.5px;color:rgba(255,255,255,.45);text-align:center;line-height:1.5;opacity:0;transition:opacity .5s ease}
+.intro.slow .in-hint{opacity:1}
+@keyframes in-fill{0%{transform:scaleX(.03)}100%{transform:scaleX(.94)}}
 .in-line{position:absolute;left:0;right:0;top:50%;height:2px;margin-top:-1px;background:#fff;box-shadow:0 0 18px var(--red);
   transform:scaleX(0);animation:in-line .62s cubic-bezier(.2,.8,.2,1) .05s forwards}
 .in-flash{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 0%,color-mix(in srgb,var(--red) 22%,transparent) 30%,color-mix(in srgb,var(--red) 55%,#fff) 50%,color-mix(in srgb,var(--red) 22%,transparent) 70%,transparent 100%);
@@ -51,7 +62,7 @@ html,body{margin:0;height:100%;background:transparent;overflow:hidden;font-famil
 </style>
 </head>
 <body>
-<div class="intro" id="intro" title="클릭하면 건너뛰어요">
+<div class="intro" id="intro" title="클릭하면 바로 열려요">
   <i class="in-top"></i><i class="in-bot"></i>
   <div class="in-stage">
   <i class="in-line"></i><i class="in-flash"></i>
@@ -59,16 +70,34 @@ html,body{margin:0;height:100%;background:transparent;overflow:hidden;font-famil
     <div class="in-lamp"><span class="in-dot"><i></i></span><b>ON AIR</b></div>
     <div class="in-brand"><img src="logo.png" alt=""><b>Streamy</b><span>Kit</span></div>
   </div>
+  <div class="in-load"><div class="in-bar"><i></i></div><div class="in-st" id="st">방송 엔진 준비 중</div>
+    <div class="in-hint">일반 데스크톱 기준 최대 30초<br>그래픽카드가 없는 노트북은 5분까지 걸릴 수 있어요</div></div>
   <i class="in-scan"></i>
   </div>
 </div>
 <script>
-// 시작 애니메이션 전용 창 (v0.33.3): 본 창 위에 투명 창으로 덮어서, 엔진 미리보기(네이티브 창)까지 같이 가렸다가 열면서 보여 줌
-const c = new URLSearchParams(location.search).get('c');
+// 시작 애니메이션 전용 창: 본 창 위에 투명 창으로 덮어서 엔진 미리보기(네이티브 창)까지 가렸다가,
+// 엔진·화면이 준비되면(main이 introOpen 호출) 위아래로 열면서 보여 줌. 로고가 다 나왔는데 아직이면 로딩 막대.
+const q = new URLSearchParams(location.search), c = q.get('c');
 if (/^#[0-9a-f]{6}$/i.test(c || '')) document.documentElement.style.setProperty('--red', c);
 const el = document.getElementById('intro');
+const boot = Math.max(1500, Number(q.get('b')) || 30000);
+el.style.setProperty('--d', Math.min(300000, Math.max(6000, boot * 1.2)) + 'ms');
+const LOGO = 1350;                       // 로고 등장이 끝나는 시간
+const t0 = performance.now();
+let want = false, opened = false;
+function open() {
+  if (opened) return; opened = true;
+  const waited = el.classList.contains('wait');
+  el.classList.add('ready');             // 막대 끝까지 채우고
+  setTimeout(() => el.classList.add('open'), waited ? 260 : 0);
+}
+window.introOpen = () => { want = true; if (performance.now() - t0 >= LOGO) open(); };
+window.introStatus = (t) => { document.getElementById('st').textContent = t; };
+setTimeout(() => { if (want) open(); else el.classList.add('wait'); }, LOGO);
+setTimeout(() => { if (!opened) el.classList.add('slow'); }, 6000);
 el.addEventListener('animationend', (e) => { if (e.animationName === 'in-open-b') window.close(); });
-el.addEventListener('pointerdown', () => el.classList.add('skip'));
+el.addEventListener('pointerdown', () => { if (performance.now() - t0 > 400) open(); });   // 클릭하면 바로 열기
 </script>
 </body>
 </html>

@@ -97,12 +97,19 @@ function main() {
           show: false, hasShadow: false, backgroundColor: '#00000000', title: 'Streamy Kit',
           webPreferences: { nodeIntegration: false, contextIsolation: true, spellcheck: false, backgroundThrottling: false },
         });
-        intro.loadFile(path.join(__dirname, 'renderer', 'intro.html'), { query: { c: /^#[0-9a-f]{6}$/i.test(st.accent || '') ? st.accent : '' } });
+        intro.loadFile(path.join(__dirname, 'renderer', 'intro.html'), { query: { c: /^#[0-9a-f]{6}$/i.test(st.accent || '') ? st.accent : '', b: String(Number(st.bootMs) || 0) } });
         intro.once('ready-to-show', () => { introReady = true; trigger('intro'); });
         intro.on('closed', () => { intro = null; });
         const place = () => { try { if (intro && !intro.isDestroyed() && win && !win.isDestroyed()) intro.setBounds(win.getContentBounds()); } catch {} };
         for (const ev of ['move', 'resize', 'maximize', 'unmaximize']) win.on(ev, place);
-        setTimeout(() => { try { if (intro && !intro.isDestroyed()) intro.close(); } catch {} }, 7000);   // 안전장치
+        // 화면이 준비 상태를 알려 줌 (엔진 준비 중 → 화면 불러오는 중 → 열기)
+        const introJs = (js) => { try { if (intro && !intro.isDestroyed()) intro.webContents.executeJavaScript(js).catch(() => {}); } catch {} };
+        ipcMain.removeAllListeners('intro:status'); ipcMain.removeAllListeners('intro:open');
+        ipcMain.on('intro:status', (_e, t) => introJs(`introStatus(${JSON.stringify(String(t))})`));
+        ipcMain.on('intro:open', () => introJs('introOpen()'));
+        win.webContents.on('render-process-gone', () => introJs('introOpen()'));
+        setTimeout(() => introJs('introOpen()'), 360000);                                          // 안전장치 (엔진은 최대 5분)
+        setTimeout(() => { try { if (intro && !intro.isDestroyed()) intro.close(); } catch {} }, 362000);
       }
     } catch {}
     let winReady = false;
