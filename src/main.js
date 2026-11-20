@@ -309,6 +309,14 @@ function main() {
   const chatLogDir = path.join(app.getPath('documents'), 'Streamy Kit', '채팅 로그');
   ipcMain.handle('chat:log', (_e, c = {}) => chat.setLog({ on: !!c.on, dir: chatLogDir }));
   ipcMain.handle('chat:log-open', () => { try { fs.mkdirSync(chatLogDir, { recursive: true }); } catch {} shell.openPath(chatLogDir); return chatLogDir; });
+  // 녹화 폴더 열기 (녹화 폴더 안쪽만)
+  ipcMain.handle('rec:open', (_e, sub) => {
+    const base = path.join(app.getPath('videos'), 'Streamy Kit');
+    let target = base;
+    if (sub) { const t = path.resolve(String(sub)); if (t === base || t.startsWith(base + path.sep)) target = t; }
+    try { fs.mkdirSync(target, { recursive: true }); } catch {}
+    shell.openPath(target); return target;
+  });
   ipcMain.handle('chat:configure', (_e, ch) => chat.configure(ch));
   ipcMain.handle('chat:kick', () => { chat.kick(); return true; });
   // 채팅창 webview 안전장치: Node 끄기, 새 창은 기본 브라우저로

@@ -131,6 +131,7 @@ function openTab(name) {
   document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x.dataset.tab === name));
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + name));
   if (name === 'sound') soundTabOpened(); else soundTabClosed();
+  if (name === 'stream') { try { renderIso(); } catch {} }
 }
 document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => openTab(b.dataset.tab)));
 
@@ -247,7 +248,7 @@ function renderSources() {
       setTimeout(() => { nmi.focus(); nmi.select(); });
     } else {
       li.className = (it.selected ? 'on' : '') + (it.visible ? '' : ' hidden');
-      li.innerHTML = `<span class="ic">${srcIcon(it.kind)}</span><span class="nm">${esc(it.name)}</span><button class="eye" title="보이기/숨기기">${it.visible ? ic('eye') : ic('eyeOff')}</button>`;
+      li.innerHTML = `<span class="ic">${srcIcon(it.kind)}</span><span class="nm">${esc(it.name)}</span>${it.where && it.where !== 'both' ? `<span class="where-tag ${it.where}" title="${WHERE[it.where][0]} 보여요">${it.where === 'stream' ? '방송만' : '녹화만'}</span>` : ''}<button class="eye" title="보이기/숨기기">${it.visible ? ic('eye') : ic('eyeOff')}</button>`;
       li.addEventListener('click', guard((e) => {
         if (DEMO) return;
         engine.select(it.id, e.shiftKey ? 'range' : (e.ctrlKey || e.metaKey) ? 'toggle' : 'single');
@@ -286,13 +287,14 @@ function selIds() { return engineOk ? [...engine.sel] : []; }
 function renderEditBar() {
   const bar = $('editBar'), name = $('selName'), size = $('selSize');
   const hint = '';
-  if (DEMO) { bar.classList.add('has-sel'); name.innerHTML = '<b>웹캠</b>'; size.textContent = '576 × 324 · 30%'; return; }
+  if (DEMO) { bar.classList.add('has-sel'); name.innerHTML = '<b>웹캠</b>'; size.textContent = '576 × 324 · 30%'; renderWhere(); return; }
   const ids = selIds();
   bar.classList.toggle('has-sel', ids.length === 1);
   if (!ids.length) { name.innerHTML = ''; size.textContent = ''; return; }
   if (ids.length > 1) { name.innerHTML = `<b>${ids.length}개</b> 선택됨 · [삭제] 또는 Delete로 한 번에 삭제`; size.textContent = ''; return; }
   const it = engine.items().find((x) => x.id === ids[0]);
   name.innerHTML = it ? `<b>${esc(it.name)}</b>` : '';
+  renderWhere();
   updateSizeLabel();
 }
 function updateSizeLabel() {
@@ -307,6 +309,7 @@ function updateSizeLabel() {
 let propsFor = null;
 engine.on('items', () => {
   renderSources();
+  if ($('tab-stream')?.classList.contains('on')) { try { renderIso(); } catch {} }
   if (engineOk) {
     const ids = selIds();
     if (ids.length !== 1) { $('propsBody').innerHTML = ''; propsFor = null; }
@@ -1319,12 +1322,91 @@ $('btnLive').addEventListener('click', guard(async () => {
   streamStates = {}; engine.startStream(targets);
   setTimeout(() => ipcRenderer.invoke('chat:kick').catch(() => {}), 8000);   // 방송이 플랫폼에 잡히면 채팅 바로 연결
 }));
+let lastRecFolder = '';
 engine.on('record', (r) => {
+  if (r.state === 'warn') { toast(r.error, true); return; }
   $('btnRec').classList.toggle('on', r.state === 'on');
-  if (r.state === 'on') toast((r.tracks > 1 ? `녹화를 시작했어요 (소리 트랙 ${r.tracks}개). ` : '녹화를 시작했어요. ') + '저장 위치: ' + info.recordDir);
-  if (r.state === 'off') r.error ? toast(r.error, true) : toast('녹화를 저장했어요.');
+  if (r.state === 'on') {
+    const bits = [];
+    if (r.tracks > 1) bits.push(`소리 트랙 ${r.tracks}개`);
+    if (r.iso > 0) bits.push(`소스 ${r.iso}개 따로`);
+    toast('녹화를 시작했어요' + (bits.length ? ` (${bits.join(' · ')})` : '') + '.');
+  }
+  if (r.state === 'off') {
+    lastRecFolder = r.folder || '';
+    if (r.error) { toast(r.error, true); return; }
+    if (r.warn) toast(r.warn, true);
+    if (r.folder) {
+      uiConfirm({ title: '녹화를 저장했어요', message: '전체 화면 · 소스별 파일' + (r.project ? ' · 편집 프로젝트' : '') + '를 폴더 하나에 담았어요.',
+        detail: r.project ? '프리미어 · 다빈치에서 [가져오기]로 .xml 파일을 열면 트랙별로 깔려요.' : '', buttons: ['폴더 열기', '닫기'] })
+        .then((i) => { if (i === 0) ipcRenderer.invoke('rec:open', r.folder); });
+    } else toast('녹화를 저장했어요.');
+  }
 });
-$('btnRec').addEventListener('click', guard(() => { if (DEMO) return; engine.recording ? engine.stopRecording() : engine.startRecording(info.recordDir); }));
+$('btnRec').addEventListener('click', guard(() => {
+  if (DEMO) return;
+  if (engine.recording) return engine.stopRecording();
+  const iso = cfg.iso && cfg.iso.on ? isoPicked() : [];
+  engine.startRecording(info.recordDir, { iso });
+}));
+$('recOpen').addEventListener('click', () => ipcRenderer.invoke('rec:open', lastRecFolder || ''));
+
+// ================================================================== 소스별 따로 녹화 (고른 소스마다 파일 하나)
+const ISO_KINDS = new Set(['monitor', 'window', 'game', 'webcam', 'virtual', 'browser', 'media', 'image']);
+function isoCfg() { if (!cfg.iso || typeof cfg.iso !== 'object') cfg.iso = { on: false, names: [] }; cfg.iso.names = cfg.iso.names || []; return cfg.iso; }
+function isoCandidates() {
+  if (DEMO) return demo.items.filter((x) => ISO_KINDS.has(x.kind)).map((x) => ({ name: x.name, kind: x.kind }));
+  if (!engineOk) return [];
+  const seen = new Set(), out = [];
+  for (const sc of engine.scenes) for (const it of engine.items(sc.id)) {
+    if (seen.has(it.name) || (it.kind && !ISO_KINDS.has(it.kind))) continue;
+    seen.add(it.name); out.push({ name: it.name, kind: it.kind });
+  }
+  return out;
+}
+function isoPicked() { const have = new Set(isoCandidates().map((x) => x.name)); return isoCfg().names.filter((n) => have.has(n)).slice(0, 3); }
+function renderIso() {
+  const box = $('isoList'), chk = $('isoOn'); if (!box || !chk) return;
+  const c = isoCfg(); chk.checked = !!c.on;
+  box.hidden = !c.on; $('isoHint').hidden = !c.on;
+  if (!c.on) { box.innerHTML = ''; return; }
+  const list = isoCandidates(), picked = new Set(isoPicked());
+  box.innerHTML = list.length ? '' : '<div class="iso-empty">장면에 화면 · 카메라 소스를 넣으면 여기서 고를 수 있어요.</div>';
+  for (const x of list) {
+    const on = picked.has(x.name), full = !on && picked.size >= 3;
+    const b = document.createElement('button');
+    b.className = 'iso-chip' + (on ? ' on' : '') + (full ? ' full' : '');
+    b.innerHTML = `<span class="ic">${srcIcon(x.kind)}</span><span class="nm">${esc(x.name)}</span><i>${on ? ic('check') : ''}</i>`;
+    b.addEventListener('click', () => {
+      if (engineOk && engine.recording) return toast('녹화가 끝난 뒤에 바꿀 수 있어요.', true);
+      const cur = isoPicked();
+      if (on) c.names = cur.filter((n) => n !== x.name);
+      else { if (cur.length >= 3) return toast('따로 녹화는 3개까지 고를 수 있어요.', true); c.names = [...cur, x.name]; }
+      save(); renderIso();
+    });
+    box.appendChild(b);
+  }
+}
+$('isoOn').addEventListener('change', () => { const c = isoCfg(); c.on = $('isoOn').checked; save(); renderIso(); });
+
+// ================================================================== 방송 · 녹화 따로 보이기 (선택한 소스)
+const WHERE = { both: ['방송 · 녹화', 'eye'], stream: ['방송에만', 'live'], record: ['녹화에만', 'rec'] };
+const WHERE_NEXT = { both: 'stream', stream: 'record', record: 'both' };
+function renderWhere() {
+  const b = $('whereBtn'); if (!b) return;
+  let w = 'both';
+  if (DEMO) w = 'both';
+  else if (engineOk && engine.sel.size === 1) { const it = engine.items().find((x) => x.id === engine.primary); if (it) w = it.where || 'both'; }
+  b.dataset.w = w; b.innerHTML = `<i class="wdot ${w}"></i>${WHERE[w][0]}`;
+}
+$('whereBtn').addEventListener('click', guard(() => {
+  if (DEMO || !engineOk || engine.sel.size !== 1) return;
+  const it = engine.items().find((x) => x.id === engine.primary); if (!it) return;
+  const next = WHERE_NEXT[it.where || 'both'];
+  const now = engine.setWhere(it.id, next); saveScenes();
+  if (!now) toast('지금 방송 · 녹화가 끝나면 적용돼요.');
+  else toast(next === 'stream' ? `'${it.name}' — 방송에만 보여요 (녹화엔 안 담겨요).` : next === 'record' ? `'${it.name}' — 녹화에만 담겨요 (방송엔 안 보여요).` : `'${it.name}' — 방송 · 녹화 둘 다 보여요.`);
+}));
 
 setInterval(() => {
   if (liveSince) { const s = Math.floor((Date.now() - liveSince) / 1000); $('liveTime').textContent = `${Math.floor(s / 3600)}:${String(Math.floor(s % 3600 / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; }
@@ -1547,7 +1629,7 @@ async function boot() {
 // 개발용 화면 미리보기 (윈도우가 아닌 환경에서 STREAMY_DEMO=1)
 const demo = {
   scenes: [{ id: 'a', name: '게임 방송', n: 3 }, { id: 'b', name: '저챗', n: 2 }, { id: 'c', name: '쉬는 시간', n: 1 }, { id: 'd', name: '합방', n: 4 }], current: 'a',
-  items: [{ id: 3, name: '웹캠', kind: 'webcam', icon: '', visible: true, selected: true }, { id: 2, name: '타이머', kind: 'timer', icon: '', visible: true, selected: true }, { id: 1, name: '모니터 1', kind: 'monitor', icon: '', visible: true }],
+  items: [{ id: 3, name: '웹캠', kind: 'webcam', icon: '', visible: true, selected: true }, { id: 2, name: '타이머', kind: 'timer', icon: '', visible: true, selected: true, where: 'stream' }, { id: 1, name: '모니터 1', kind: 'monitor', icon: '', visible: true }],
   audio: [{ name: 'd', label: '데스크톱 소리', vol: 0.8, muted: false }, { name: 'm', label: '마이크', vol: 0.72, muted: false }, { name: 'dc', label: '디스코드', vol: 0.55, muted: false, kind: 'app' }, { name: 'ch', label: 'Google Chrome', vol: 0.4, muted: false, kind: 'app' }],
   sep: [{ name: 'dc', label: '디스코드', exe: 'Discord.exe' }, { name: 'ch', label: 'Google Chrome', exe: 'chrome.exe' }],
   live: [{ exe: 'Spotify.exe', desc: 'Spotify', peak: 0.4 }, { exe: 'msedge.exe', desc: 'Microsoft Edge', peak: 0.2 }, { exe: 'League of Legends.exe', desc: 'League of Legends', peak: 0.6 }, { exe: 'KakaoTalk.exe', desc: '카카오톡', peak: 0 }],

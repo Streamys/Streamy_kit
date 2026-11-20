@@ -94,8 +94,9 @@ class Engine {
     this.anchor = null;          // Shift 범위 선택 기준
     this.probes = {};            // type -> 조회용 private 소스 (재사용)
     this.streams = {};           // platform -> { out, parts, state, error }
-    this.recording = null;
-    this.recTracks = { on: false, map: {}, scene: 0 };   // 녹화 트랙 분리: map = 오디오 이름 -> 트랙(2~6, 0=없음), scene = 장면 소스 소리
+    this.recTracks = { on: false, map: {}, scene: 0 };
+    this.isoItems = [];          // 소스별 따로 녹화용 숨은 장면 항목 [{ s, id, ctx }] — 목록 · 저장 · 선택에서 빠짐
+    this.rec = null;             // 지금 녹화 묶음 { folder, outs:[{ r, multi, name, ctx, file }], t0, t1, left }   // 녹화 트랙 분리: map = 오디오 이름 -> 트랙(2~6, 0=없음), scene = 장면 소스 소리
     this.encoderPref = 'auto';
     this.listeners = {};
     this.seq = 1;
@@ -263,6 +264,7 @@ class Engine {
   switchScene(id, instant = false) {
     const s = this.sceneById(id); if (!s) return;
     this.clearSelection();
+    if (this.isoItems.length) this.isoAttach(s);
     if (instant || !this.currentId) this.transition.set(s.scene); else this.transition.start(300, s.scene);
     this.currentId = id;
     this.emit('scenes'); this.emit('items');
@@ -313,6 +315,7 @@ class Engine {
     this.mixOne(input, this.recTracks.scene);
     if (kind === 'virtual') this.sources[name].virt = { ...VIRTUAL_DEFAULT, ...(opt.virt || {}), crop: { ...VIRTUAL_DEFAULT.crop, ...(opt.virt?.crop || {}) } };
     const item = scene.scene.add(input);
+    if (this.isoItems.length) { try { item.video = this.video; } catch {} }
     item.alignment = E.Align.TopLeft;
     if (kind === 'virtual') {
       this.applyVirtual(name);
@@ -340,17 +343,45 @@ class Engine {
 
   gcSources() {
     const used = new Set();
-    for (const s of this.scenes) for (const it of s.scene.getItems()) used.add(it.source.name);
+    for (const s of this.scenes) for (const it of this.uItems(s)) used.add(it.source.name);
     for (const [n, s] of Object.entries(this.sources)) if (!used.has(n)) { try { s.input.release(); } catch {} delete this.sources[n]; }
   }
 
+  // 사용자 항목만 (소스별 녹화용 숨은 항목 제외)
+  uItems(s) {
+    const list = s.scene.getItems();
+    if (!this.isoItems.length) return list;
+    return list.filter((it) => !this.isoItems.some((x) => x.s === s && x.id === it.id));
+  }
   // 목록은 위(앞)에 있는 것부터
   items(sceneId = this.currentId) {
     const s = this.sceneById(sceneId); if (!s) return [];
-    return s.scene.getItems().map((it) => {
+    return this.uItems(s).map((it) => {
       const src = this.sources[it.source.name];
-      return { id: it.id, name: it.source.name, kind: src ? src.kind : '', icon: (src && src.icon) || '•', visible: it.visible, selected: this.sel.has(it.id) };
+      return { id: it.id, name: it.source.name, kind: src ? src.kind : '', icon: (src && src.icon) || '•', visible: it.visible, selected: this.sel.has(it.id), where: this.itemWhere(it) };
     }).reverse();
+  }
+  // ---- 방송 · 녹화 따로 보이기 (both / stream = 방송에만 / record = 녹화에만)
+  itemWhere(it) { let sv = true, rv = true; try { sv = it.streamVisible !== false; rv = it.recordingVisible !== false; } catch {} return sv && rv ? 'both' : sv ? 'stream' : rv ? 'record' : 'both'; }
+  setWhere(itemId, w) {
+    const it = this.itemObj(itemId); if (!it) return false;
+    it.streamVisible = w !== 'record'; it.recordingVisible = w !== 'stream';
+    const ok = this.syncMultiRender();
+    this.emit('items'); return ok;
+  }
+  selectiveUsed() {
+    for (const s of this.scenes) for (const it of this.uItems(s)) if (this.itemWhere(it) !== 'both') return true;
+    return false;
+  }
+  // 따로 보이기를 쓰는 항목이 있을 때만 방송/녹화 화면을 따로 그림 (방송 · 녹화가 꺼져 있을 때만 바꿀 수 있음)
+  // 돌려주는 값: 지금 바로 적용되면 true, 다음 방송/녹화부터면 false
+  syncMultiRender() {
+    let cur = false; try { cur = !!this.osn.Global.multipleRendering; } catch {}
+    const want = this.selectiveUsed();
+    if (cur === want) return true;
+    if (this.streaming || this.recording) return !want;
+    try { this.osn.Global.multipleRendering = want; } catch (e) { console.warn('multipleRendering', e); return false; }
+    return true;
   }
   itemObj(itemId, sceneId = this.currentId) { const s = this.sceneById(sceneId); return s ? s.scene.findItem(itemId) : null; }
   setVisible(itemId, v) { const it = this.itemObj(itemId); if (it) { it.visible = v; this.emit('items'); } }
@@ -388,7 +419,7 @@ class Engine {
   }
   syncSelected() {
     const s = this.currentScene; if (!s) return;
-    for (const it of s.scene.getItems()) { const on = this.sel.has(it.id); try { if (it.selected !== on) it.selected = on; } catch {} }
+    for (const it of this.uItems(s)) { const on = this.sel.has(it.id); try { if (it.selected !== on) it.selected = on; } catch {} }
   }
   clearSelection() {
     const s = this.currentScene;
@@ -418,7 +449,7 @@ class Engine {
   }
   hitTest(cx, cy) {
     const s = this.currentScene; if (!s) return null;
-    const list = s.scene.getItems();
+    const list = this.uItems(s);
     for (let i = list.length - 1; i >= 0; i--) {
       const it = list[i];
       if (!it.visible) continue;
@@ -515,7 +546,7 @@ class Engine {
       try { if (f) f.update(set); else s.input.addFilter(this.osn.FilterFactory.create(ftype, 'Streamy 크로마키', set)); } catch (e) { console.warn('chroma', e); }
     } else if (f) { try { s.input.removeFilter(f); f.release?.(); } catch {} }
     // 장면 항목들
-    for (const sc of this.scenes) for (const it of sc.scene.getItems()) {
+    for (const sc of this.scenes) for (const it of this.uItems(sc)) {
       if (it.source.name !== name) continue;
       const c = v.crop || {};
       const keep = it.boundsType === E.Bounds.None && it.scale.x < 0 ? this.itemRect(it) : null;   // 반전 상태에서 자르면 왼쪽 끝이 그대로이게
@@ -563,8 +594,8 @@ class Engine {
     const s = this.sources[name]; if (!s) return 0;
     let n = 0;
     for (const sc of this.scenes) {
-      if (sc.scene.getItems().some((it) => it.source.name === name)) continue;
-      try { sc.scene.add(s.input); n++; } catch {}
+      if (this.uItems(sc).some((it) => it.source.name === name)) continue;
+      try { const it = sc.scene.add(s.input); if (this.isoItems.length) it.video = this.video; n++; } catch {}
     }
     this.applyVirtual(name); return n;
   }
@@ -662,10 +693,14 @@ class Engine {
 
   // ================================================================ 저장 / 불러오기
   serialize() {
-    const items = (s) => s.scene.getItems().map((it) => ({
-      source: it.source.name, visible: it.visible, pos: it.position, scale: it.scale, align: it.alignment,
-      boundsType: it.boundsType, bounds: it.bounds, boundsAlign: it.boundsAlignment, crop: it.crop,
-    }));
+    const items = (s) => this.uItems(s).map((it) => {
+      const w = this.itemWhere(it);
+      return {
+        source: it.source.name, visible: it.visible, pos: it.position, scale: it.scale, align: it.alignment,
+        boundsType: it.boundsType, bounds: it.bounds, boundsAlign: it.boundsAlignment, crop: it.crop,
+        ...(w !== 'both' ? { where: w } : {}),
+      };
+    });
     return {
       version: 5,
       current: this.currentScene ? this.currentScene.name : null,
@@ -695,11 +730,13 @@ class Engine {
             item.alignment = it.align; item.boundsType = it.boundsType; item.boundsAlignment = it.boundsAlign;
             item.bounds = it.bounds; item.scale = it.scale; item.position = it.pos; item.visible = it.visible;
             if (it.crop) item.crop = it.crop;
+            if (it.where === 'stream' || it.where === 'record') { item.streamVisible = it.where === 'stream'; item.recordingVisible = it.where === 'record'; }
           } catch (e) { console.warn('item load failed', it.source, e); }
         }
       } catch (e) { console.warn('scene load failed', sc.name, e); }
     }
     this.applyMixers();
+    this.syncMultiRender();
     for (const [n, src] of Object.entries(this.sources)) if (src.kind === 'virtual') { try { this.applyVirtual(n, { layout: false }); } catch (e) { console.warn('virtual load', e); } }
     const cur = this.scenes.find((s) => s.name === data.current) || this.scenes[0];
     if (cur) this.switchScene(cur.id, true);
@@ -726,6 +763,7 @@ class Engine {
     if (this.streaming) throw new Error('이미 방송 중이에요.');
     const list = targets.filter((t) => PLATFORMS[t.platform] && t.key);
     if (!list.length) throw new Error('스트림 키를 하나 이상 입력해 주세요.');
+    if (!this.recording) this.syncMultiRender();
     const enc = this.pickEncoder();
     this.streamInfo = { encoder: enc.label };
     for (const t of list) {
@@ -793,54 +831,181 @@ class Engine {
   }
 
   // ================================================================ 녹화
-  startRecording(dir) {
-    if (this.recording) return;
-    const osn = this.osn; fs.mkdirSync(dir, { recursive: true });
+  get recording() { return !!this.rec; }
+  recVideoSettings(id) { return id === 'obs_x264' ? { rate_control: 'CRF', crf: 20, preset: 'veryfast' } : { rate_control: 'CQP', cqp: 20 }; }
+  // opt.iso: 따로 녹화할 소스 이름들 → 녹화마다 폴더 하나에 [전체 화면 + 소스별 파일 + 편집 프로젝트]
+  startRecording(dir, opt = {}) {
+    if (this.rec) return;
+    const osn = this.osn;
+    const iso = [...new Set(opt.iso || [])].filter((n) => this.sources[n]).slice(0, 3);
+    let folder = dir;
+    if (iso.length) {
+      const d = new Date(), p2 = (n) => String(n).padStart(2, '0');
+      const stamp = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}-${p2(d.getMinutes())}-${p2(d.getSeconds())}`;
+      folder = require('path').join(dir, stamp);
+    }
+    fs.mkdirSync(folder, { recursive: true });
+    if (!this.streaming) this.syncMultiRender();
     const enc = this.pickEncoder(), tag = Date.now();
-    const vset = enc.id === 'obs_x264' ? { rate_control: 'CRF', crf: 20, preset: 'veryfast' } : { rate_control: 'CQP', cqp: 20 };
+    const rec = this.rec = { folder, outs: [], t0: 0, t1: 0, iso: iso.length > 0, error: '', trackCount: 1 };
+
+    // 1) 전체 화면
     const multi = this.recTracks.on;
-    let r, tracks = [];
-    if (multi) {
-      // 트랙 분리 녹화: 고급 녹화 + 트랙마다 오디오 인코더 (mkv라 트랙이 그대로 담김)
-      this.applyMixers();
-      const names = this.trackNames();
+    let r;
+    if (multi || iso.length) {
+      // 고급 녹화: 트랙 분리면 트랙마다, 아니면 트랙 1(전체 소리)만
+      if (multi) this.applyMixers();
+      const names = multi ? this.trackNames() : { 1: '전체 소리' };
       let mixer = 0;
       for (const [t, nm] of Object.entries(names)) {
         const tr = osn.AudioTrackFactory.create(192, String(nm).slice(0, 60));
-        osn.AudioTrackFactory.setAtIndex(tr, Number(t)); tracks.push(tr);
+        osn.AudioTrackFactory.setAtIndex(tr, Number(t));
         mixer |= 1 << (Number(t) - 1);
       }
+      rec.trackCount = Object.keys(names).length; rec.trackNames = names;
       r = osn.AdvancedRecordingFactory.create();
-      r.path = dir; r.format = 'mkv'; r.video = this.video;
       r.useStreamEncoders = false; r.rescaling = false; r.mixer = mixer;
-      r.videoEncoder = osn.VideoEncoderFactory.create(enc.id, 'streamy-rec-' + tag, vset);
     } else {
       r = osn.SimpleRecordingFactory.create();
-      r.path = dir; r.format = 'mkv'; r.quality = 1; r.video = this.video;
-      r.videoEncoder = osn.VideoEncoderFactory.create(enc.id, 'streamy-rec-' + tag, vset);
+      r.quality = 1; r.lowCPU = false;
       r.audioEncoder = osn.AudioEncoderFactory.create('ffmpeg_aac', 'streamy-rec-audio-' + tag);
-      r.lowCPU = false;
     }
-    r.overwrite = false; r.noSpace = false;
-    r.signalHandler = (sig) => {
-      if (sig.signal === 'start') this.emit('record', { state: 'on', tracks: multi ? tracks.length : 1 });
-      if (sig.signal === 'stop') { this.emit('record', { state: 'off', error: sig.code ? (sig.error || '녹화 오류') : '' }); this.cleanupRecording(); }
-    };
-    this.recording = r; this.recordingMulti = multi;
-    r.start();
+    r.path = folder; r.format = 'mkv'; r.video = this.video; r.overwrite = false; r.noSpace = false;
+    if (iso.length) { try { r.fileFormat = '전체 화면'; } catch {} }
+    r.videoEncoder = osn.VideoEncoderFactory.create(enc.id, 'streamy-rec-' + tag, this.recVideoSettings(enc.id));
+    rec.outs.push({ r, adv: !(r.audioEncoder), name: '전체 화면', main: true, state: 'starting' });
+
+    // 2) 소스별: 소스마다 화면(캔버스)을 하나 더 만들고, 그 캔버스에만 보이는 항목으로 소스를 꽉 채워 녹화
+    if (iso.length) {
+      this.pinMain();
+      for (const name of iso) {
+        try {
+          const ctx = osn.VideoFactory.create(); ctx.video = { ...this.video.video };
+          const o = { name, ctx, state: 'starting' };
+          this.isoItems.push(...this.isoAdd(this.currentScene, name, ctx));
+          const ir = osn.AdvancedRecordingFactory.create();
+          ir.useStreamEncoders = false; ir.rescaling = false; ir.mixer = 1;
+          ir.path = folder; ir.format = 'mkv'; ir.video = ctx; ir.overwrite = false; ir.noSpace = false;
+          try { ir.fileFormat = safeFile(name); } catch {}
+          ir.videoEncoder = osn.VideoEncoderFactory.create(enc.id, 'streamy-iso-' + tag + '-' + rec.outs.length, this.recVideoSettings(enc.id));
+          o.r = ir; o.adv = true; rec.outs.push(o);
+        } catch (e) { console.warn('iso', name, e); rec.error = `'${name}' 따로 녹화를 시작하지 못했어요.`; }
+      }
+    }
+    for (const o of rec.outs) {
+      o.r.signalHandler = (sig) => this.onRecSignal(o, sig);
+      try { o.r.start(); } catch (e) { o.state = 'off'; o.error = String(e.message || e); }
+    }
+    rec.t0 = Date.now();
   }
-  stopRecording(force = false) { if (this.recording) { this.recording.stop(force); if (force) this.cleanupRecording(); } }
-  cleanupRecording() {
-    const r = this.recording, multi = this.recordingMulti; this.recording = null; if (!r) return;
+  onRecSignal(o, sig) {
+    const rec = this.rec; if (!rec || !rec.outs.includes(o)) return;
+    if (sig.signal === 'start') {
+      o.state = 'on';
+      if (o.main) this.emit('record', { state: 'on', tracks: rec.trackCount, iso: rec.outs.length - 1, folder: rec.folder });
+    }
+    if (sig.signal === 'stop') {
+      if (o.state === 'off') return;
+      o.state = 'off'; if (sig.code) o.error = sig.error || '녹화 오류';
+      try { o.file = o.r.lastFile(); } catch {}
+      if (o.main && rec.outs.some((x) => x.state !== 'off')) {   // 전체 화면이 멈추면 나머지도 같이 멈춤
+        for (const x of rec.outs) if (x.state !== 'off') { try { x.r.stop(); } catch {} }
+      }
+      if (!o.main && o.error && rec.outs[0].state !== 'off') this.emit('record', { state: 'warn', error: `'${o.name}' 따로 녹화가 멈췄어요.` });
+      if (rec.outs.every((x) => x.state === 'off')) this.finishRecording();
+    }
+  }
+  stopRecording(force = false) {
+    const rec = this.rec; if (!rec) return;
+    rec.t1 = Date.now();
+    for (const o of rec.outs) if (o.state !== 'off') { try { o.r.stop(force); } catch {} }
+    if (force) { for (const o of rec.outs) o.state = 'off'; this.finishRecording(); }
+  }
+  finishRecording() {
+    const rec = this.rec; if (!rec) return; this.rec = null;
+    if (!rec.t1) rec.t1 = Date.now();
+    // 숨은 항목 · 캔버스 정리
+    for (const x of this.isoItems) { try { const it = x.s.scene.findItem(x.id); if (it) it.remove(); } catch {} }
+    this.isoItems = [];
+    let project = '';
+    if (rec.iso) { try { project = this.writeProject(rec); } catch (e) { console.warn('project', e); } }
+    const err = rec.outs[0].error || '';
+    this.emit('record', { state: 'off', error: err, warn: rec.error, folder: rec.iso ? rec.folder : '', project });
     setTimeout(() => {
-      try {
-        const v = r.videoEncoder, a = multi ? null : r.audioEncoder;
-        (multi ? this.osn.AdvancedRecordingFactory : this.osn.SimpleRecordingFactory).destroy(r);
-        v && v.release(); a && a.release();
-      } catch {}
-    }, 500);
+      for (const o of rec.outs) {
+        try {
+          const v = o.r.videoEncoder, a = o.adv ? null : o.r.audioEncoder;
+          (o.adv ? this.osn.AdvancedRecordingFactory : this.osn.SimpleRecordingFactory).destroy(o.r);
+          v && v.release(); a && a.release();
+        } catch {}
+        if (o.ctx) { try { o.ctx.destroy(); } catch {} }
+      }
+    }, 800);
+  }
+  // 소스별 녹화 중에는 사용자 항목을 전부 '원래 화면' 캔버스에 묶어 둠 (안 묶인 항목은 모든 캔버스에 그려지므로)
+  pinMain() {
+    for (const s of this.scenes) for (const it of this.uItems(s)) { try { it.video = this.video; } catch {} }
+  }
+  isoAdd(s, name, ctx) {
+    if (!s) return [];
+    const src = this.sources[name]; if (!src) return [];
+    let crop = null;
+    for (const sc of this.scenes) { const u = this.uItems(sc).find((it) => it.source.name === name); if (u) { try { crop = u.crop; } catch {} break; } }
+    // 처음부터 그 캔버스 전용으로, 숨긴 채 넣고 → 자리 잡은 뒤 보이기 (방송 화면에 한 순간도 안 섞이게)
+    const tf = { scaleX: 1, scaleY: 1, visible: false, x: 0, y: 0, rotation: 0, crop: { left: 0, top: 0, right: 0, bottom: 0 }, streamVisible: true, recordingVisible: true, scaleFilter: 0, blendingMode: 0, blendingMethod: 0 };
+    let item;
+    try { item = s.scene.add(src.input, tf, ctx); } catch { item = null; }
+    if (!item) { item = s.scene.add(src.input); item.visible = false; item.video = ctx; }
+    item.alignment = E.Align.TopLeft; item.position = { x: 0, y: 0 };
+    item.boundsType = E.Bounds.ScaleInner; item.boundsAlignment = E.Align.Center; item.bounds = { x: this.width, y: this.height };
+    if (crop) { try { item.crop = crop; } catch {} }
+    item.visible = true;
+    return [{ s, id: item.id, ctx, name }];
+  }
+  // 장면을 바꾸면 숨은 항목도 새 장면으로 옮김
+  isoAttach(s) {
+    const old = this.isoItems; this.isoItems = [];
+    for (const x of old) {
+      try { const it = x.s.scene.findItem(x.id); if (it) it.remove(); } catch {}
+      try { this.isoItems.push(...this.isoAdd(s, x.name, x.ctx)); } catch (e) { console.warn('iso move', e); }
+    }
+    this.pinMain();
+  }
+  // 편집 프로젝트 (Final Cut Pro 7 XML — 프리미어 프로 · 다빈치 리졸브에서 [가져오기])
+  writeProject(rec) {
+    const path = require('path');
+    const files = rec.outs.filter((o) => o.file && fs.existsSync(o.file));
+    if (!files.length) return '';
+    const fps = Math.round(this.fps || 60), frames = Math.max(1, Math.round((rec.t1 - rec.t0) / 1000 * fps));
+    const W = this.width, H = this.height, x = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const url = (f) => 'file://localhost/' + f.replace(/\\/g, '/').split('/').map((seg, i) => (i === 0 && /^[A-Za-z]:$/.test(seg) ? seg : encodeURIComponent(seg))).join('/');
+    const rate = `<rate><timebase>${fps}</timebase><ntsc>FALSE</ntsc></rate>`;
+    const main = files.find((o) => o.main), tracks = main ? (rec.trackCount || 1) : 0;
+    const fileXml = (o, i) => `<file id="file-${i}"><name>${x(path.basename(o.file))}</name><pathurl>${x(url(o.file))}</pathurl>${rate}<duration>${frames}</duration>` +
+      `<media><video><samplecharacteristics>${rate}<width>${W}</width><height>${H}</height><pixelaspectratio>square</pixelaspectratio></samplecharacteristics></video>` +
+      Array.from({ length: o.main ? tracks : 1 }, () => '<audio><samplecharacteristics><depth>16</depth><samplerate>48000</samplerate></samplecharacteristics><channelcount>2</channelcount></audio>').join('') +
+      `</media></file>`;
+    const clip = (id, name, inner) => `<clipitem id="${id}"><name>${x(name)}</name><enabled>TRUE</enabled><duration>${frames}</duration>${rate}<start>0</start><end>${frames}</end><in>0</in><out>${frames}</out>${inner}</clipitem>`;
+    // 영상: V1 = 전체 화면, V2~ = 소스별
+    const order = [...files].sort((a, b) => (b.main ? 1 : 0) - (a.main ? 1 : 0));
+    const vTracks = order.map((o, i) => `<track>${clip('v-' + i, o.name, fileXml(o, i))}</track>`).join('');
+    // 소리: A1~ = 전체 화면 파일의 트랙들 (트랙 분리 녹화면 트랙마다)
+    const mi = order.indexOf(main);
+    const aTracks = main ? Array.from({ length: tracks }, (_, k) => {
+      const nm = (rec.trackNames && Object.values(rec.trackNames)[k]) || '전체 소리';
+      return `<track>${clip('a-' + k, nm, `<file id="file-${mi}"/><sourcetrack><mediatype>audio</mediatype><trackindex>${k + 1}</trackindex></sourcetrack>`)}</track>`;
+    }).join('') : '';
+    const title = 'Streamy Kit 녹화 ' + path.basename(rec.folder);
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="5"><sequence id="seq-1"><name>${x(title)}</name><duration>${frames}</duration>${rate}` +
+      `<media><video><format><samplecharacteristics>${rate}<width>${W}</width><height>${H}</height><pixelaspectratio>square</pixelaspectratio></samplecharacteristics></format>${vTracks}</video>` +
+      `<audio>${aTracks}</audio></media></sequence></xmeml>\n`;
+    const out = path.join(rec.folder, '편집 프로젝트 (프리미어 · 다빈치).xml');
+    fs.writeFileSync(out, xml, 'utf8');
+    return out;
   }
 }
+
+function safeFile(n) { return String(n).replace(/[\\/:*?"<>|%]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60) || '소스'; }
 
 function streamError(sig) {
   const msg = { '-1': '스트림 키나 서버 주소가 잘못됐어요.', '-2': '서버에 연결할 수 없어요. 인터넷 연결을 확인해 주세요.', '-3': '인코더를 시작하지 못했어요. 다른 인코더를 골라 보세요.', '-4': '연결이 끊겼어요.', '-5': '방송을 시작할 수 없어요.', '-6': '서버가 연결을 거부했어요. 스트림 키를 확인해 주세요.' }[String(sig.code)];

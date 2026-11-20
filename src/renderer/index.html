@@ -91,6 +91,7 @@
       <span class="sel-name" id="selName"></span>
       <span class="sel-size" id="selSize"></span>
       <div class="edit-actions">
+        <button id="whereBtn" class="where-btn" title="방송 · 녹화에 보이는 곳 (누를 때마다 바뀜)"></button>
         <button data-fit="fit">화면 맞춤</button><button data-fit="center">가운데</button><button data-fit="reset">원래 크기</button><button data-fit="uncrop">자르기 초기화</button>
       </div>
     </div>
@@ -156,6 +157,12 @@
         <p class="hint" id="encHint"></p>
         <h4>화질</h4>
         <label class="field"><select id="quality"><option value="1080p60">1080p 60fps (권장)</option><option value="1080p30">1080p 30fps</option><option value="720p60">720p 60fps (저사양 PC)</option></select></label>
+
+        <h4>녹화 <small>소스별로 따로</small></h4>
+        <label class="check"><input type="checkbox" id="isoOn"> 소스별로 따로 녹화하기</label>
+        <div class="iso-list" id="isoList"></div>
+        <p class="hint" id="isoHint">녹화마다 폴더 하나에 전체 화면 + 고른 소스 + 편집 프로젝트(.xml)를 같이 저장해요. 최대 3개, 그래픽카드를 더 써요.</p>
+        <div class="row"><button id="recOpen"><span data-ic="folder"></span>녹화 폴더 열기</button></div>
       </section>
 
       <!-- 채팅: 통합(직접 연결) + 플랫폼별 공식 채팅창 -->
