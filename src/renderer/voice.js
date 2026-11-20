@@ -63,6 +63,13 @@
   const A = { soloNodes: [], ctx: null, stream: null, mic: null, play: null, recBuf: null, chainIn: null, filters: [], sig: '', an: null, mon: null, listening: false, playing: false, rec: null };
   // 구간만 듣기 방식: 자르기면 '잘려 나가는 쪽', 쉘프면 '바뀌는 쪽', 벨 · 노치면 '그 둘레'
   const soloKindOf = (b) => ({ hp: 'cut-low', lp: 'cut-high', ls: 'shelf-low', hs: 'shelf-high', bell: 'band', notch: 'band' })[b.type] || 'band';
+  // 구간 경계: 벨 · 노치는 폭(최소 1/3옥타브), 쉘프 · 자르기는 그 주파수 아래/위 전부
+  const soloEdges = (b) => {
+    const k = soloKindOf(b);
+    if (k.endsWith('low')) return [20, b.f];
+    if (k.endsWith('high')) return [b.f, 20000];
+    const bw = Math.max(1 / 3, bwOf(b.q)); return [b.f / Math.pow(2, bw / 2), b.f * Math.pow(2, bw / 2)];
+  };
   const WA_TYPE = { hp: 'highpass', lp: 'lowpass', bell: 'peaking', ls: 'lowshelf', hs: 'highshelf', notch: 'notch' };
   function ensureCtx() {
     if (A.ctx) return A.ctx;
@@ -93,14 +100,21 @@
       if (sb) {
         // 그 구간만: 벨 · 노치 = 그 주파수 둘레만, 쉘프 = 그 아래/위만, 자르기 = 잘려 나가는 소리(필터 전)
         let src = soloKind.startsWith('cut') ? A.chainIn : last;
-        const t = soloKind.endsWith('low') ? 'lowpass' : soloKind.endsWith('high') ? 'highpass' : 'bandpass';
-        for (let i = 0; i < (t === 'bandpass' ? 1 : 2); i++) { const n = A.ctx.createBiquadFilter(); n.type = t; src.connect(n); src = n; A.soloNodes.push(n); }
+        // 가파르게 (48dB/옥타브): 바깥 소리가 새어 들어오지 않게
+        const roles = soloKind.endsWith('low') ? ['lp', 'lp', 'lp', 'lp'] : soloKind.endsWith('high') ? ['hp', 'hp', 'hp', 'hp'] : ['hp', 'hp', 'hp', 'hp', 'lp', 'lp', 'lp', 'lp'];
+        for (const r of roles) { const n = A.ctx.createBiquadFilter(); n.type = r === 'lp' ? 'lowpass' : 'highpass'; n._role = r; src.connect(n); src = n; A.soloNodes.push(n); }
         src.connect(A.an);
       } else last.connect(A.an);
       A.sig = sig;
     }
     const t = A.ctx.currentTime;
-    if (sb) for (const n of A.soloNodes) { n.frequency.setTargetAtTime(Math.max(20, Math.min(20000, sb.f)), t, 0.015); n.Q.setTargetAtTime(n.type === 'bandpass' ? Math.max(0.5, Math.min(12, sb.q)) : 0.71, t, 0.015); }
+    if (sb) {
+      const [lo, hi] = soloEdges(sb), k = soloKindOf(sb);
+      for (const n of A.soloNodes) {
+        const fq = k === 'band' ? (n._role === 'hp' ? lo : hi) : sb.f;
+        n.frequency.setTargetAtTime(Math.max(20, Math.min(20000, fq)), t, 0.015); n.Q.setTargetAtTime(0.71, t, 0.015);
+      }
+    }
     let i = 0;
     for (const b of bypass ? [] : bs) {
       const n = (b.type === 'hp' || b.type === 'lp') ? 2 : 1;
@@ -215,8 +229,7 @@
     const sb = solo != null ? V().bands.find((b) => b.id === solo) : null;
     ov.classList.toggle('vo-soloing', !!sb);
     if (sb) {
-      const k = soloKindOf(sb), bw = bwOf(Math.max(0.5, sb.q));
-      const a = k.endsWith('low') ? 20 : k.endsWith('high') ? sb.f : sb.f / Math.pow(2, bw / 2), z = k.endsWith('low') ? sb.f : k.endsWith('high') ? 20000 : sb.f * Math.pow(2, bw / 2);
+      const [a, z] = soloEdges(sb);
       soloRect.setAttribute('x', fx(Math.max(20, a))); soloRect.setAttribute('width', Math.max(4, fx(Math.min(20000, z)) - fx(Math.max(20, a)))); soloRect.setAttribute('height', H);
     } else soloRect.setAttribute('width', 0);
   }
