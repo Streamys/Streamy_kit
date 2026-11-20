@@ -35,6 +35,7 @@
 - **글 줄이기 · 줄 맞춤**: 설명 문구 숨김, 카드 제목/여백/버튼 통일, 사운드 % 위치, 아이콘+글자 세로 정렬 (v0.22 ~ v0.22.1), 플랫폼 뱃지(색 점 · 치/유/숲) 제거 — 채팅 메시지 안 표시만 유지 (v0.24.1)
 
 ### 동작 · 안정성
+- **v0.27.0 녹화 트랙 분리**: 사운드 탭 [녹화 트랙 분리]. 트랙 1 = 전체 소리(방송과 같음), 소리마다 2~6 중 하나 선택(장면 소스 소리는 한 줄로 묶음). 켜면 `AdvancedRecordingFactory` + `AudioTrackFactory`로 mkv 다중 트랙 녹화, 끄면 기존 단순 녹화. 각 입력의 `audioMixers`는 `1 | 고른 트랙`으로 항상 설정(송출은 트랙 1만 씀). 설정은 `cfg.recTracks {on,map,scene}`. **실기기 미확인** — 녹화 후 편집 프로그램에서 트랙 수 · 이름 확인 필요.
 - **엔진 조회 크래시 회피** (v0.19.1 ~ v0.21.2): 이 사용자 PC에서 `engine.choices()`(임시 private 소스로 속성 조회)가 **엔진(obs64)을 죽임**. 이제 `engine.choices()`는 빈 배열을 돌려주고,
   - 모니터: `src/monitors.ps1`(EnumDisplayDevices, `EDD_GET_DEVICE_INTERFACE_NAME`)로 OBS `monitor_id` 형식 장치 ID를 읽음 (main `app:displays`)
   - 창 · 게임: `windows.ps1` 창 목록 (`windows:get`)

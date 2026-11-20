@@ -95,6 +95,7 @@ class Engine {
     this.probes = {};            // type -> 조회용 private 소스 (재사용)
     this.streams = {};           // platform -> { out, parts, state, error }
     this.recording = null;
+    this.recTracks = { on: false, map: {}, scene: 0 };   // 녹화 트랙 분리: map = 오디오 이름 -> 트랙(2~6, 0=없음), scene = 장면 소스 소리
     this.encoderPref = 'auto';
     this.listeners = {};
     this.seq = 1;
@@ -309,6 +310,7 @@ class Engine {
     const name = this.uniqueName(opt.name || def.label, (n) => this.nameTaken(n));
     const input = this.osn.InputFactory.create(type, name, this.settingsFor(kind, opt));
     this.sources[name] = { input, kind, icon: def.icon };
+    this.mixOne(input, this.recTracks.scene);
     if (kind === 'virtual') this.sources[name].virt = { ...VIRTUAL_DEFAULT, ...(opt.virt || {}), crop: { ...VIRTUAL_DEFAULT.crop, ...(opt.virt?.crop || {}) } };
     const item = scene.scene.add(input);
     item.alignment = E.Align.TopLeft;
@@ -577,6 +579,7 @@ class Engine {
     const fader = osn.FaderFactory.create(E.Fader.Cubic); fader.attach(input);
     const volmeter = osn.VolmeterFactory.create(E.Fader.IEC); volmeter.attach(input);
     this.audio[name] = { input, fader, volmeter, label, kind };
+    this.mixOne(input, this.recTracks.map[name]);
     this.emit('audio');
     return this.audio[name];
   }
@@ -629,6 +632,24 @@ class Engine {
       return p && p.details ? p.details.items.map((x) => ({ name: String(x.name), value: String(x.value) })) : [];
     } catch (e) { console.error('audioDevices', e); return []; }
   }
+  // ---- 녹화 트랙 (OBS 오디오 트랙 1~6). 트랙 1 = 모든 소리(방송과 같음), 2~6 = 고른 소리만
+  mixOne(input, t) { try { input.audioMixers = 1 | (t >= 2 && t <= 6 ? 1 << (t - 1) : 0); } catch {} }
+  applyMixers() {
+    for (const [n, a] of Object.entries(this.audio)) this.mixOne(a.input, this.recTracks.map[n]);
+    for (const s of Object.values(this.sources)) this.mixOne(s.input, this.recTracks.scene);
+  }
+  setRecTracks(rt) {
+    this.recTracks = { on: !!rt?.on, map: { ...(rt?.map || {}) }, scene: Number(rt?.scene) || 0 };
+    this.applyMixers();
+  }
+  // 트랙 번호 -> 이름 (편집 프로그램에서 보이는 이름)
+  trackNames() {
+    const names = { 1: '전체 소리' }, rt = this.recTracks;
+    const add = (t, label) => { if (t >= 2 && t <= 6) names[t] = names[t] ? names[t] + ' + ' + label : label; };
+    for (const [n, a] of Object.entries(this.audio)) add(rt.map[n], a.label);
+    add(rt.scene, '장면 소리');
+    return names;
+  }
   setAudioDevice(name, deviceId) { const a = this.audio[name]; if (a) a.input.update({ device_id: deviceId }); }
   onVolmeter(arr) {
     for (const d of arr || []) {
@@ -678,6 +699,7 @@ class Engine {
         }
       } catch (e) { console.warn('scene load failed', sc.name, e); }
     }
+    this.applyMixers();
     for (const [n, src] of Object.entries(this.sources)) if (src.kind === 'virtual') { try { this.applyVirtual(n, { layout: false }); } catch (e) { console.warn('virtual load', e); } }
     const cur = this.scenes.find((s) => s.name === data.current) || this.scenes[0];
     if (cur) this.switchScene(cur.id, true);
@@ -774,22 +796,49 @@ class Engine {
   startRecording(dir) {
     if (this.recording) return;
     const osn = this.osn; fs.mkdirSync(dir, { recursive: true });
-    const enc = this.pickEncoder();
-    const r = osn.SimpleRecordingFactory.create();
-    r.path = dir; r.format = 'mkv'; r.quality = 1; r.video = this.video;
-    r.videoEncoder = osn.VideoEncoderFactory.create(enc.id, 'streamy-rec-' + Date.now(), enc.id === 'obs_x264' ? { rate_control: 'CRF', crf: 20, preset: 'veryfast' } : { rate_control: 'CQP', cqp: 20 });
-    r.audioEncoder = osn.AudioEncoderFactory.create('ffmpeg_aac', 'streamy-rec-audio-' + Date.now());
-    r.lowCPU = false; r.overwrite = false; r.noSpace = false;
+    const enc = this.pickEncoder(), tag = Date.now();
+    const vset = enc.id === 'obs_x264' ? { rate_control: 'CRF', crf: 20, preset: 'veryfast' } : { rate_control: 'CQP', cqp: 20 };
+    const multi = this.recTracks.on;
+    let r, tracks = [];
+    if (multi) {
+      // 트랙 분리 녹화: 고급 녹화 + 트랙마다 오디오 인코더 (mkv라 트랙이 그대로 담김)
+      this.applyMixers();
+      const names = this.trackNames();
+      let mixer = 0;
+      for (const [t, nm] of Object.entries(names)) {
+        const tr = osn.AudioTrackFactory.create(192, String(nm).slice(0, 60));
+        osn.AudioTrackFactory.setAtIndex(tr, Number(t)); tracks.push(tr);
+        mixer |= 1 << (Number(t) - 1);
+      }
+      r = osn.AdvancedRecordingFactory.create();
+      r.path = dir; r.format = 'mkv'; r.video = this.video;
+      r.useStreamEncoders = false; r.rescaling = false; r.mixer = mixer;
+      r.videoEncoder = osn.VideoEncoderFactory.create(enc.id, 'streamy-rec-' + tag, vset);
+    } else {
+      r = osn.SimpleRecordingFactory.create();
+      r.path = dir; r.format = 'mkv'; r.quality = 1; r.video = this.video;
+      r.videoEncoder = osn.VideoEncoderFactory.create(enc.id, 'streamy-rec-' + tag, vset);
+      r.audioEncoder = osn.AudioEncoderFactory.create('ffmpeg_aac', 'streamy-rec-audio-' + tag);
+      r.lowCPU = false;
+    }
+    r.overwrite = false; r.noSpace = false;
     r.signalHandler = (sig) => {
-      if (sig.signal === 'start') this.emit('record', { state: 'on' });
+      if (sig.signal === 'start') this.emit('record', { state: 'on', tracks: multi ? tracks.length : 1 });
       if (sig.signal === 'stop') { this.emit('record', { state: 'off', error: sig.code ? (sig.error || '녹화 오류') : '' }); this.cleanupRecording(); }
     };
-    this.recording = r; r.start();
+    this.recording = r; this.recordingMulti = multi;
+    r.start();
   }
   stopRecording(force = false) { if (this.recording) { this.recording.stop(force); if (force) this.cleanupRecording(); } }
   cleanupRecording() {
-    const r = this.recording; this.recording = null; if (!r) return;
-    setTimeout(() => { try { const v = r.videoEncoder, a = r.audioEncoder; this.osn.SimpleRecordingFactory.destroy(r); v && v.release(); a && a.release(); } catch {} }, 500);
+    const r = this.recording, multi = this.recordingMulti; this.recording = null; if (!r) return;
+    setTimeout(() => {
+      try {
+        const v = r.videoEncoder, a = multi ? null : r.audioEncoder;
+        (multi ? this.osn.AdvancedRecordingFactory : this.osn.SimpleRecordingFactory).destroy(r);
+        v && v.release(); a && a.release();
+      } catch {}
+    }, 500);
   }
 }
 

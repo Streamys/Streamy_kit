@@ -1297,3 +1297,17 @@ label.check,.lay-chk,label:has(>input[type=checkbox]){cursor:pointer}
 .boot-box small{color:rgba(243,244,247,.62)!important;font-size:12.5px}
 .boot-bar{height:8px;background:rgba(255,255,255,.12)!important;margin:10px 0 8px}
 .boot-ov{background:rgba(10,11,15,.8)!important}
+
+/* 녹화 트랙 분리 (v0.27) */
+.sec-card>.trk-list{display:flex!important;flex-direction:column;gap:6px;padding:8px!important}
+.sec-card>.trk-list[hidden],#trkHint[hidden]{display:none!important}
+.trk-row{display:flex;align-items:center;gap:10px;min-height:34px;padding:0 4px 0 8px;border-radius:10px}
+.trk-row:not(.trk-all):hover{background:var(--hover)}
+.trk-nm{flex:1;min-width:0;font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:16px}
+.trk-nm small{display:block;font-size:11px;font-weight:500;color:var(--sub)}
+.trk-seg{display:flex;gap:3px;flex:none}
+.tab .sec-card .trk-seg button{width:26px;height:26px;min-width:0;padding:0!important;border-radius:8px;font-size:12px;font-weight:800;color:var(--sub);background:var(--card2)!important;border:none;display:inline-flex;align-items:center;justify-content:center}
+.tab .sec-card .trk-seg button:hover{color:var(--text)}
+.tab .sec-card .trk-seg button.on{background:var(--red)!important;color:var(--onac,#fff)}
+.trk-one{height:26px;padding:0 10px;border-radius:8px;font-size:12px;font-weight:800;display:inline-flex;align-items:center;background:var(--soft,var(--card2));color:var(--red2,var(--red))}
+.trk-all{border-bottom:1px solid var(--line);border-radius:0;padding-bottom:6px;margin-bottom:2px}

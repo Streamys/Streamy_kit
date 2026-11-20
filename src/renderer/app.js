@@ -783,7 +783,54 @@ function renderMixer() {
     meterEls[a.name] = { row, lvl: row.querySelector('.lvl'), pk: row.querySelector('.pkw'), shown: 0, peak: 0, peakT: 0, drawn: -1, drawnPk: -1 };
   }
 }
-engine.on('audio', () => { renderMixer(); renderApps(true); });
+engine.on('audio', () => { renderMixer(); renderApps(true); renderTracks(); });
+
+// ================================================================== 녹화 트랙 분리 (OBS 오디오 트랙 1~6)
+// 트랙 1 = 전체 소리(방송과 같음). 소리마다 2~6 중 하나를 고르면 그 트랙에 그 소리만 따로 담김
+const SCENE_TRK = '__scene__';
+function recTracks() {
+  const rt = cfg.recTracks && typeof cfg.recTracks === 'object' ? cfg.recTracks : (cfg.recTracks = { on: false, map: {}, scene: 0 });
+  rt.map = rt.map || {}; rt.scene = Number(rt.scene) || 0; return rt;
+}
+// 처음 켤 때 기본값: 마이크 2, 데스크톱 3, 프로그램 4~6
+function trkDefaults(list) {
+  const rt = recTracks(); if (Object.keys(rt.map).length) return;
+  let next = 4;
+  for (const a of list) {
+    if (a.label === '마이크' || a.kind === 'mic') rt.map[a.name] = 2;
+    else if (a.label === '데스크톱 소리' || a.kind === 'desktop') rt.map[a.name] = 3;
+    else if (next <= 6) rt.map[a.name] = next++;
+  }
+}
+function trkApply() { save(); if (!DEMO && engineOk) { try { engine.setRecTracks(recTracks()); } catch (e) { rlog('warn', 'rec tracks', e); } } }
+function renderTracks() {
+  const box = $('trkList'), chk = $('trkOn'); if (!box || !chk) return;
+  const rt = recTracks(); chk.checked = !!rt.on;
+  box.hidden = !rt.on; $('trkHint').hidden = !rt.on;
+  if (!rt.on) { box.innerHTML = ''; return; }
+  const list = DEMO ? demo.audio : engineOk ? engine.audioList() : [];
+  const rows = list.map((a) => ({ key: a.name, label: a.label, t: Number(rt.map[a.name]) || 0 }));
+  rows.push({ key: SCENE_TRK, label: '장면 소리', sub: '웹캠 · 알림창', t: rt.scene });
+  box.innerHTML = '<div class="trk-row trk-all"><div class="trk-nm">전체 소리</div><div class="trk-seg"><span class="trk-one">트랙 1</span></div></div>';
+  for (const r of rows) {
+    const row = document.createElement('div'); row.className = 'trk-row';
+    row.innerHTML = `<div class="trk-nm">${esc(r.label)}${r.sub ? `<small>${esc(r.sub)}</small>` : ''}</div><div class="trk-seg">` +
+      [0, 2, 3, 4, 5, 6].map((t) => `<button data-t="${t}" class="${r.t === t ? 'on' : ''}" title="${t ? '트랙 ' + t : '따로 안 나눔'}">${t || '–'}</button>`).join('') + '</div>';
+    row.querySelector('.trk-seg').addEventListener('click', (e) => {
+      const b = e.target.closest('button'); if (!b) return;
+      const t = Number(b.dataset.t);
+      if (r.key === SCENE_TRK) rt.scene = t; else rt.map[r.key] = t;
+      trkApply(); renderTracks();
+    });
+    box.appendChild(row);
+  }
+}
+$('trkOn').addEventListener('change', () => {
+  const rt = recTracks(); rt.on = $('trkOn').checked;
+  if (rt.on) trkDefaults(DEMO ? demo.audio : engineOk ? engine.audioList() : []);
+  trkApply(); renderTracks();
+  if (rt.on && !DEMO && engine.recording) toast('다음 녹화부터 트랙이 나뉘어요.');
+});
 // 레벨은 엔진에서 1초에 수십 번 들쑥날쑥 들어와요 → 화면에서는 시간 기준으로 부드럽게 따라가게 (올라갈 땐 빠르게, 내려갈 땐 천천히)
 let meterT = performance.now();
 const ease = (cur, target, dt, up, down) => cur + (target - cur) * (1 - Math.exp(-dt / (target > cur ? up : down)));
@@ -824,7 +871,7 @@ let liveSeen = {};          // exe(lower) -> 마지막으로 보인 시각 (잠�
 let soundOpen = false, liveRenderT = 0;
 function soundTabOpened() {
   if (soundOpen) return; soundOpen = true;
-  renderDevices(); renderLiveApps(); renderSepApps();
+  renderDevices(); renderLiveApps(); renderSepApps(); renderTracks();
   if (!DEMO) ipcRenderer.send('audio-sessions:start');
 }
 function soundTabClosed() { if (!soundOpen) return; soundOpen = false; if (!DEMO) ipcRenderer.send('audio-sessions:stop'); }
@@ -1274,7 +1321,7 @@ $('btnLive').addEventListener('click', guard(async () => {
 }));
 engine.on('record', (r) => {
   $('btnRec').classList.toggle('on', r.state === 'on');
-  if (r.state === 'on') toast('녹화를 시작했어요. 저장 위치: ' + info.recordDir);
+  if (r.state === 'on') toast((r.tracks > 1 ? `녹화를 시작했어요 (소리 트랙 ${r.tracks}개). ` : '녹화를 시작했어요. ') + '저장 위치: ' + info.recordDir);
   if (r.state === 'off') r.error ? toast(r.error, true) : toast('녹화를 저장했어요.');
 });
 $('btnRec').addEventListener('click', guard(() => { if (DEMO) return; engine.recording ? engine.stopRecording() : engine.startRecording(info.recordDir); }));
@@ -1478,6 +1525,7 @@ async function boot() {
     }, 1500);
     setTimeout(() => { try { for (const it of engine.items()) { const o = engine.itemObj(it.id), st = engine.sourceSettings(it.name); rlog('info', 'source', it.kind, it.name, `${o?.source?.width || 0}x${o?.source?.height || 0}`, it.visible ? 'shown' : 'hidden', JSON.stringify(st?.settings || {}).slice(0, 220)); } } catch (e) { rlog('warn', 'source diag', e); } }, 4000);
   } catch (e) { ipcRenderer.send('engine:booting', false); boot.remove(); engineError(e); return; }
+  try { engine.setRecTracks(cfg.recTracks); } catch (e) { rlog('warn', 'rec tracks', e); }
   try {
     let saved = null; try { saved = JSON.parse(fs.readFileSync(scenesFile, 'utf8')); } catch {}
     if (saved && saved.scenes && saved.scenes.length) engine.load(saved);
