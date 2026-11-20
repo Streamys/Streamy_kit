@@ -157,16 +157,28 @@
         <h4>화질</h4>
         <label class="field"><select id="quality"><option value="1080p60">1080p 60fps (권장)</option><option value="1080p30">1080p 30fps</option><option value="720p60">720p 60fps (저사양 PC)</option></select></label>
 
-        <h4>녹화 <small>소스별로 따로</small></h4>
+        <h4>방송 · 녹화 따로 보이기</h4>
+        <div class="vis-list" id="visList"></div>
+        <h4>녹화 파일</h4>
+        <div class="seg rec-fmt" id="recFmt"><button data-f="mkv">mkv</button><button data-f="mp4">mp4</button><button data-f="mov">mov</button></div>
+        <div class="field">저장 위치<div class="row rec-dir"><code id="recDirV"></code><button id="recOpen"><span data-ic="folder"></span>열기</button></div></div>
+        <h4>소스별 따로 녹화</h4>
         <label class="check"><input type="checkbox" id="isoOn"> 소스별로 따로 녹화하기</label>
         <div class="iso-list" id="isoList"></div>
         <p class="hint" id="isoHint">녹화마다 폴더 하나에 전체 화면 + 고른 소스 + 편집 프로젝트(.xml)를 같이 저장해요. 최대 3개, 그래픽카드를 더 써요.</p>
-        <div class="row"><button id="recOpen"><span data-ic="folder"></span>녹화 폴더 열기</button></div>
+        <h4>녹화 사운드 트랙 분리</h4>
+        <label class="check"><input type="checkbox" id="trkOn"> 녹화할 때 소리를 트랙별로 나누기</label>
+        <div class="trk-list" id="trkList"></div>
+        <p class="hint" id="trkHint">트랙 1은 항상 전체 소리 (방송과 같아요). 녹화 파일(.mkv)을 편집 프로그램에서 열면 트랙이 나뉘어 보여요.</p>
+
+        <h4>채팅 기록</h4>
+        <label class="check"><input type="checkbox" id="chatLogOn"> 채팅을 파일로 저장하기 (날짜별 .txt)</label>
+        <div class="row"><button id="chatLogDir2">기록 폴더 열기</button></div>
       </section>
 
       <!-- 채팅: 통합(직접 연결) + 플랫폼별 공식 채팅창 -->
       <section class="tab chat-tab" id="tab-chat">
-        <div class="chat-switch" id="chatSwitch">
+        <div class="chat-switch subtabs" id="chatSwitch">
           <button data-v="all" class="on">통합</button>
           <button data-v="chzzk"><i class="pd chzzk"></i>치지직</button>
           <button data-v="youtube"><i class="pd youtube"></i>유튜브</button>
@@ -188,10 +200,14 @@
           <div class="type-grid" id="typeGrid"></div>
           <div class="add-form" id="addForm"></div>
         </div>
-        <div class="sec-card props-card" id="propsCard">
+        <div class="sp-scenes" id="srcScenes"></div>
+        <div class="sp-head" id="srcHead"></div>
+        <div class="sp-list" id="srcList"></div>
+        <div class="sp-hold" id="srcHold" hidden>
+        <div class="props-card" id="propsCard">
           <div id="propsBody"></div>
         </div>
-        <div class="sec-card" id="timerCard">
+        <div class="timer-card" id="timerCard">
           <h4>방송 타이머</h4>
         <div class="timer-big" id="timerBig">00:00</div>
         <div class="row"><button class="primary-sm" data-t="start"><span data-ic="play"></span>시작</button><button data-t="pause"><span data-ic="pause"></span>멈춤</button><button data-t="reset"><span data-ic="reset"></span>리셋</button></div>
@@ -203,6 +219,7 @@
         <label class="field">문구<input id="tLabel" placeholder="방송 시작까지"></label>
         <button id="tApply">설정 적용</button>
         
+        </div>
         </div>
       </section>
 
@@ -255,13 +272,6 @@
         <b>빼기</b>: 사운드 칸에서 막대 이름을 잡고 끌어서 <b>아무 데나</b> 놓으면 빠져요.<br>
         같은 소리가 두 번 들리면 <b>데스크톱 소리</b>를 음소거하세요 (게임 소리도 같이 꺼지니 주의).</p>
 
-        <h4>녹화 트랙 분리 <small>편집할 때 소리 따로</small></h4>
-        <label class="check"><input type="checkbox" id="trkOn"> 녹화할 때 소리를 트랙별로 나누기</label>
-        <div class="trk-list" id="trkList"></div>
-        <p class="hint" id="trkHint">트랙 1은 항상 전체 소리 (방송과 같아요). 녹화 파일(.mkv)을 편집 프로그램에서 열면 트랙이 나뉘어 보여요.</p>
-
-        <h4>방송 · 녹화 따로 보이기</h4>
-        <div class="vis-list" id="visList"></div>
       </section>
 
 
@@ -287,9 +297,6 @@
         <div class="field">포인트 색
           <div class="accent-row" id="accentRow"></div>
         </div>
-        <h4>채팅 기록</h4>
-        <label class="check"><input type="checkbox" id="chatLogOn"> 채팅을 파일로 저장하기 (날짜별 .txt)</label>
-        <div class="row"><button id="chatLogDir2">기록 폴더 열기</button></div>
         <h4>업데이트</h4>
         <div class="upd-box">
           <div><b id="updCur"></b><small id="updStatus">확인 전</small></div>

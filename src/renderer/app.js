@@ -131,8 +131,11 @@ function openTab(name) {
   document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x.dataset.tab === name));
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + name));
   if (name === 'sound') soundTabOpened(); else soundTabClosed();
-  if (name === 'stream') { try { renderIso(); } catch {} }
+  if (name === 'stream') { try { renderStreamSubs(); } catch {} }
+  if (name === 'sources') { try { renderSrcTab(); } catch (e) { rlog('warn', 'src tab', e); } }
 }
+// 방송 탭에 옮겨 온 녹화 · 따로 보이기 칸 그리기
+function renderStreamSubs() { renderIso(); renderTracks(); renderVis(); renderRecFile(); }
 document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => openTab(b.dataset.tab)));
 
 // ================================================================== 창 버튼
@@ -308,14 +311,17 @@ function updateSizeLabel() {
 let propsFor = null;
 engine.on('items', () => {
   renderSources();
-  if ($('tab-stream')?.classList.contains('on')) { try { renderIso(); } catch {} }
+  if ($('tab-stream')?.classList.contains('on')) { try { renderIso(); renderVis(); } catch {} }
   if (soundOpen) { try { renderVis(); } catch {} }
+  if ($('tab-sources')?.classList.contains('on')) { try { renderSrcTab(); } catch {} }
   if (engineOk) {
     const ids = selIds();
-    if (ids.length !== 1) { $('propsBody').innerHTML = ''; propsFor = null; }
+    if (ids.length !== 1) propsFor = null;
     else if (propsFor !== ids[0]) {
-      showProps();
-      if (mode !== 'air' && $('addBox').hidden) { openTab('sources'); document.querySelector('.tab-body').scrollTop = 0; }   // 누르면 그 소스 설정만 바로
+      propsFor = ids[0];
+      if (mode !== 'air' && $('addBox').hidden) {      // 누르면 소스 탭에서 그 장면 · 그 소스로 바로
+        srcScene = engine.currentId; openTab('sources'); renderSrcTab(true); srcFocus(ids[0]);
+      }
     }
   }
   clearTimeout(countT); countT = setTimeout(renderScenes, 150);
@@ -563,6 +569,81 @@ function showProps() {
     engine.updateSource(it.name, s.kind, opt); saveScenes(); toast('적용했어요.');
   }));
 }
+
+// ================================================================== 소스 탭: 위에서 장면 고르면 그 장면 소스 설정이 쭉
+let srcScene = null, srcKey = '';
+function srcScenesList() {
+  if (DEMO) return demo.scenes.map((s) => ({ id: s.id, name: s.name, n: s.n }));
+  if (!engineOk) return [];
+  return engine.scenes.map((s) => ({ id: s.id, name: s.name, n: engine.items(s.id).length }));
+}
+function renderSrcTab(force) {
+  const box = $('srcScenes'), list = $('srcList'); if (!box || !list) return;
+  const scenes = srcScenesList(), cur = DEMO ? demo.current : engineOk ? engine.currentId : null;
+  if (!srcScene || !scenes.some((x) => x.id === srcScene)) srcScene = cur;
+  box.innerHTML = scenes.map((x) => `<button class="sp-sc${x.id === srcScene ? ' on' : ''}" data-id="${esc(x.id)}"><span>${esc(x.name)}</span>${x.id === cur ? '<i class="sp-now" title="지금 방송 중인 장면"></i>' : ''}<em>${x.n}</em></button>`).join('');
+  const items = DEMO ? (srcScene === demo.current ? demo.items : []) : engineOk ? engine.items(srcScene) : [];
+  const sc = scenes.find((x) => x.id === srcScene);
+  $('srcHead').innerHTML = sc ? `<b>${esc(sc.name)}</b><small>소스 ${items.length}개 · 위에서부터 앞에 보이는 순서</small>` : '';
+  const key = srcScene + '|' + (srcScene === cur) + '|' + items.map((i) => `${i.id}:${i.name}:${i.kind}:${i.visible}`).join(',');
+  if (!force && key === srcKey && list.childElementCount) return;
+  srcKey = key;
+  const hold = $('srcHold'); hold.appendChild($('propsCard')); hold.appendChild($('timerCard'));
+  list.innerHTML = '';
+  if (!items.length) { list.innerHTML = '<div class="sp-empty">이 장면엔 아직 소스가 없어요. 왼쪽 <b>＋ 추가</b>로 넣어 보세요.</div>'; return; }
+  let virtDone = false;
+  items.forEach((it, i) => {
+    const card = document.createElement('div'); card.className = 'sp-card'; card.dataset.id = it.id;
+    const eye = srcScene === cur ? `<button class="sp-eye${it.visible ? '' : ' off'}" title="보이기 / 숨기기">${ic(it.visible ? 'eye' : 'eyeOff')}</button>` : '';
+    card.innerHTML = `<div class="sp-card-h"><span class="ic">${srcIcon(it.kind)}</span><b>${esc(it.name)}</b>${eye}</div><div class="sp-card-b"></div>`;
+    list.appendChild(card);
+    const b = card.querySelector('.sp-card-b');
+    if (eye) card.querySelector('.sp-eye').addEventListener('click', guard(() => { if (DEMO) return; engine.setVisible(it.id, !it.visible); saveScenes(); }));
+    const st = DEMO ? { kind: it.kind, settings: {} } : engine.sourceSettings(it.name);
+    const kind = st ? st.kind : it.kind;
+    if (kind === 'timer') { const tc = $('timerCard'); tc.hidden = false; b.appendChild(tc); return; }
+    if (kind === 'virtual') {
+      if (virtDone) { b.innerHTML = '<p class="sp-note">버추얼 설정은 첫 번째 버추얼 소스에서 바꿀 수 있어요.</p>'; return; }
+      virtDone = true; b.appendChild($('propsCard'));
+      if (DEMO) renderVirtualProps(it.name, { ...VIRTUAL_DEFAULT }, '', 'game');
+      else { const v = engine.getVirtual(it.name); renderVirtualProps(it.name, v, st.settings.window, v.method); }
+      return;
+    }
+    const t = SOURCE_TYPES[kind] || {};
+    if (!(t.prop || t.file || t.text || t.url || kind === 'color')) { b.innerHTML = '<p class="sp-note">따로 정할 건 없어요.</p>'; return; }
+    const px = 'q' + i;
+    b.innerHTML = sourceForm(kind, px, st.settings || {}) + `<button class="primary-sm" id="${px}Save">적용</button>`;
+    bindForm(kind, px);
+    if (t.prop && st.settings) { const cv = st.settings[t.prop]; if (cv != null && $(px + 'Pick')) $(px + 'Pick').value = cv; }
+    $(px + 'Save').addEventListener('click', guard(() => {
+      if (DEMO) return;
+      const opt = readForm(px);
+      if (t.prop && !opt.value && kind !== 'game') return toast('목록에서 골라 주세요.', true);
+      engine.updateSource(it.name, kind, opt); saveScenes(); toast(`'${it.name}' 적용했어요.`);
+    }));
+  });
+}
+function srcFocus(id) {
+  const c = document.querySelector(`#srcList .sp-card[data-id="${id}"]`); if (!c) return;
+  c.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  c.classList.remove('hl'); void c.offsetWidth; c.classList.add('hl');
+}
+$('srcScenes').addEventListener('click', (e) => { const b = e.target.closest('.sp-sc'); if (!b) return; srcScene = b.dataset.id; renderSrcTab(true); document.querySelector('.tab-body').scrollTop = 0; });
+engine.on('scenes', () => { if ($('tab-sources')?.classList.contains('on')) { try { renderSrcTab(); } catch {} } });
+
+// ================================================================== 녹화 파일 (형식 · 저장 위치)
+function renderRecFile() {
+  const f = ['mkv', 'mp4', 'mov'].includes(cfg.recFormat) ? cfg.recFormat : 'mkv';
+  $('recFmt').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.f === f));
+  $('recDirV').textContent = info.recordDir || '';
+  $('recDirV').title = info.recordDir || '';
+}
+$('recFmt').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (!DEMO && engineOk && engine.recording) return toast('녹화가 끝난 뒤에 바꿀 수 있어요.', true);
+  cfg.recFormat = b.dataset.f; save(); renderRecFile();
+  if (b.dataset.f !== 'mkv') toast('mp4 · mov는 녹화 중에 프로그램이 꺼지면 파일이 깨질 수 있어요.');
+});
 
 // ================================================================== 미리보기에서 끌기 / 크기 조절
 const prev = $('preview');
@@ -1347,7 +1428,7 @@ $('btnRec').addEventListener('click', guard(() => {
   if (DEMO) return;
   if (engine.recording) return engine.stopRecording();
   const iso = cfg.iso && cfg.iso.on ? isoPicked() : [];
-  engine.startRecording(info.recordDir, { iso });
+  engine.startRecording(info.recordDir, { iso, format: ['mkv', 'mp4', 'mov'].includes(cfg.recFormat) ? cfg.recFormat : 'mkv' });
 }));
 $('recOpen').addEventListener('click', () => ipcRenderer.invoke('rec:open', lastRecFolder || ''));
 
@@ -1716,6 +1797,37 @@ for (const id of ['tab-stream', 'tab-settings', 'tab-sound']) {
     if (el.tagName === 'H4') { card = document.createElement('div'); card.className = 'sec-card'; tab.insertBefore(card, el); }
     if (card && !el.classList.contains('tab-back')) card.appendChild(el);
   }
+}
+// 탭 안 작은 탭: 카드 제목(h4)으로 어느 칸에 들어갈지 정함
+const SUBTABS = {
+  'tab-stream': [['live', '실시간', ['스트림 키', '방송 정보', '인코더', '화질', '방송 · 녹화 따로 보이기']], ['rec', '녹화', ['녹화 파일', '소스별 따로 녹화', '녹화 사운드 트랙 분리', '채팅 기록']]],
+  'tab-sound': [['dev', '장치 설정', ['기본 사운드 장치']], ['fil', '필터 설정', ['마이크 필터']], ['set', '사운드 설정', ['사운드 분리']]],
+  'tab-settings': [['theme', '테마', ['최소화 오버레이', '화면 테마']], ['upd', '업데이트 · 공지', ['업데이트']], ['app', '프로그램 설정', ['문제 해결']]],
+};
+function subOf(tabId) { const subs = SUBTABS[tabId]; const v = cfg.subTab && cfg.subTab[tabId]; return subs.some(([k]) => k === v) ? v : subs[0][0]; }
+function applySub(tabId) {
+  const tab = $(tabId), cur = subOf(tabId);
+  tab.querySelectorAll(':scope > .subtabs button').forEach((b) => b.classList.toggle('on', b.dataset.sub === cur));
+  tab.querySelectorAll(':scope > .sec-card').forEach((c) => c.classList.toggle('sub-off', (c.dataset.sub || '') !== cur));
+}
+for (const [tabId, subs] of Object.entries(SUBTABS)) {
+  const tab = $(tabId); if (!tab) continue;
+  for (const card of tab.querySelectorAll(':scope > .sec-card')) {
+    const h = card.querySelector(':scope > h4'); const t = h ? (h.childNodes[0].textContent || '').trim() : '';
+    const hit = subs.find(([, , heads]) => heads.includes(t));
+    card.dataset.sub = hit ? hit[0] : subs[subs.length - 1][0];
+  }
+  const nav = document.createElement('nav'); nav.className = 'subtabs';
+  nav.innerHTML = subs.map(([k, l]) => `<button data-sub="${k}">${l}</button>`).join('');
+  const back = tab.querySelector(':scope > .tab-back');
+  tab.insertBefore(nav, back ? back.nextSibling : tab.firstChild);
+  nav.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    cfg.subTab = { ...(cfg.subTab || {}), [tabId]: b.dataset.sub }; save(); applySub(tabId);
+    document.querySelector('.tab-body').scrollTop = 0;
+    if (tabId === 'tab-stream') renderStreamSubs();
+  });
+  applySub(tabId);
 }
 try { const vg = document.querySelector('#vtGo > span'); if (vg) vg.innerHTML = FLAT_ICONS.virtual; } catch {}
 document.querySelectorAll('[data-ic]').forEach((el) => { el.innerHTML = UI_ICON(el.dataset.ic); });

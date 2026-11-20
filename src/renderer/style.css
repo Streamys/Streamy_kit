@@ -1,3 +1,5 @@
+@font-face{font-family:'Pretendard';src:url(fonts/PretendardVariable.woff2) format('woff2');font-weight:45 920;font-display:swap}
+@font-face{font-family:'Geist Mono';src:url(fonts/GeistMono-Variable.woff2) format('woff2');font-weight:100 900;font-display:swap}
 :root{
   /* 기본: 밝은 카드 테마 (--red = 포인트 색, --live = 방송 중 빨강) */
   --bg:#E9EBF0;--bg2:#F7F7F9;--card:#F7F7F9;--card2:#EFF0F3;--sec:#EAECF0;--line:#DDE0E6;--line2:#CBCFD8;--onac:#FFF8FA;
@@ -1514,3 +1516,49 @@ label.check,.lay-chk,label:has(>input[type=checkbox]){cursor:pointer}
 .vo-lock-card input:focus{outline:none;border-color:var(--red)}
 .vo-lock-card em{font-style:normal;font-size:12.5px;font-weight:700;color:var(--red2,var(--red));min-height:18px}
 .vo-lock-card button{width:100%;height:44px;border-radius:14px;border:none;background:var(--red);color:var(--onac,#fff);font-weight:900;font-size:14.5px;cursor:pointer}
+
+/* ===== 탭 패널 개편 (v0.32): 작은 탭 · 소스 탭 장면별 · 글꼴 ===== */
+:root{--mono:'Geist Mono',ui-monospace,Consolas,monospace}
+code,.key-item code,#liveTime,#recDirV,.vc-row b,.vo-bt em,.vo-bt small,.vo-chip b,.trk-seg button,.timer-big{font-family:var(--mono)!important;letter-spacing:0}
+.subtabs,.tab .chat-switch.subtabs{display:flex!important;gap:2px;padding:3px;margin:0 0 12px;border-radius:12px;background:var(--card2);position:sticky;top:-16px;z-index:3;box-shadow:0 0 0 6px var(--bg)}
+.subtabs button,.tab .chat-switch.subtabs button{flex:1;height:32px;display:flex;align-items:center;justify-content:center;gap:5px;padding:0 6px!important;border:none!important;border-radius:9px!important;background:transparent!important;color:var(--sub)!important;font-size:12.5px;font-weight:600;white-space:nowrap;cursor:pointer;box-shadow:none}
+.subtabs button.on,.tab .chat-switch.subtabs button.on{background:var(--card)!important;color:var(--text)!important;font-weight:800;box-shadow:0 1px 3px rgba(40,20,35,.12)}
+.sec-card.sub-off{display:none!important}
+.rec-fmt{display:flex;gap:2px;padding:3px;border-radius:12px;background:var(--card2)}
+.rec-fmt button{flex:1;height:30px;border:none!important;border-radius:9px!important;background:transparent!important;color:var(--sub)!important;font-family:var(--mono);font-weight:600;font-size:12.5px}
+.rec-fmt button.on{background:var(--card)!important;color:var(--text)!important;box-shadow:0 1px 3px rgba(40,20,35,.12)}
+.rec-dir{display:flex;gap:6px;align-items:center;margin-top:6px}
+.rec-dir code{flex:1;min-width:0;height:34px;display:flex;align-items:center;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-size:11.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:rtl;text-align:left}
+/* 소스 탭 */
+.sp-scenes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:12px}
+.sp-sc{height:40px;display:flex!important;align-items:center;gap:7px;padding:0 12px!important;border-radius:12px!important;border:1px solid var(--line)!important;background:var(--card)!important;color:var(--text)!important;font-size:13px;font-weight:600;text-align:left;cursor:pointer;min-width:0}
+.sp-sc span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sp-sc em{font-style:normal;font-family:var(--mono);font-size:11px;font-weight:600;color:var(--sub)}
+.sp-sc .sp-now{width:7px;height:7px;border-radius:50%;background:#3DBE8B;flex:none}
+.sp-sc.on{background:var(--red)!important;border-color:var(--red)!important;color:var(--onac,#fff)!important;font-weight:800}
+.sp-sc.on em{color:inherit;opacity:.85}
+.sp-head{display:flex;align-items:baseline;gap:8px;margin:2px 2px 8px}
+.sp-head b{font-size:14px;letter-spacing:-.02em}
+.sp-head small{font-size:11.5px;color:var(--sub)}
+.sp-list{display:flex;flex-direction:column;gap:10px}
+.sp-card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;transition:box-shadow .3s}
+.sp-card.hl{animation:srcHl 1.4s ease}
+@keyframes srcHl{0%,40%{box-shadow:0 0 0 2.5px var(--red)}100%{box-shadow:0 0 0 0 transparent}}
+.sp-card-h{display:flex;align-items:center;gap:9px;padding:10px 10px 10px 14px;border-bottom:1px solid var(--line)}
+.sp-card-h .ic{width:18px;height:18px;color:var(--red);display:inline-flex;flex:none}
+.sp-card-h .ic svg{width:18px;height:18px}
+.sp-card-h b{flex:1;min-width:0;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sp-eye{width:30px;height:30px;padding:0!important;border-radius:9px!important;border:none!important;background:var(--card2)!important;color:var(--red)!important;display:inline-flex!important;align-items:center;justify-content:center}
+.sp-eye.off{color:var(--sub)!important}
+.sp-eye svg{width:15px;height:15px}
+.sp-card-b{padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.sp-card-b>#timerCard,.sp-card-b>#propsCard{background:none!important;border:none!important;box-shadow:none!important;padding:0!important;margin:0!important}
+.sp-card-b>#timerCard>h4{display:none}
+.sp-card-b .vprops>h4{display:none}
+.sp-note{margin:0;font-size:12px;color:var(--sub)}
+.sp-empty{padding:18px;text-align:center;font-size:12.5px;color:var(--sub);background:var(--card);border:1px dashed var(--line);border-radius:14px}
+.timer-card{display:flex;flex-direction:column;gap:10px}
+.timer-card .row{display:flex;gap:6px;flex-wrap:wrap}
+.tab .sec-card>#recFmt{display:flex!important;flex-direction:row!important;gap:2px;padding:3px!important;border-radius:12px;background:var(--card2)!important;border:none!important;box-shadow:none!important}
+.tab .sec-card>#recFmt button{flex:1;height:30px;border:none!important;border-radius:9px!important;background:transparent!important;color:var(--sub)!important;font-family:var(--mono);font-weight:600;font-size:12.5px;box-shadow:none!important}
+.tab .sec-card>#recFmt button.on{background:var(--card)!important;color:var(--text)!important;box-shadow:0 1px 3px rgba(40,20,35,.12)!important}

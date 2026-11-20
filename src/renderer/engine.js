@@ -861,6 +861,7 @@ class Engine {
   startRecording(dir, opt = {}) {
     if (this.rec) return;
     const osn = this.osn;
+    const fmt = ['mkv', 'mp4', 'mov'].includes(opt.format) ? opt.format : 'mkv';
     const iso = [...new Set(opt.iso || [])].filter((n) => this.sources[n]).slice(0, 3);
     let folder = dir;
     if (iso.length) {
@@ -894,7 +895,7 @@ class Engine {
       r.quality = 1; r.lowCPU = false;
       r.audioEncoder = osn.AudioEncoderFactory.create('ffmpeg_aac', 'streamy-rec-audio-' + tag);
     }
-    r.path = folder; r.format = 'mkv'; r.video = this.video; r.overwrite = false; r.noSpace = false;
+    r.path = folder; r.format = fmt; r.video = this.video; r.overwrite = false; r.noSpace = false;
     if (iso.length) { try { r.fileFormat = '전체 화면'; } catch {} }
     r.videoEncoder = osn.VideoEncoderFactory.create(enc.id, 'streamy-rec-' + tag, this.recVideoSettings(enc.id));
     rec.outs.push({ r, adv: !(r.audioEncoder), name: '전체 화면', main: true, state: 'starting' });
@@ -909,7 +910,7 @@ class Engine {
           this.isoItems.push(...this.isoAdd(this.currentScene, name, ctx));
           const ir = osn.AdvancedRecordingFactory.create();
           ir.useStreamEncoders = false; ir.rescaling = false; ir.mixer = 1;
-          ir.path = folder; ir.format = 'mkv'; ir.video = ctx; ir.overwrite = false; ir.noSpace = false;
+          ir.path = folder; ir.format = fmt; ir.video = ctx; ir.overwrite = false; ir.noSpace = false;
           try { ir.fileFormat = safeFile(name); } catch {}
           ir.videoEncoder = osn.VideoEncoderFactory.create(enc.id, 'streamy-iso-' + tag + '-' + rec.outs.length, this.recVideoSettings(enc.id));
           o.r = ir; o.adv = true; rec.outs.push(o);
