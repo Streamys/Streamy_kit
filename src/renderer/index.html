@@ -91,7 +91,6 @@
       <span class="sel-name" id="selName"></span>
       <span class="sel-size" id="selSize"></span>
       <div class="edit-actions">
-        <span class="vis-tg"><button id="visStream" class="vis" data-o="stream" title="방송에 보이기 / 빼기"></button><button id="visRec" class="vis" data-o="record" title="녹화에 담기 / 빼기"></button></span>
         <button data-fit="fit">화면 맞춤</button><button data-fit="center">가운데</button><button data-fit="reset">원래 크기</button><button data-fit="uncrop">자르기 초기화</button>
       </div>
     </div>
@@ -257,6 +256,9 @@
         <label class="check"><input type="checkbox" id="trkOn"> 녹화할 때 소리를 트랙별로 나누기</label>
         <div class="trk-list" id="trkList"></div>
         <p class="hint" id="trkHint">트랙 1은 항상 전체 소리 (방송과 같아요). 녹화 파일(.mkv)을 편집 프로그램에서 열면 트랙이 나뉘어 보여요.</p>
+
+        <h4>방송 · 녹화 따로 보이기</h4>
+        <div class="vis-list" id="visList"></div>
       </section>
 
 

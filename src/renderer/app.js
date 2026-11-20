@@ -287,14 +287,13 @@ function selIds() { return engineOk ? [...engine.sel] : []; }
 function renderEditBar() {
   const bar = $('editBar'), name = $('selName'), size = $('selSize');
   const hint = '';
-  if (DEMO) { bar.classList.add('has-sel'); name.innerHTML = '<b>웹캠</b>'; size.textContent = '576 × 324 · 30%'; renderWhere(); return; }
+  if (DEMO) { bar.classList.add('has-sel'); name.innerHTML = '<b>웹캠</b>'; size.textContent = '576 × 324 · 30%'; return; }
   const ids = selIds();
   bar.classList.toggle('has-sel', ids.length === 1);
   if (!ids.length) { name.innerHTML = ''; size.textContent = ''; return; }
   if (ids.length > 1) { name.innerHTML = `<b>${ids.length}개</b> 선택됨 · [삭제] 또는 Delete로 한 번에 삭제`; size.textContent = ''; return; }
   const it = engine.items().find((x) => x.id === ids[0]);
   name.innerHTML = it ? `<b>${esc(it.name)}</b>` : '';
-  renderWhere();
   updateSizeLabel();
 }
 function updateSizeLabel() {
@@ -310,6 +309,7 @@ let propsFor = null;
 engine.on('items', () => {
   renderSources();
   if ($('tab-stream')?.classList.contains('on')) { try { renderIso(); } catch {} }
+  if (soundOpen) { try { renderVis(); } catch {} }
   if (engineOk) {
     const ids = selIds();
     if (ids.length !== 1) { $('propsBody').innerHTML = ''; propsFor = null; }
@@ -874,7 +874,7 @@ let liveSeen = {};          // exe(lower) -> 마지막으로 보인 시각 (잠�
 let soundOpen = false, liveRenderT = 0;
 function soundTabOpened() {
   if (soundOpen) return; soundOpen = true;
-  renderDevices(); renderLiveApps(); renderSepApps(); renderTracks();
+  renderDevices(); renderLiveApps(); renderSepApps(); renderTracks(); renderVis();
   if (!DEMO) ipcRenderer.send('audio-sessions:start');
 }
 function soundTabClosed() { if (!soundOpen) return; soundOpen = false; if (!DEMO) ipcRenderer.send('audio-sessions:stop'); }
@@ -1389,30 +1389,40 @@ function renderIso() {
 }
 $('isoOn').addEventListener('change', () => { const c = isoCfg(); c.on = $('isoOn').checked; save(); renderIso(); });
 
-// ================================================================== 방송 · 녹화 따로 보이기 (선택한 소스)
-// 편집 막대의 [방송] [녹화] 버튼 = 그 소스를 방송에 / 녹화에 넣을지 켜고 끄기 (눈 버튼처럼)
-const whereOf = (it) => ({ stream: (it?.where || 'both') !== 'record', record: (it?.where || 'both') !== 'stream' });
-function selItem() { return engineOk && engine.sel.size === 1 ? engine.items().find((x) => x.id === engine.primary) : null; }
-function renderWhere() {
-  const it = DEMO ? demo.items[0] : selItem(), w = whereOf(it);
-  for (const [id, key, label] of [['visStream', 'stream', '방송'], ['visRec', 'record', '녹화']]) {
-    const b = $(id); if (!b) continue;
-    b.classList.toggle('off', !w[key]);
-    b.innerHTML = `${ic(w[key] ? 'eye' : 'eyeOff')}<span>${label}</span>`;
+// ================================================================== 방송 · 녹화 따로 보이기 (사운드 탭, 녹화 트랙 아래)
+// 소스마다 [방송] [녹화] 켜고 끄기 — 모든 장면의 같은 소스에 한 번에 적용
+const whereOf = (w) => ({ stream: (w || 'both') !== 'record', record: (w || 'both') !== 'stream' });
+function visSources() {
+  if (DEMO) return demo.items.map((x) => ({ name: x.name, kind: x.kind, where: x.where || 'both' }));
+  if (!engineOk) return [];
+  const seen = new Set(), out = [];
+  for (const sc of engine.scenes) for (const it of engine.items(sc.id)) {
+    if (seen.has(it.name)) continue; seen.add(it.name);
+    out.push({ name: it.name, kind: it.kind, where: engine.sourceWhere(it.name) });
+  }
+  return out;
+}
+function renderVis() {
+  const box = $('visList'); if (!box) return;
+  const list = visSources();
+  box.innerHTML = list.length ? '' : '<div class="iso-empty">장면에 소스를 넣으면 여기서 고를 수 있어요.</div>';
+  for (const x of list) {
+    const w = whereOf(x.where);
+    const row = document.createElement('div'); row.className = 'vis-row' + (x.where !== 'both' ? ' part' : '');
+    row.innerHTML = `<span class="ic">${srcIcon(x.kind)}</span><span class="nm">${esc(x.name)}</span><span class="vis-tg">` +
+      [['stream', '방송'], ['record', '녹화']].map(([k, l]) => `<button class="vis${w[k] ? '' : ' off'}" data-o="${k}">${ic(w[k] ? 'eye' : 'eyeOff')}<span>${l}</span></button>`).join('') + '</span>';
+    row.querySelector('.vis-tg').addEventListener('click', guard((e) => {
+      const b = e.target.closest('button'); if (!b || DEMO) return;
+      const key = b.dataset.o; w[key] = !w[key];
+      if (!w.stream && !w.record) { renderVis(); return toast('둘 다 빼려면 소스 옆 눈 버튼으로 숨겨 주세요.', true); }
+      const next = w.stream && w.record ? 'both' : w.stream ? 'stream' : 'record';
+      const now = engine.setWhereSource(x.name, next); saveScenes();
+      if (!now) toast('지금 방송 · 녹화가 끝나면 적용돼요.');
+      renderVis();
+    }));
+    box.appendChild(row);
   }
 }
-for (const id of ['visStream', 'visRec']) $(id).addEventListener('click', guard(() => {
-  if (DEMO) return;
-  const it = selItem(); if (!it) return;
-  const w = whereOf(it), key = $(id).dataset.o;
-  w[key] = !w[key];
-  if (!w.stream && !w.record) return toast('둘 다 빼려면 소스 옆 눈 버튼으로 숨겨 주세요.', true);
-  const next = w.stream && w.record ? 'both' : w.stream ? 'stream' : 'record';
-  const now = engine.setWhere(it.id, next); saveScenes();
-  const label = key === 'stream' ? '방송' : '녹화';
-  if (!now) toast(`지금 방송 · 녹화가 끝나면 적용돼요.`);
-  else toast(w[key] ? `'${it.name}' — 다시 ${label}에 나와요.` : `'${it.name}' — ${label}에서 뺐어요. 미리보기에만 보여요.`);
-}));
 
 setInterval(() => {
   if (liveSince) { const s = Math.floor((Date.now() - liveSince) / 1000); $('liveTime').textContent = `${Math.floor(s / 3600)}:${String(Math.floor(s % 3600 / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; }

@@ -369,6 +369,19 @@ class Engine {
     const ok = this.syncMultiRender();
     this.emit('items'); return ok;
   }
+  // 소스 단위 (모든 장면의 같은 소스에 한 번에)
+  setWhereSource(name, w) {
+    for (const sc of this.scenes) for (const it of this.uItems(sc)) {
+      if (it.source.name !== name) continue;
+      it.streamVisible = w !== 'record'; it.recordingVisible = w !== 'stream';
+    }
+    const ok = this.syncMultiRender();
+    this.emit('items'); return ok;
+  }
+  sourceWhere(name) {
+    for (const sc of this.scenes) for (const it of this.uItems(sc)) if (it.source.name === name) return this.itemWhere(it);
+    return 'both';
+  }
   selectiveUsed() {
     for (const s of this.scenes) for (const it of this.uItems(s)) if (this.itemWhere(it) !== 'both') return true;
     return false;

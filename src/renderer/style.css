@@ -1314,11 +1314,11 @@ label.check,.lay-chk,label:has(>input[type=checkbox]){cursor:pointer}
 
 /* 방송 · 녹화 따로 보이기 (v0.28.1): 편집 막대 [방송] [녹화] 켜고 끄기 */
 .vis-tg{display:inline-flex;gap:2px;padding:2px;border-radius:10px;background:var(--card2);flex:none}
-.edit-actions .vis-tg button.vis{display:inline-flex!important;align-items:center;gap:5px;height:28px;padding:0 10px!important;border-radius:8px;border:none;background:var(--card)!important;color:var(--text);font-weight:800;box-shadow:0 1px 2px rgba(25,31,40,.06)}
-.edit-actions .vis-tg button.vis svg{width:15px;height:15px;color:var(--red)}
-.edit-actions .vis-tg button.vis.off{background:transparent!important;color:var(--sub);box-shadow:none}
-.edit-actions .vis-tg button.vis.off svg{color:var(--sub)}
-.edit-actions .vis-tg button.vis.off span{text-decoration:line-through;text-decoration-thickness:1.5px}
+#visList .vis-tg button.vis{display:inline-flex!important;align-items:center;gap:5px;height:28px;padding:0 10px!important;border-radius:8px;border:none;background:var(--card)!important;color:var(--text);font-weight:800;box-shadow:0 1px 2px rgba(25,31,40,.06)}
+#visList .vis-tg button.vis svg{width:15px;height:15px;color:var(--red)}
+#visList .vis-tg button.vis.off{background:transparent!important;color:var(--sub);box-shadow:none}
+#visList .vis-tg button.vis.off svg{color:var(--sub)}
+#visList .vis-tg button.vis.off span{text-decoration:line-through;text-decoration-thickness:1.5px}
 .vis-off{flex:none;display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:800;line-height:18px;padding:0 6px 0 4px;border-radius:6px;margin-left:4px;background:var(--card2);color:var(--sub);text-decoration:line-through}
 .vis-off svg{width:12px;height:12px}
 /* 소스별 따로 녹화 */
@@ -1339,4 +1339,12 @@ label.check,.lay-chk,label:has(>input[type=checkbox]){cursor:pointer}
 .edit-bar .sel-size{white-space:nowrap;flex:none}
 .edit-actions{display:flex!important;align-items:center;gap:6px;flex-wrap:nowrap;min-width:0}
 .edit-actions>button{white-space:nowrap;padding-left:10px!important;padding-right:10px!important;flex:none}
-.edit-actions>.vis-tg{margin-right:4px}
+
+/* 방송 · 녹화 따로 보이기 목록 (사운드 탭) */
+.sec-card>.vis-list{display:flex!important;flex-direction:column;gap:4px;padding:8px!important}
+.vis-row{display:flex;align-items:center;gap:8px;min-height:38px;padding:0 4px 0 8px;border-radius:10px}
+.vis-row:hover{background:var(--hover)}
+.vis-row .ic{width:18px;height:18px;flex:none;color:var(--sub);display:inline-flex}
+.vis-row .ic svg{width:18px;height:18px}
+.vis-row.part .ic{color:var(--red)}
+.vis-row .nm{flex:1;min-width:0;font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
