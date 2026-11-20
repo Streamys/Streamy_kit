@@ -18,6 +18,8 @@
     if (!cfg.voice || typeof cfg.voice !== 'object') cfg.voice = {};
     const v = cfg.voice;
     if (!Array.isArray(v.bands) || !v.bands.length) { v.bands = mkBands(PRESETS.base[1]); v.preset = 'base'; }
+    v.view = v.view === 'comp' ? 'comp' : 'eq';
+    if (!v.comp || typeof v.comp !== 'object') v.comp = { on: true, thr: -22, ratio: 4, att: 5, rel: 100, knee: 6, makeup: 0, auto: true, easy: 50, preset: 'broadcast' };
     v.level = v.level || 'pro'; if (v.tone == null) v.tone = 30; if (v.mud == null) v.mud = 40; if (v.cutOn == null) v.cutOn = true;
     return v;
   }
@@ -60,7 +62,7 @@
   const bandDb = (b, f) => (b.type === 'hp' || b.type === 'lp' ? 2 : 1) * magDb(coefs(b), f);
 
   // ---------------------------------------------------------------- 실제 소리 (WebAudio: 같은 바이쿼드)
-  const A = { soloNodes: [], ctx: null, stream: null, mic: null, play: null, recBuf: null, chainIn: null, filters: [], sig: '', an: null, mon: null, listening: false, playing: false, rec: null };
+  const A = { soloNodes: [], comp: null, ready: null, ctx: null, stream: null, mic: null, play: null, recBuf: null, chainIn: null, filters: [], sig: '', an: null, mon: null, listening: false, playing: false, rec: null };
   // 구간만 듣기 방식: 자르기면 '잘려 나가는 쪽', 쉘프면 '바뀌는 쪽', 벨 · 노치면 '그 둘레'
   const soloKindOf = (b) => ({ hp: 'cut-low', lp: 'cut-high', ls: 'shelf-low', hs: 'shelf-high', bell: 'band', notch: 'band' })[b.type] || 'band';
   // 구간 경계: 벨 · 노치는 폭(최소 1/3옥타브), 쉘프 · 자르기는 그 주파수 아래/위 전부
@@ -78,6 +80,13 @@
     A.an = A.ctx.createAnalyser(); A.an.fftSize = 4096; A.an.smoothingTimeConstant = 0.82; A.an.minDecibels = -100; A.an.maxDecibels = -10;
     A.mon = A.ctx.createGain(); A.mon.gain.value = 0;
     A.an.connect(A.mon); A.mon.connect(A.ctx.destination);
+    const ctx = A.ctx;
+    A.ready = ctx.audioWorklet.addModule('voice-worklet.js').then(() => {
+      if (A.ctx !== ctx) return;
+      A.comp = new AudioWorkletNode(ctx, 'streamy-comp', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
+      A.comp.port.onmessage = (e) => compMeter(e.data);
+      A.sig = ''; syncChain();
+    }).catch((e) => { console.warn('comp worklet', e); });
     return A.ctx;
   }
   // 체인 구조가 바뀌면 다시 잇고, 값만 바뀌면 값만 바꿈
@@ -86,17 +95,19 @@
     const bs = V().bands.filter((b) => b.on);
     const sb = solo != null ? V().bands.find((b) => b.id === solo) : null;
     const soloKind = sb ? soloKindOf(sb) : '';
-    const sig = (bypass ? 'bypass' : bs.map((b) => b.type).join(',')) + '|' + soloKind;
+    const sig = (bypass ? 'bypass' : bs.map((b) => b.type).join(',') + (A.comp ? '|comp' : '')) + '|' + soloKind;
     if (sig !== A.sig) {
       try { A.chainIn.disconnect(); } catch {}
       for (const f of A.filters) { try { f.node.disconnect(); } catch {} }
       for (const n of A.soloNodes || []) { try { n.disconnect(); } catch {} }
+      if (A.comp) { try { A.comp.disconnect(); } catch {} }
       A.filters = []; A.soloNodes = [];
       let last = A.chainIn;
       if (!bypass) for (const b of bs) {
         const n = (b.type === 'hp' || b.type === 'lp') ? 2 : 1;      // 로우컷 · 하이컷은 2단 (12dB → 24dB/옥타브), 그림과 같게
         for (let i = 0; i < n; i++) { const node = A.ctx.createBiquadFilter(); node.type = WA_TYPE[b.type]; last.connect(node); last = node; A.filters.push({ node, b }); }
       }
+      if (!bypass && A.comp) { last.connect(A.comp); last = A.comp; }          // EQ 다음 컴프레서
       if (sb) {
         // 그 구간만: 벨 · 노치 = 그 주파수 둘레만, 쉘프 = 그 아래/위만, 자르기 = 잘려 나가는 소리(필터 전)
         let src = soloKind.startsWith('cut') ? A.chainIn : last;
@@ -108,6 +119,11 @@
       A.sig = sig;
     }
     const t = A.ctx.currentTime;
+    if (A.comp) {
+      const c = compParams(), P = A.comp.parameters;
+      for (const k of ['thr', 'ratio', 'att', 'rel', 'knee', 'makeup']) P.get(k).setValueAtTime(c[k], t);
+      P.get('on').setValueAtTime(c.on ? 1 : 0, t);
+    }
     if (sb) {
       const [lo, hi] = soloEdges(sb), k = soloKindOf(sb);
       for (const n of A.soloNodes) {
@@ -128,6 +144,7 @@
   }
   async function micStart() {
     ensureCtx(); if (A.ctx.state === 'suspended') await A.ctx.resume();
+    if (A.ready) { try { await A.ready; } catch {} }
     if (A.stream) return;
     const dev = Q('voMic') && Q('voMic').value;
     A.stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: dev ? { exact: dev } : undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
@@ -182,6 +199,24 @@
     if (A.play) { try { A.play.stop(); A.play.disconnect(); } catch {} A.play = null; }
     if (A.playing) { A.playing = false; if (A.mic) { try { A.mic.connect(A.chainIn); } catch {} } if (A.mon) A.mon.gain.setTargetAtTime(A.listening ? 1 : 0, A.ctx.currentTime, 0.02); }
     if (!quiet) renderTest();
+  }
+
+  // ---------------------------------------------------------------- 컴프레서 설정 · 계산 (worklet과 같은 식)
+  const gcDb = (x, T, R, W) => { const d = x - T; if (2 * d < -W) return x; if (W > 0 && 2 * Math.abs(d) <= W) return x + (1 / R - 1) * Math.pow(d + W / 2, 2) / (2 * W); return T + d / R; };
+  const CPRESETS = {
+    natural: ['자연스럽게', { thr: -24, ratio: 2, att: 15, rel: 150, knee: 8 }],
+    broadcast: ['방송처럼', { thr: -22, ratio: 4, att: 5, rel: 100, knee: 6 }],
+    shout: ['소리 지르는 방송', { thr: -26, ratio: 6, att: 2, rel: 80, knee: 4 }],
+    asmr: ['ASMR', { thr: -30, ratio: 2.5, att: 25, rel: 250, knee: 10 }],
+  };
+  const autoMakeup = (c) => Math.max(0, Math.min(18, -(gcDb(-18, c.thr, c.ratio, c.knee) + 18) * 0.85));   // 보통 목소리(-18dB)가 원래 크기쯤 되게
+  function compParams() { const c = V().comp; return { ...c, makeup: c.auto ? autoMakeup(c) : c.makeup }; }
+  function easyComp(k) { const c = V().comp; Object.assign(c, { easy: k, thr: -16 - k * 0.14, ratio: 1.5 + k * 0.045, att: 20 - k * 0.15, rel: 180 - k * 0.8, knee: 8, auto: true, preset: '' }); }
+  const hist = [];       // [{ in, out, gr }] 최근 6초
+  let meterNow = { in: -120, out: -120, gr: 0 }, liveIn = -120;
+  function compMeter(d) {
+    meterNow = d; hist.push(d); if (hist.length > 240) hist.shift();
+    liveIn = d.in > liveIn ? d.in : liveIn * 0.85 + d.in * 0.15;
   }
 
   // ---------------------------------------------------------------- 그리기
@@ -282,18 +317,40 @@
       box.appendChild(btn);
     }
   }
+  const CHAIN = [['로우컷', 'eq'], ['잡음 제거', ''], ['게이트', ''], ['EQ', 'eq'], ['디에서', ''], ['컴프레서', 'comp'], ['리미터', '']];
+  function chainDraw() {
+    const v = V();
+    Q('voChain').innerHTML = CHAIN.map(([l, view], i) => {
+      const on = view && view === v.view && (view !== 'eq' || l === 'EQ'), soon = !view;
+      const off = view === 'comp' && !v.comp.on;
+      return `${i ? '<span class="vo-cl"></span>' : ''}<button class="vo-step${on ? ' on' : ''}${soon ? ' soon' : ''}${off ? ' off' : ''}" data-view="${view}" ${soon ? 'disabled title="준비 중"' : ''}><i>${i + 1}</i>${l}</button>`;
+    }).join('');
+  }
   function headDraw() {
     const v = V();
     Q('voLevel').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.l === v.level));
-    Q('voPresets').innerHTML = Object.entries(PRESETS).map(([k, [l]]) => `<button data-p="${k}" class="${v.preset === k ? 'on' : ''}">${l}</button>`).join('');
+    const comp = v.view === 'comp';
+    Q('voPresets').innerHTML = comp
+      ? Object.entries(CPRESETS).map(([k, [l]]) => `<button data-c="${k}" class="${v.comp.preset === k ? 'on' : ''}">${l}</button>`).join('')
+      : Object.entries(PRESETS).map(([k, [l]]) => `<button data-p="${k}" class="${v.preset === k ? 'on' : ''}">${l}</button>`).join('');
+    Q('voGraph').hidden = comp; Q('voComp').hidden = !comp;
+    document.querySelector('.vo-foot').hidden = comp;
+    chainDraw();
+    if (comp) { compCtrlDraw(); tfDraw(); }
     Q('voAB').querySelectorAll('button').forEach((b) => b.classList.toggle('on', (b.dataset.ab === 'off') === bypass));
     const easy = v.level === 'easy';
-    Q('voEasy').hidden = !easy; Q('voPro').hidden = easy;
+    Q('voEasy').hidden = !easy || comp; Q('voPro').hidden = easy || comp;
     Q('voHint').textContent = v.level === 'pro' ? '점 끌기 · 양옆 막대 = 폭 · 빈 곳 두 번 = 추가' : '점을 끌어서 맞추세요';
     Q('voTone').value = v.tone; Q('voMud').value = v.mud; Q('voMudV').textContent = v.mud ? '-' + (v.mud * 0.06).toFixed(1) + 'dB' : '끔';
     Q('voCut').classList.toggle('on', !!v.cutOn);
   }
   function drawAll() { zonesDraw(); curveDraw(); nodesDraw(); chipsDraw(); headDraw(); }
+  Q('voChain').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-view]'); if (!b || !b.dataset.view) return;
+    const v = V(); if (v.view === b.dataset.view) return;
+    v.view = b.dataset.view; if (v.view === 'comp') solo = null;
+    syncChain(); requestAnimationFrame(() => { resize(); drawAll(); }); saveSoon();
+  });
   function changed(quick) {
     if (!quick) V().preset = V().preset || '';
     syncChain(); curveDraw(); nodesDraw(); if (!quick) { zonesDraw(); chipsDraw(); headDraw(); } else bubbleDraw();
@@ -302,8 +359,10 @@
 
   // 목소리 구름 (실제 마이크 / 녹음 소리, 필터 거친 뒤)
   let fft = null, raf = 0;
+  let tfT = 0;
   function loop() {
     raf = requestAnimationFrame(loop);
+    if (V().view === 'comp') { histDraw(); const n = performance.now(); if (n - tfT > 60 && !tfDrag) { tfT = n; tfDraw(); } liveIn = Math.max(-120, liveIn - 0.6); return; }
     if (!A.an || !xsCache.length) { cloud.setAttribute('d', ''); edge.setAttribute('d', ''); return; }
     if (!fft || fft.length !== A.an.frequencyBinCount) fft = new Float32Array(A.an.frequencyBinCount);
     A.an.getFloatFrequencyData(fft);
@@ -347,7 +406,8 @@
     v.bands.push({ id, type: 'bell', f: xf(p.x), g: Math.max(-15, Math.min(15, yg(p.y))), q: 1, on: true }); sel = id; v.preset = ''; changed();
   });
   Q('voLevel').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.l === 'easy') solo = null; V().level = b.dataset.l; drawAll(); saveSoon(); });
-  Q('voPresets').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; solo = null; const v = V(); v.bands = mkBands(PRESETS[b.dataset.p][1]); v.preset = b.dataset.p; sel = 2; changed(); });
+  Q('voPresets').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; solo = null; const v = V();
+    if (b.dataset.c) { Object.assign(v.comp, CPRESETS[b.dataset.c][1], { preset: b.dataset.c, auto: true, on: true }); syncChain(); headDraw(); saveSoon(); return; } v.bands = mkBands(PRESETS[b.dataset.p][1]); v.preset = b.dataset.p; sel = 2; changed(); });
   Q('voAB').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; bypass = b.dataset.ab === 'off'; changed(); });
   function easyApply() {
     const v = V(), k = v.tone / 100, bs = [];
@@ -358,6 +418,109 @@
   Q('voTone').addEventListener('input', () => { V().tone = Number(Q('voTone').value); easyApply(); });
   Q('voMud').addEventListener('input', () => { V().mud = Number(Q('voMud').value); easyApply(); });
   Q('voCut').addEventListener('click', () => { V().cutOn = !V().cutOn; easyApply(); });
+
+  // ---------------------------------------------------------------- 컴프레서 화면
+  const vcSvg = Q('vcSvg'), vcHist = Q('vcHist');
+  let tfW = 300, tfDrag = null;
+  const DBMIN = -60;
+  const tfX = (db) => 34 + (db - DBMIN) / -DBMIN * (tfW - 48);
+  const tfY = (db) => tfW - 30 - (db - DBMIN) / -DBMIN * (tfW - 48);
+  const tfDb = (px) => DBMIN + (px - 34) / (tfW - 48) * -DBMIN;
+  function tfDraw() {
+    const r = vcSvg.getBoundingClientRect(); tfW = Math.max(180, Math.round(Math.min(r.width, r.height)));
+    vcSvg.setAttribute('viewBox', `0 0 ${tfW} ${tfW}`);
+    const c = compParams(), on = c.on && !bypass;
+    let grid = '';
+    for (const d of [-48, -36, -24, -12, 0]) grid += `<line x1="${tfX(d)}" y1="${tfY(DBMIN)}" x2="${tfX(d)}" y2="${tfY(0)}" class="vc-grid"/><line x1="${tfX(DBMIN)}" y1="${tfY(d)}" x2="${tfX(0)}" y2="${tfY(d)}" class="vc-grid"/><text x="${tfX(d)}" y="${tfW - 12}" class="vc-ax" text-anchor="middle">${d}</text><text x="26" y="${tfY(d) + 4}" class="vc-ax" text-anchor="end">${d}</text>`;
+    let d = '';
+    for (let i = 0; i <= 120; i++) { const x = DBMIN + i * (-DBMIN) / 120, y = Math.min(0, (on ? gcDb(x, c.thr, c.ratio, c.knee) : x) + (on ? c.makeup : 0)); d += (i ? 'L' : 'M') + tfX(x).toFixed(1) + ' ' + tfY(Math.max(DBMIN, y)).toFixed(1) + ' '; }
+    const ty = on ? gcDb(c.thr, c.thr, c.ratio, c.knee) + c.makeup : c.thr, ry = on ? gcDb(0, c.thr, c.ratio, c.knee) + c.makeup : 0;
+    const li = Math.max(DBMIN, Math.min(0, liveIn)), lo = on ? gcDb(li, c.thr, c.ratio, c.knee) + c.makeup : li;
+    vcSvg.innerHTML = grid +
+      `<rect x="${tfX(c.thr)}" y="${tfY(0)}" width="${tfX(0) - tfX(c.thr)}" height="${tfY(DBMIN) - tfY(0)}" class="vc-zone"/>` +
+      `<line x1="${tfX(DBMIN)}" y1="${tfY(DBMIN)}" x2="${tfX(0)}" y2="${tfY(0)}" class="vc-diag"/>` +
+      `<line x1="${tfX(c.thr)}" y1="${tfY(DBMIN)}" x2="${tfX(c.thr)}" y2="${tfY(0)}" class="vc-thr"/>` +
+      `<text x="${tfX(c.thr) - 6}" y="${tfY(0) + 16}" class="vc-thl" text-anchor="end">기준선 ${Math.round(c.thr)}</text>` +
+      `<path d="${d}" class="vc-curve"/>` +
+      (liveIn > DBMIN ? `<circle cx="${tfX(li)}" cy="${tfY(Math.max(DBMIN, Math.min(0, lo)))}" r="7" class="vc-live"/>` : '') +
+      (V().level !== 'easy' ? `<circle cx="${tfX(c.thr)}" cy="${tfY(Math.max(DBMIN, Math.min(0, ty)))}" r="9" class="vc-h" data-h="thr"/>` : '') +
+      (V().level !== 'easy' ? `<rect x="${tfX(0) - 14}" y="${tfY(Math.max(DBMIN, Math.min(0, ry))) - 6}" width="20" height="12" rx="6" class="vc-h" data-h="ratio"/>` : '');
+  }
+  vcSvg.addEventListener('pointerdown', (e) => { const h = e.target.closest('[data-h]'); if (!h) return; tfDrag = h.dataset.h; vcSvg.setPointerCapture(e.pointerId); e.preventDefault(); });
+  vcSvg.addEventListener('pointermove', (e) => {
+    if (!tfDrag) return;
+    const r = vcSvg.getBoundingClientRect(), k = tfW / r.width, px = (e.clientX - r.left) * k, py = (e.clientY - r.top) * k, c = V().comp;
+    if (tfDrag === 'thr') c.thr = Math.round(Math.max(-50, Math.min(-3, tfDb(px))));
+    else { const outDb = DBMIN + (tfW - 30 - py) / (tfW - 48) * -DBMIN, mk = compParams().makeup; const red = (outDb - mk) - c.thr; c.ratio = Math.max(1, Math.min(20, red > 0.3 ? -c.thr / red : 20)); }
+    c.preset = ''; syncChain(); tfDraw(); compCtrlDraw(true);
+  });
+  const tfUp = () => { if (tfDrag) { tfDrag = null; headDraw(); saveSoon(); } };
+  vcSvg.addEventListener('pointerup', tfUp); vcSvg.addEventListener('pointercancel', tfUp);
+
+  const CTRL = {
+    thr: ['기준선', 'Threshold', -50, -3, 1, (v) => Math.round(v) + 'dB'],
+    ratio: ['누르는 정도', 'Ratio', 1, 20, 0.1, (v) => v >= 19.9 ? '∞:1' : v.toFixed(1) + ':1'],
+    att: ['반응 속도', 'Attack', 0.5, 100, 0.5, (v) => v.toFixed(v < 10 ? 1 : 0) + 'ms'],
+    rel: ['풀리는 속도', 'Release', 20, 800, 5, (v) => Math.round(v) + 'ms'],
+    knee: ['부드러움', 'Knee', 0, 18, 0.5, (v) => v.toFixed(1) + 'dB'],
+    makeup: ['볼륨 보정', 'Makeup', -6, 18, 0.5, (v) => (v > 0 ? '+' : '') + v.toFixed(1) + 'dB'],
+  };
+  function compCtrlDraw(valuesOnly) {
+    const v = V(), c = v.comp, box = Q('vcCtrl'), lv = v.level, P = compParams();
+    if (valuesOnly) { box.querySelectorAll('[data-k]').forEach((row) => { const k = row.dataset.k, val = k === 'makeup' ? P.makeup : c[k]; row.querySelector('b').textContent = CTRL[k][5](val); const inp = row.querySelector('input'); if (document.activeElement !== inp) inp.value = val; }); return; }
+    const sw = `<button class="vc-on${c.on ? ' on' : ''}" id="vcOn"><i></i>${c.on ? '컴프레서 켜짐' : '컴프레서 꺼짐'}</button>`;
+    if (lv === 'easy') {
+      box.innerHTML = sw + `<label class="vc-easy"><span><i>자연스럽게</i><b>목소리 크기 고르게</b><i>방송처럼</i></span><input type="range" id="vcEasy" min="0" max="100" value="${c.easy ?? 50}"></label>`;
+    } else {
+      const keys = lv === 'mid' ? ['thr', 'ratio'] : ['thr', 'ratio', 'att', 'rel', 'knee', 'makeup'];
+      box.innerHTML = sw + keys.map((k) => {
+        const [l, en, mn, mx, st, f] = CTRL[k], val = k === 'makeup' ? P.makeup : c[k], dis = k === 'makeup' && c.auto;
+        return `<label class="vc-row${dis ? ' dis' : ''}" data-k="${k}" title="${en}"><span><em>${l}</em><b>${f(val)}</b></span><input type="range" min="${mn}" max="${mx}" step="${st}" value="${val}" ${dis ? 'disabled' : ''}></label>`;
+      }).join('') + `<button class="vc-auto${c.auto ? ' on' : ''}" id="vcAuto">볼륨 자동 보정</button>`;
+    }
+  }
+  Q('vcCtrl').addEventListener('input', (e) => {
+    const c = V().comp;
+    if (e.target.id === 'vcEasy') { easyComp(Number(e.target.value)); syncChain(); tfDraw(); saveSoon(); return; }
+    const row = e.target.closest('[data-k]'); if (!row) return;
+    c[row.dataset.k] = Number(e.target.value); c.preset = '';
+    syncChain(); tfDraw(); compCtrlDraw(true); saveSoon();
+  });
+  Q('vcCtrl').addEventListener('change', () => headDraw());
+  Q('vcCtrl').addEventListener('click', (e) => {
+    const c = V().comp;
+    if (e.target.closest('#vcOn')) { c.on = !c.on; syncChain(); headDraw(); saveSoon(); }
+    if (e.target.closest('#vcAuto')) { if (c.auto) c.makeup = autoMakeup(c); c.auto = !c.auto; syncChain(); headDraw(); saveSoon(); }
+  });
+  // 목소리 크기 흐름 (최근 6초)
+  function histDraw() {
+    if (Q('voComp').hidden) return;
+    const r = vcHist.getBoundingClientRect(), z = window.devicePixelRatio || 1, w = Math.round(r.width * z), h = Math.round(r.height * z);
+    if (!w || !h) return;
+    if (vcHist.width !== w || vcHist.height !== h) { vcHist.width = w; vcHist.height = h; }
+    const g = vcHist.getContext('2d'), cs = getComputedStyle(ov), red = cs.getPropertyValue('--red').trim() || '#E5577E', sub = cs.getPropertyValue('--sub').trim() || '#888', line = cs.getPropertyValue('--line').trim() || '#ddd';
+    g.clearRect(0, 0, w, h);
+    const yOf = (db) => h - 8 * z - Math.max(0, Math.min(1, (db - DBMIN) / -DBMIN)) * (h - 40 * z);
+    const N = 240, step = w / (N - 1), off = N - hist.length;
+    const c = compParams();
+    g.strokeStyle = line; g.lineWidth = 1 * z; g.setLineDash([4 * z, 5 * z]);
+    g.beginPath(); g.moveTo(0, yOf(c.thr)); g.lineTo(w, yOf(c.thr)); g.stroke(); g.setLineDash([]);
+    g.fillStyle = sub; g.font = `${11 * z}px sans-serif`; g.fillText('기준선', 6 * z, yOf(c.thr) - 5 * z);
+    // 눌린 만큼 (위에서 내려옴)
+    g.fillStyle = red; g.globalAlpha = 0.28;
+    hist.forEach((d, i) => { const x = (i + off) * step, gh = Math.min(1, -d.gr / 24) * (h * 0.45); if (gh > 0.5) g.fillRect(x - step / 2, 0, Math.max(1, step), gh); });
+    g.globalAlpha = 1;
+    // 나가는 소리 (채움)
+    g.beginPath(); g.moveTo(off * step, h);
+    hist.forEach((d, i) => g.lineTo((i + off) * step, yOf(d.out)));
+    g.lineTo((hist.length - 1 + off) * step, h); g.closePath(); g.fillStyle = red; g.globalAlpha = 0.22; g.fill(); g.globalAlpha = 1;
+    g.beginPath(); hist.forEach((d, i) => (i ? g.lineTo : g.moveTo).call(g, (i + off) * step, yOf(d.out))); g.strokeStyle = red; g.lineWidth = 2 * z; g.stroke();
+    // 들어온 소리 (선)
+    g.beginPath(); hist.forEach((d, i) => (i ? g.lineTo : g.moveTo).call(g, (i + off) * step, yOf(d.in))); g.strokeStyle = sub; g.globalAlpha = 0.6; g.lineWidth = 1.4 * z; g.stroke(); g.globalAlpha = 1;
+    const gr = hist.length ? Math.min(...hist.slice(-6).map((d) => d.gr)) : 0;
+    Q('vcGr').textContent = (gr < -0.05 ? gr : 0).toFixed(1);
+    Q('vcGr').parentElement.classList.toggle('hot', gr < -0.5);
+  }
 
   async function setSolo(id) {
     solo = id;
@@ -399,7 +562,8 @@
     } else {
       solo = null; stopPlay(true); setListen(false); micStop();
       if (raf) { cancelAnimationFrame(raf); raf = 0; }
-      if (A.ctx) { A.ctx.close().catch(() => {}); A.ctx = null; A.sig = ''; A.filters = []; A.soloNodes = []; }
+      if (A.ctx) { A.ctx.close().catch(() => {}); A.ctx = null; A.sig = ''; A.filters = []; A.soloNodes = []; A.comp = null; A.ready = null; }
+      hist.length = 0;
       save();
     }
   }

@@ -368,6 +368,7 @@
       <div class="vo-seg vo-ab" id="voAB"><button data-ab="off">원래 소리</button><button data-ab="on">필터</button></div>
       <button class="lay-x" id="voClose" data-ic="x" title="닫기 (Esc)"></button>
     </div>
+    <div class="vo-chain" id="voChain"></div>
     <div class="vo-graph" id="voGraph">
       <div class="vo-zones" id="voZones"></div>
       <svg id="voSvg" role="img" aria-label="소리 이름 EQ"></svg>
@@ -380,6 +381,17 @@
         <label class="vo-sl vo-sl2"><span><b>먹먹함 빼기</b><i id="voMudV"></i></span><input type="range" id="voMud" min="0" max="100"></label>
       </div>
       <div class="vo-pro" id="voPro"><em>지금 바뀐 곳</em><div class="vo-chips" id="voChips"></div><span class="vo-hint" id="voHint"></span></div>
+    </div>
+    <div class="vo-comp" id="voComp" hidden>
+      <div class="vc-main">
+        <div class="vc-card vc-tf"><div class="vc-cap"><b>들어온 소리 → 나가는 소리</b></div><svg id="vcSvg" role="img" aria-label="컴프레서 곡선"></svg></div>
+        <div class="vc-card vc-hc">
+          <div class="vc-cap"><b>목소리 크기 흐름</b><span class="vc-leg"><i class="in"></i>들어온 소리<i class="out"></i>나가는 소리<i class="gr"></i>눌린 만큼</span></div>
+          <canvas id="vcHist"></canvas>
+          <div class="vc-grbox"><small>지금 눌리는 양</small><b id="vcGr">0.0</b><em>dB</em></div>
+        </div>
+      </div>
+      <div class="vc-ctrl" id="vcCtrl"></div>
     </div>
     <div class="vo-test">
       <select id="voMic" aria-label="들어볼 마이크"></select>
