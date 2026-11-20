@@ -1207,6 +1207,7 @@ function addChat(list) {
   if (atBottom || chat.stick) { feed.scrollTop = feed.scrollHeight; chat.stick = true; }
   else { chat.unseen += list.filter((m) => !m.recent).length; $('chatMore').hidden = !chat.unseen; $('chatMore').textContent = `새 채팅 ${chat.unseen}개 ↓`; }
   if (!$('tab-chat').classList.contains('on') && list.some((m) => !m.recent)) $('chatDot').className = 'tab-dot new';
+  if (chat.view !== 'all' && list.some((m) => m.p === chat.view)) renderChatView();
 }
 $('chatFeed').addEventListener('scroll', () => {
   const f = $('chatFeed'); chat.stick = f.scrollHeight - f.scrollTop - f.clientHeight < 40;
@@ -1222,6 +1223,25 @@ function webUrl(p) {
   if (p === 'youtube') return chat.status.youtube?.url || '';
   if (p === 'soop') return `https://play.sooplive.com/${encodeURIComponent(id)}`;
   return '';
+}
+// 플랫폼별 보기: 브라우저로 공식 채팅창을 띄우지 않고, 우리 채팅 목록을 그 플랫폼만 걸러서 + 위에 채널 상태
+function renderChatView() {
+  const p = chat.view, all = $('chatAll'), head = $('chatPlat');
+  all.hidden = false; $('chatWeb').hidden = true;
+  all.dataset.only = p === 'all' ? '' : p;
+  if (p === 'all') { head.hidden = true; return; }
+  const st = chat.status[p] || {};
+  const name = DEMO ? { chzzk: '스트리미', youtube: 'Streamy', soop: 'streamy' }[p] : (bcSt && bcSt[p] && bcSt[p].channel && bcSt[p].channel.name) || '';
+  const linked = DEMO || !!cfg.channels[p];
+  const live = DEMO ? p !== 'soop' : st.state === 'live';
+  const v = DEMO ? { chzzk: 812, youtube: 391 }[p] : p === 'chzzk' ? viewers.chzzk : null;
+  const right = live ? `<span class="cp-live"><i></i>LIVE</span>${v != null ? `<b class="cp-v">${Number(v).toLocaleString('ko-KR')}<small>명</small></b>` : ''}`
+    : `<span class="cp-st">${esc(linked ? STATE_KO[st.state] || '대기 중' : p === 'soop' ? '준비 중' : '로그인 필요')}</span>`;
+  const n = $('chatFeed').querySelectorAll(`.cm.p-${p}`).length;
+  const empty = !linked ? (p === 'soop' ? 'SOOP 로그인은 앱 심사가 끝나면 열려요' : `방송 탭에서 ${CHAT_P[p]} 로그인을 해 주세요`) : n ? '' : `아직 ${CHAT_P[p]} 채팅이 없어요`;
+  head.hidden = false;
+  head.innerHTML = `<div class="cp-row">${platMark(p, 'lg')}<div class="cp-tx"><b>${esc(name || CHAT_P[p])}</b><small>${linked ? '채널 연결됨' : '연결 안 됨'}</small></div>${right}</div>` + (empty ? `<div class="cp-empty">${empty}${!linked && p !== 'soop' ? ' <button class="link inline" id="chatGoLogin">로그인하러 가기</button>' : ''}</div>` : '');
+  const g = $('chatGoLogin'); if (g) g.onclick = () => openTab('stream');
 }
 function renderChatWeb() {
   const p = chat.view, box = $('chatWeb');
@@ -1259,14 +1279,14 @@ $('chatSwitch').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   chat.view = b.dataset.v;
   $('chatSwitch').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
-  renderChatWeb();
-  if (chat.view === 'all') { const f = $('chatFeed'); if (chat.stick) f.scrollTop = f.scrollHeight; }
+  renderChatView();
+  { const f = $('chatFeed'); if (chat.stick) f.scrollTop = f.scrollHeight; }
 });
 ipcRenderer.on('chat:messages', (_e, list) => addChat(list));
 ipcRenderer.on('chat:status', (_e, st) => {
   const prev = chat.status[st.p] || {};
   chat.status[st.p] = st; renderChatState();
-  if (st.p === 'youtube' && prev.url !== st.url && chat.view === 'youtube') renderChatWeb();
+  if (chat.view === st.p) renderChatView();
   if (st.state === 'live' && prev.state !== 'live') addChat([{ p: st.p, kind: 'system', nick: '', parts: [{ t: 'text', v: `${CHAT_P[st.p]} 채팅에 연결됐어요` }] }]);
 });
 
