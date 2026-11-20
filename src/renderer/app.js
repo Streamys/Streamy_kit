@@ -17,7 +17,7 @@ function uiNotice({ icon = 'warn', title = '', message = '', steps = [], chips =
       ${steps.length ? `<ol class="nt-steps">${steps.map((x) => `<li><span>${x}</span></li>`).join('')}</ol>` : ''}
       ${chips.length ? `<div class="nt-chips">${chips.map((x) => `<span>${esc(x)}</span>`).join('')}</div>` : ''}
       ${foot ? `<p class="cf-detail">${esc(foot)}</p>` : ''}
-      <div class="cf-btns${buttons.length === 1 ? ' one' : ''}">${buttons.map((b, i) => `<button data-i="${i}" class="${i === 0 ? 'cf-main' : 'cf-cancel'}">${esc(b)}</button>`).join('')}</div></div>`;
+      <div class="cf-btns${buttons.length === 1 ? ' one' : buttons.length > 2 ? ' many' : ''}">${buttons.map((b, i) => `<button data-i="${i}" class="${i === 0 ? 'cf-main' : i === buttons.length - 1 ? 'cf-cancel' : 'cf-mid'}">${esc(b)}</button>`).join('')}</div></div>`;
     const done = (i) => { window.removeEventListener('keydown', key, true); ov.classList.add('out'); setTimeout(() => ov.remove(), 120); try { hidePreview('notice', false); } catch {} resolve(i); };
     const key = (e) => { if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); done(e.key === 'Enter' ? 0 : -1); } };
     ov.addEventListener('click', (e) => { const b = e.target.closest('button[data-i]'); if (b) done(+b.dataset.i); else if (e.target === ov) done(-1); });
@@ -913,13 +913,32 @@ function bindChannelDrag(row, a) {
     guard(() => { if (DEMO) return toast(`'${d.label}'을(를) 뺐어요 (데모)`); engine.removeAudio(d.name); saveAudioState(); renderApps(true); toast(`'${d.label}' 소리를 사운드에서 뺐어요.`); })();
   });
 }
+// 블루투스 이어폰(버즈 · 에어팟 등) 마이크를 열면 윈도우가 '통화 모드'로 바꿔서 이어폰 음질이 확 떨어짐 → 알려 주고 고르게
+const BT_MIC = /hands-?free|핸즈프리|buds|airpods|bluetooth|블루투스|\bAG Audio\b|wf-1000|wh-1000|galaxy/i;
+async function checkBtMic() {
+  if (DEMO || !engineOk || cfg.btMicOk || cfg.devices.mic === '__off__') return;
+  let name = '';
+  try {
+    const cur = cfg.devices.mic || 'default';
+    if (cur !== 'default') name = (engine.audioDevices('mic').find((d) => d.value === cur) || {}).name || '';
+    else { const ds = await navigator.mediaDevices.enumerateDevices(); name = (ds.find((d) => d.kind === 'audioinput' && d.deviceId === 'default') || {}).label || ''; }
+  } catch {}
+  if (!BT_MIC.test(name)) return;
+  rlog('info', 'bt mic', name);
+  const i = await uiNotice({ icon: 'warn', title: '블루투스 이어폰 마이크를 쓰고 있어요', message: name.replace(/^기본값\s*-\s*/, ''),
+    steps: ['이어폰 마이크를 켜면 윈도우가 <b>통화 모드</b>로 바꿔요', '그래서 <b>이어폰 소리 음질이 확 떨어져요</b>'],
+    buttons: ['다른 마이크 고르기', '마이크 끄기', '그대로 쓰기'] });
+  if (i === 0) { openTab('sound'); setTimeout(() => $('devMic')?.focus(), 200); }
+  else if (i === 1) { cfg.devices.mic = '__off__'; save(); try { engine.setAudioDevice('마이크', '__off__'); } catch {} renderDevices(); toast('마이크를 껐어요. 이어폰 음질이 돌아와요.'); }
+  else if (i === 2) { cfg.btMicOk = true; save(); }
+}
 function renderDevices() {
   if (!engineOk) { for (const id of ['devDesktop', 'devMic']) $(id).innerHTML = '<option>엔진 준비 중</option>'; return; }
   for (const [sel, name, kind] of [['devDesktop', '데스크톱 소리', 'desktop'], ['devMic', '마이크', 'mic']]) {
-    const el = $(sel); el.innerHTML = optionList(engine.audioDevices(kind), '장치 없음');
+    const el = $(sel); el.innerHTML = optionList(engine.audioDevices(kind), '장치 없음') + (kind === 'mic' ? '<option value="__off__">사용 안 함</option>' : '');
     const opts = [...el.options].map((o) => o.value);
-    el.value = opts.includes(cfg.devices[kind]) ? cfg.devices[kind] : opts.includes('default') ? 'default' : (opts[0] || '');
-    el.onchange = guard(() => { engine.setAudioDevice(name, el.value); cfg.devices[kind] = el.value; save(); toast('장치를 바꿨어요.'); });
+    el.value = (opts.includes(cfg.devices[kind]) || cfg.devices[kind] === '__off__') ? cfg.devices[kind] : opts.includes('default') ? 'default' : (opts[0] || '');
+    el.onchange = guard(() => { engine.setAudioDevice(name, el.value); cfg.devices[kind] = el.value; save(); toast('장치를 바꿨어요.'); if (kind === 'mic') { cfg.btMicOk = false; setTimeout(checkBtMic, 300); } });
   }
 }
 
@@ -1432,6 +1451,7 @@ async function boot() {
     cfg.bootMs = Math.round(performance.now() - t0); save();
     boot.classList.add('done'); setTimeout(() => boot.remove(), 450);
     engineOk = true;
+    setTimeout(checkBtMic, 3000);
     // 0.19.2~0.21.0에서 넣은 모니터(번호로 지정)는 화면이 안 잡혀서, 진짜 모니터 ID로 바꿔 줌
     setTimeout(function fixMon(n = 0) {
       try {
